@@ -8,3 +8,15 @@ resource "aws_vpc" "main" {
     Name = "stockspoon-vpc"
   }
 }
+
+# EC2가 배치될 Public Subnet
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = "ap-northeast-2a"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "stockspoon-public-subnet"
+  }
+}
