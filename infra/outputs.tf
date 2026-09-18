@@ -18,3 +18,18 @@ output "app_security_group_id" {
   description = "ID of the security group for the application EC2"
   value       = aws_security_group.app.id
 }
+
+output "public_ecr_repository_uri" {
+  description = "URI of the public ECR repository for backend images"
+  value       = aws_ecrpublic_repository.backend.repository_uri
+}
+
+output "github_actions_ecr_push_role_arn" {
+  description = "IAM role ARN assumed by the backend GitHub Actions workflow"
+  value       = aws_iam_role.github_actions_ecr_push.arn
+}
+
+output "github_actions_oidc_provider_arn" {
+  description = "ARN of the GitHub Actions OIDC provider"
+  value       = aws_iam_openid_connect_provider.github_actions.arn
+}
