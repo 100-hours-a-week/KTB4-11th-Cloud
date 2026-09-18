@@ -15,7 +15,7 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
 
 data "aws_iam_policy_document" "github_actions_assume_role" {
   statement {
-    sid     = "AllowBackendMainBranch"
+    sid     = "AllowApplicationMainBranches"
     effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
@@ -35,6 +35,8 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       variable = "token.actions.githubusercontent.com:sub"
       values = [
         "repo:${var.github_repository_owner}/${var.github_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
+        "repo:${var.github_repository_owner}/${var.github_frontend_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
+        "repo:${var.github_repository_owner}/${var.github_ai_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
       ]
     }
   }
@@ -64,7 +66,7 @@ data "aws_iam_policy_document" "github_actions_ecr_push" {
   }
 
   statement {
-    sid    = "PushBackendImage"
+    sid    = "PushApplicationImages"
     effect = "Allow"
     actions = [
       "ecr-public:BatchCheckLayerAvailability",
@@ -73,7 +75,11 @@ data "aws_iam_policy_document" "github_actions_ecr_push" {
       "ecr-public:PutImage",
       "ecr-public:UploadLayerPart",
     ]
-    resources = [aws_ecrpublic_repository.backend.arn]
+    resources = [
+      aws_ecrpublic_repository.backend.arn,
+      aws_ecrpublic_repository.frontend.arn,
+      aws_ecrpublic_repository.ai.arn,
+    ]
   }
 }
 

@@ -22,6 +22,18 @@ variable "public_ecr_repository_name" {
   default     = "stockspoon-v1-backend"
 }
 
+variable "public_ecr_frontend_repository_name" {
+  description = "Name of the public ECR repository for the frontend application"
+  type        = string
+  default     = "stockspoon-v1-frontend"
+}
+
+variable "public_ecr_ai_repository_name" {
+  description = "Name of the public ECR repository for the AI application"
+  type        = string
+  default     = "stockspoon-v1-ai"
+}
+
 variable "github_repository_owner" {
   description = "GitHub organization or user that owns the backend repository"
   type        = string
@@ -32,6 +44,18 @@ variable "github_repository_name" {
   description = "GitHub backend repository allowed to push images"
   type        = string
   default     = "KTB4-11th-BE"
+}
+
+variable "github_frontend_repository_name" {
+  description = "GitHub frontend repository allowed to push images"
+  type        = string
+  default     = "KTB4-11th-FE"
+}
+
+variable "github_ai_repository_name" {
+  description = "GitHub AI repository allowed to push images"
+  type        = string
+  default     = "KTB4-11th-AI"
 }
 
 variable "github_deployment_branch" {
