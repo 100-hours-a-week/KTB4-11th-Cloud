@@ -24,6 +24,16 @@ output "public_ecr_repository_uri" {
   value       = aws_ecrpublic_repository.backend.repository_uri
 }
 
+output "public_ecr_frontend_repository_uri" {
+  description = "URI of the public ECR repository for frontend images"
+  value       = aws_ecrpublic_repository.frontend.repository_uri
+}
+
+output "public_ecr_ai_repository_uri" {
+  description = "URI of the public ECR repository for AI images"
+  value       = aws_ecrpublic_repository.ai.repository_uri
+}
+
 output "github_actions_ecr_push_role_arn" {
   description = "IAM role ARN assumed by the backend GitHub Actions workflow"
   value       = aws_iam_role.github_actions_ecr_push.arn
