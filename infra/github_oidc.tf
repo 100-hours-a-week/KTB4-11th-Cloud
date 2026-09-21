@@ -35,8 +35,12 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       variable = "token.actions.githubusercontent.com:sub"
       values = [
         "repo:${var.github_repository_owner}/${var.github_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
+        "repo:${var.github_repository_owner}/${var.github_repository_name}:ref:refs/heads/dev",
         "repo:${var.github_repository_owner}/${var.github_frontend_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
         "repo:${var.github_repository_owner}/${var.github_ai_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
+        "repo:${var.github_repository_owner}/${var.github_repository_name}:environment:production",
+        "repo:${var.github_repository_owner}/${var.github_frontend_repository_name}:environment:production",
+        "repo:${var.github_repository_owner}/${var.github_ai_repository_name}:environment:production",
       ]
     }
   }
@@ -71,6 +75,7 @@ data "aws_iam_policy_document" "github_actions_ecr_push" {
     actions = [
       "ecr-public:BatchCheckLayerAvailability",
       "ecr-public:CompleteLayerUpload",
+      "ecr-public:DescribeImages",
       "ecr-public:InitiateLayerUpload",
       "ecr-public:PutImage",
       "ecr-public:UploadLayerPart",
