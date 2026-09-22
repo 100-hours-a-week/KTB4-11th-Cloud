@@ -19,6 +19,26 @@ output "app_security_group_id" {
   value       = aws_security_group.app.id
 }
 
+output "app_instance_id" {
+  description = "ID of the StockSpoon V1 application EC2 instance"
+  value       = aws_instance.app.id
+}
+
+output "app_public_ip" {
+  description = "Elastic IP used as the EC2_HOST GitHub Environment secret"
+  value       = aws_eip.app.public_ip
+}
+
+output "app_public_dns" {
+  description = "Public DNS name of the application EC2 instance"
+  value       = aws_eip.app.public_dns
+}
+
+output "app_ssh_user" {
+  description = "SSH username used as the EC2_USER GitHub Environment secret"
+  value       = "ubuntu"
+}
+
 output "public_ecr_repository_uri" {
   description = "URI of the public ECR repository for backend images"
   value       = aws_ecrpublic_repository.backend.repository_uri

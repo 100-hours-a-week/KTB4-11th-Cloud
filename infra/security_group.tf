@@ -33,6 +33,22 @@ resource "aws_vpc_security_group_ingress_rule" "https" {
   description = "Allow HTTPS traffic"
 }
 
+# GitHub-hosted runners do not have one fixed outbound IP address.
+# For V1, SSH is reachable from the internet but accepts the registered key only;
+# password and root logins are disabled by user-data.sh.
+resource "aws_vpc_security_group_ingress_rule" "ssh" {
+  for_each = toset(var.ssh_allowed_cidrs)
+
+  security_group_id = aws_security_group.app.id
+
+  cidr_ipv4   = each.value
+  from_port   = 22
+  to_port     = 22
+  ip_protocol = "tcp"
+
+  description = "Allow key-only SSH deployment access"
+}
+
 # EC2에서 외부로 나가는 모든 트래픽 허용
 resource "aws_vpc_security_group_egress_rule" "all" {
   security_group_id = aws_security_group.app.id
