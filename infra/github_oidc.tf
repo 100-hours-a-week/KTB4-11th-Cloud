@@ -33,14 +33,16 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
+
       values = [
-        "repo:${var.github_repository_owner}/${var.github_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
-        "repo:${var.github_repository_owner}/${var.github_repository_name}:ref:refs/heads/dev",
-        "repo:${var.github_repository_owner}/${var.github_frontend_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
-        "repo:${var.github_repository_owner}/${var.github_ai_repository_name}:ref:refs/heads/${var.github_deployment_branch}",
-        "repo:${var.github_repository_owner}/${var.github_repository_name}:environment:production",
-        "repo:${var.github_repository_owner}/${var.github_frontend_repository_name}:environment:production",
-        "repo:${var.github_repository_owner}/${var.github_ai_repository_name}:environment:production",
+        "repo:100-hours-a-week@167328634/KTB4-11th-BE@1352977792:ref:refs/heads/main",
+        "repo:100-hours-a-week@167328634/KTB4-11th-BE@1352977792:ref:refs/heads/dev",
+
+        "repo:100-hours-a-week@167328634/KTB4-11th-FE@1352298546:ref:refs/heads/main",
+        "repo:100-hours-a-week@167328634/KTB4-11th-FE@1352298546:ref:refs/heads/dev",
+
+        "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/main",
+        "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/dev"
       ]
     }
   }
