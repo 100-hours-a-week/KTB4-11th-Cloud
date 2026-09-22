@@ -63,3 +63,8 @@ output "github_actions_oidc_provider_arn" {
   description = "ARN of the GitHub Actions OIDC provider"
   value       = aws_iam_openid_connect_provider.github_actions.arn
 }
+
+output "github_cloud_deploy_role_arn" {
+  description = "IAM role ARN used by Cloud CD to verify deployment images"
+  value       = aws_iam_role.github_cloud_deploy.arn
+}

@@ -88,6 +88,12 @@ variable "github_repository_owner" {
   default     = "100-hours-a-week"
 }
 
+variable "github_repository_owner_id" {
+  description = "Immutable GitHub organization ID used in OIDC subjects"
+  type        = string
+  default     = "167328634"
+}
+
 variable "github_repository_name" {
   description = "GitHub backend repository allowed to push images"
   type        = string
@@ -110,6 +116,12 @@ variable "github_cloud_repository_name" {
   description = "GitHub Cloud repository allowed to validate and deploy images"
   type        = string
   default     = "KTB4-11th-Cloud"
+}
+
+variable "github_cloud_repository_id" {
+  description = "Immutable GitHub Cloud repository ID used in OIDC subjects"
+  type        = string
+  default     = "1350512544"
 }
 
 variable "github_deployment_branch" {
