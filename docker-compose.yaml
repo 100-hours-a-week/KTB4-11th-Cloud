@@ -1,0 +1,149 @@
+name: stockspoon-v1
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  nginx:
+    image: ${NGINX_IMAGE:?NGINX_IMAGE is required}
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - app-net
+    cpus: ${NGINX_CPUS:-0.25}
+    mem_limit: ${NGINX_MEMORY_LIMIT:-128m}
+    logging: *default-logging
+
+  frontend:
+    image: ${ECR_REGISTRY:?ECR_REGISTRY is required}/${FRONTEND_ECR_REPOSITORY:?FRONTEND_ECR_REPOSITORY is required}:${FE_TAG:?FE_TAG is required}
+    container_name: frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - app-net
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    cpus: ${FRONTEND_CPUS:-0.5}
+    mem_limit: ${FRONTEND_MEMORY_LIMIT:-512m}
+    logging: *default-logging
+
+  backend:
+    image: ${ECR_REGISTRY:?ECR_REGISTRY is required}/${BACKEND_ECR_REPOSITORY:?BACKEND_ECR_REPOSITORY is required}:${BE_TAG:?BE_TAG is required}
+    container_name: backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL is required}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:?MYSQL_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:-com.mysql.cj.jdbc.Driver}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:?REDIS_HOST is required}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:?REDIS_PORT is required}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:?KAKAO_CLIENT_ID is required}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:?KAKAO_REDIRECT_URI is required}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-net
+      - data-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 40s
+    cpus: ${BACKEND_CPUS:-1.0}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-1500m}
+    logging: *default-logging
+
+  db:
+    image: ${MYSQL_IMAGE:?MYSQL_IMAGE is required}
+    container_name: db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      TZ: ${TZ:-Asia/Seoul}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - data-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    cpus: ${MYSQL_CPUS:-0.75}
+    mem_limit: ${MYSQL_MEMORY_LIMIT:-1024m}
+    logging: *default-logging
+
+  redis:
+    image: ${REDIS_IMAGE:?REDIS_IMAGE is required}
+    container_name: redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: >-
+      sh -c 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    volumes:
+      - redis-data:/data
+    networks:
+      - data-net
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    cpus: ${REDIS_CPUS:-0.25}
+    mem_limit: ${REDIS_MEMORY_LIMIT:-256m}
+    logging: *default-logging
+
+volumes:
+  db-data:
+  redis-data:
+
+networks:
+  app-net:
+    driver: bridge
+  data-net:
+    driver: bridge
