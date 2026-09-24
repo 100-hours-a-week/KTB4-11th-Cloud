@@ -22,4 +22,10 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# Runtime secrets used by Docker Compose
+.env
+.env.*
+!.env.example
+
 .codex/
+.env.example
