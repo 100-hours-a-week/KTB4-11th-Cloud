@@ -39,6 +39,24 @@ variable "ec2_root_volume_size_gib" {
   }
 }
 
+variable "enable_app_dns" {
+  description = "Whether Terraform should create the application A record in the existing public Route 53 hosted zone"
+  type        = bool
+  default     = true
+}
+
+variable "route53_zone_name" {
+  description = "Name of the existing public Route 53 hosted zone, for example example.com"
+  type        = string
+  default     = "stock-spoon.com"
+}
+
+variable "app_dns_record_name" {
+  description = "Fully qualified application DNS record name, for example example.com or app.example.com"
+  type        = string
+  default     = "stock-spoon.com"
+}
+
 variable "ssh_allowed_cidrs" {
   description = "IPv4 CIDR blocks allowed to make key-only SSH connections"
   type        = list(string)
