@@ -8,6 +8,7 @@ resource "aws_instance" "ai" {
   key_name                    = var.ec2_key_name
   subnet_id                   = aws_subnet.public.id
   associate_public_ip_address = true
+  iam_instance_profile        = aws_iam_instance_profile.ai_ec2.name
   vpc_security_group_ids      = [aws_security_group.ai.id]
 
   user_data = templatefile("${path.module}/ai_user_data.sh", {
