@@ -63,9 +63,6 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:-com.mysql.cj.jdbc.Driver}
       SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
-      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:?REDIS_HOST is required}
-      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:?REDIS_PORT is required}
-      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:?KAKAO_CLIENT_ID is required}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:?KAKAO_REDIRECT_URI is required}
@@ -73,8 +70,6 @@ services:
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - app-net
@@ -116,31 +111,8 @@ services:
     mem_limit: ${MYSQL_MEMORY_LIMIT:-1024m}
     logging: *default-logging
 
-  redis:
-    image: ${REDIS_IMAGE:?REDIS_IMAGE is required}
-    container_name: redis
-    restart: unless-stopped
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-    command: >-
-      sh -c 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
-    volumes:
-      - redis-data:/data
-    networks:
-      - data-net
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 10s
-    cpus: ${REDIS_CPUS:-0.25}
-    mem_limit: ${REDIS_MEMORY_LIMIT:-256m}
-    logging: *default-logging
-
 volumes:
   db-data:
-  redis-data:
 
 networks:
   app-net:

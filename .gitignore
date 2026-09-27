@@ -28,4 +28,3 @@ override.tf.json
 !.env.example
 
 .codex/
-.env.example
