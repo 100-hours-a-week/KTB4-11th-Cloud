@@ -26,4 +26,25 @@ printf '%s\n' \
 /usr/sbin/sshd -t
 systemctl restart ssh
 
+# Tailscale 인증 키 가져오기
+TAILSCALE_AUTH_KEY=$(aws ssm get-parameter \
+  --name "/stockspoon/ai/tailscale-auth-key" \
+  --with-decryption \
+  --query 'Parameter.Value' \
+  --output text \
+  --region ap-northeast-2)
+
+# Tailscale 설치
+curl -fsSL https://tailscale.com/install.sh | sh
+systemctl enable --now tailscaled
+
+# Tailscale 연결
+tailscale up \
+  --auth-key="$TAILSCALE_AUTH_KEY" \
+  --hostname="stockspoon-ai"
+
+# 확인
+tailscale status
+tailscale ip -4
+
 docker compose version
