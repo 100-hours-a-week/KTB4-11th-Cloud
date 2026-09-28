@@ -63,3 +63,8 @@ output "github_actions_oidc_provider_arn" {
   description = "ARN of the GitHub Actions OIDC provider"
   value       = aws_iam_openid_connect_provider.github_actions.arn
 }
+
+output "app_cloudwatch_agent_role_arn" {
+  description = "IAM role attached to the application EC2 for CloudWatch Agent publishing"
+  value       = aws_iam_role.app_cloudwatch_agent.arn
+}
