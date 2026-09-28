@@ -1,0 +1,78 @@
+{
+  "agent": {
+    "metrics_collection_interval": 60
+  },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": {
+      "InstanceId": "${aws:InstanceId}"
+    },
+    "metrics_collected": {
+      "cpu": {
+        "measurement": [
+          "usage_active",
+          "usage_idle",
+          "usage_iowait",
+          "usage_system",
+          "usage_user"
+        ],
+        "totalcpu": true
+      },
+      "mem": {
+        "measurement": [
+          "available_percent",
+          "used_percent"
+        ]
+      },
+      "disk": {
+        "resources": [
+          "/"
+        ],
+        "measurement": [
+          "used_percent",
+          "inodes_free"
+        ]
+      },
+      "diskio": {
+        "measurement": [
+          "reads",
+          "writes",
+          "read_bytes",
+          "write_bytes",
+          "io_time",
+          "iops_in_progress"
+        ]
+      },
+      "netstat": {
+        "measurement": [
+          "tcp_established",
+          "tcp_time_wait",
+          "tcp_close_wait"
+        ]
+      },
+      "swap": {
+        "measurement": [
+          "used_percent"
+        ]
+      }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/syslog",
+            "log_group_name": "/stockspoon/v1/host/system",
+            "log_stream_name": "{instance_id}-syslog"
+          },
+          {
+            "file_path": "/var/log/auth.log",
+            "log_group_name": "/stockspoon/v1/host/auth",
+            "log_stream_name": "{instance_id}-auth"
+          }
+        ]
+      }
+    }
+  }
+}

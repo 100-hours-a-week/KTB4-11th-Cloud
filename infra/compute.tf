@@ -4,13 +4,14 @@ data "aws_ssm_parameter" "ubuntu_2604_ami" {
   name = "/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id"
 }
 
-# Single V1 application host for Nginx, frontend, backend, MySQL, and Redis.
+# Single V1 application host for Nginx, frontend, backend, and MySQL.
 resource "aws_instance" "app" {
   ami                    = data.aws_ssm_parameter.ubuntu_2604_ami.value
   instance_type          = var.ec2_instance_type
   key_name               = var.ec2_key_name
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.app.id]
+  iam_instance_profile   = aws_iam_instance_profile.app.name
 
   user_data = templatefile("${path.module}/user-data.sh", {
     cloud_repository_url    = "https://github.com/${var.github_repository_owner}/${var.github_cloud_repository_name}.git"

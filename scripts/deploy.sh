@@ -94,7 +94,7 @@ wait_for_service() {
 wait_for_stack() {
   local service
 
-  for service in db redis backend frontend nginx; do
+  for service in db backend frontend nginx; do
     wait_for_service "$service"
   done
 }
