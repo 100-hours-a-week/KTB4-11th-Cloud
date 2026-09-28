@@ -16,6 +16,13 @@ services:
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot-data:/etc/letsencrypt:ro
+      - acme-webroot:/var/www/certbot:ro
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-data:/etc/letsencrypt
+      - acme-webroot:/var/www/certbot
     depends_on:
       frontend:
         condition: service_healthy
@@ -113,6 +120,8 @@ services:
     logging: *default-logging
 
 volumes:
+  certbot-data:
+  acme-webroot:
   db-data:
 
 networks:
