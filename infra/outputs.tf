@@ -68,3 +68,8 @@ output "github_cloud_deploy_role_arn" {
   description = "IAM role ARN used by Cloud CD to verify deployment images"
   value       = aws_iam_role.github_cloud_deploy.arn
 }
+
+output "cloudwatch_agent_role_arn" {
+  description = "EC2 role used by the manually installed CloudWatch Agent"
+  value       = aws_iam_role.app_cloudwatch_agent.arn
+}
