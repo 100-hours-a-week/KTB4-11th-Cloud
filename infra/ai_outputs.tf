@@ -4,8 +4,8 @@ output "ai_instance_id" {
 }
 
 output "ai_public_ip" {
-  description = "Auto-assigned public IP for initial SSH access to the AI host"
-  value       = aws_instance.ai.public_ip
+  description = "Elastic IP used for stable SSH access to the AI host"
+  value       = aws_eip.ai.public_ip
 }
 
 output "ai_private_ip" {
