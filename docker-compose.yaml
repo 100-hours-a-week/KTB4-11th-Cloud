@@ -18,11 +18,6 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - certbot-data:/etc/letsencrypt:ro
       - acme-webroot:/var/www/certbot:ro
-  certbot:
-    image: certbot/certbot
-    volumes:
-      - certbot-data:/etc/letsencrypt
-      - acme-webroot:/var/www/certbot
     depends_on:
       frontend:
         condition: service_healthy
@@ -33,6 +28,12 @@ services:
     cpus: ${NGINX_CPUS:-0.25}
     mem_limit: ${NGINX_MEMORY_LIMIT:-128m}
     logging: *default-logging
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-data:/etc/letsencrypt
+      - acme-webroot:/var/www/certbot
 
   frontend:
     image: ${ECR_REGISTRY:?ECR_REGISTRY is required}/${FRONTEND_ECR_REPOSITORY:?FRONTEND_ECR_REPOSITORY is required}:${FE_TAG:?FE_TAG is required}
