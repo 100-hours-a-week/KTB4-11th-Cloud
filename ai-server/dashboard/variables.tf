@@ -33,6 +33,13 @@ variable "application_log_group" {
   default     = "/stockspoon/ai/application"
 }
 
+# 커널 및 시스템 로그가 수집되는 AI 서버 로그 그룹을 설정합니다.
+variable "system_log_group" {
+  description = "CloudWatch Logs group containing AI host system logs"
+  type        = string
+  default     = "/stockspoon/ai/system"
+}
+
 # 계좌 및 모델 포트폴리오 업무 지표가 발행되는 네임스페이스를 설정합니다.
 variable "business_metric_namespace" {
   description = "CloudWatch namespace for AI business metrics"
