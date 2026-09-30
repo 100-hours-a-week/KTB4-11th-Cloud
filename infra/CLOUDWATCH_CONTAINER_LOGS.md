@@ -62,10 +62,11 @@ device error filter remains attached to `/stockspoon/app/system`.
 
 ## Apply CloudWatch Agent metric and log changes
 
-The Agent configuration now publishes `mem_used_percent` instead of
-`mem_available_percent`. It also collects system journal entries at `info`
-priority and above, plus the Agent's own diagnostic log. From the repository
-root on your local machine, copy the full config to EC2:
+The Agent configuration publishes the CPU `usage_active` measurement under the
+CloudWatch metric name `used_percent`, while memory remains `mem_used_percent`.
+It also collects system journal entries at `info` priority and above, plus the
+Agent's own diagnostic log. From the repository root on your local machine,
+copy the full config to EC2:
 
 ```sh
 scp -i <key.pem> infra/cloudwatch-agent.json ubuntu@<EC2_PUBLIC_IP>:/tmp/cloudwatch-agent.json
@@ -83,7 +84,7 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -s
 ```
 
-The memory alarm and USE dashboard now use `mem_used_percent`; the alarm is
-85% or higher for three of five one-minute periods. `mem_used_percent` and
-`mem_available_percent` use different Linux memory calculations, so this is a
-metric change rather than an exact rename of the previous alarm.
+The CPU alarm and USE dashboard use the renamed CPU metric `used_percent`; the
+memory alarm and dashboard use `mem_used_percent`. The CPU and memory metrics
+remain distinct because their dimensions differ: the CPU metric includes the
+`cpu=cpu-total` dimension.
