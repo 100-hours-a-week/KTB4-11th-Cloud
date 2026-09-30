@@ -191,7 +191,7 @@ resource "aws_cloudwatch_dashboard" "ai_basic" {
         height = 6
         properties = merge(local.widget_defaults, {
           title = "vLLM Prefill TPS"
-          stat  = "Sum"
+          stat  = "Maximum"
           metrics = [
             [local.vllm_metric_namespace, "vllm:prompt_tokens_total", { id = "prompt_tokens", visible = false }],
             [{ expression = "RATE(prompt_tokens)", id = "prefill_tps", label = "tokens/s", color = "#1f77b4" }]
@@ -224,7 +224,7 @@ resource "aws_cloudwatch_dashboard" "ai_basic" {
         height = 6
         properties = merge(local.widget_defaults, {
           title = "vLLM Prefill cache hit rate"
-          stat  = "Sum"
+          stat  = "Maximum"
           yAxis = { left = { min = 0, max = 100 } }
           metrics = [
             [local.vllm_metric_namespace, "vllm:prefix_cache_hits", { id = "cache_hits", visible = false }],
