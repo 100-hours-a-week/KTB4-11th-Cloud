@@ -1,10 +1,14 @@
 name: stockspoon-v1
 
 x-logging: &default-logging
-  driver: json-file
+  driver: awslogs
   options:
-    max-size: "10m"
-    max-file: "3"
+    awslogs-region: ap-northeast-2
+    awslogs-group: /stockspoon/app/containers
+    awslogs-create-group: "false"
+    mode: non-blocking
+    max-buffer-size: 4m
+    tag: "{{.Name}}-{{.ID}}"
 
 services:
   nginx:
