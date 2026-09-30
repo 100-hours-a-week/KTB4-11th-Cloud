@@ -78,7 +78,7 @@ resource "aws_lambda_function" "ai_discord_notifier" {
   handler          = "ai_discord_notifier.handler"
   filename         = "${path.module}/lambda/ai_discord_notifier.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda/ai_discord_notifier.zip")
-  timeout          = 15
+  timeout          = 20
   memory_size      = 128
 
   environment {
