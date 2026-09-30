@@ -90,7 +90,10 @@ def _send_discord(alarm):
     request = urllib.request.Request(
         _get_webhook_url(),
         data=json.dumps(_discord_payload(alarm)).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "StockspoonCloudWatchNotifier/1.0",
+        },
         method="POST",
     )
 
@@ -99,7 +102,25 @@ def _send_discord(alarm):
             if response.status < 200 or response.status >= 300:
                 raise RuntimeError(f"Discord returned HTTP status {response.status}")
     except urllib.error.HTTPError as error:
-        raise RuntimeError(f"Discord returned HTTP status {error.code}") from error
+        # Log only Discord's structured error fields. Never log the request URL,
+        # which contains the webhook token.
+        try:
+            response_data = json.loads(error.read(4096).decode("utf-8", errors="replace"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            response_data = {}
+
+        discord_code = response_data.get("code", "unknown")
+        discord_message = str(response_data.get("message", "No message returned"))[:300]
+        safe_header_names = ("Content-Type", "Server", "CF-Ray", "Via", "Retry-After")
+        response_headers = {
+            name.lower(): error.headers.get(name)
+            for name in safe_header_names
+            if error.headers and error.headers.get(name)
+        }
+        raise RuntimeError(
+            f"Discord returned HTTP {error.code}; code={discord_code}; "
+            f"message={discord_message}; headers={json.dumps(response_headers, sort_keys=True)}"
+        ) from error
 
 
 def _send_email(alarm):
@@ -119,9 +140,13 @@ def _send_email(alarm):
         ]
     )
 
+    source = os.environ["SES_FROM_EMAIL"]
+    recipient = os.environ["ALERT_EMAIL_RECIPIENT"]
+    print(f"SES send attempt: From={source}")
+
     ses.send_email(
-        Source=os.environ["SES_FROM_EMAIL"],
-        Destination={"ToAddresses": [os.environ["ALERT_EMAIL_RECIPIENT"]]},
+        Source=source,
+        Destination={"ToAddresses": [recipient]},
         Message={
             "Subject": {"Data": subject, "Charset": "UTF-8"},
             "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},

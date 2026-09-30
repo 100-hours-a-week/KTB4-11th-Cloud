@@ -98,10 +98,25 @@ data "aws_iam_policy_document" "app_discord_lambda" {
   }
 
   statement {
-    sid       = "SendAlarmEmail"
-    effect    = "Allow"
-    actions   = ["ses:SendEmail"]
-    resources = [aws_ses_domain_identity.app_alert_email.arn]
+    sid     = "SendAlarmEmail"
+    effect  = "Allow"
+    actions = ["ses:SendEmail"]
+    resources = [
+      aws_ses_domain_identity.app_alert_email.arn,
+      aws_ses_email_identity.app_alert_recipient.arn,
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ses:FromAddress"
+      values   = [local.app_alert_email_from]
+    }
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "ses:Recipients"
+      values   = [var.app_alert_email_recipient]
+    }
   }
 
   statement {
