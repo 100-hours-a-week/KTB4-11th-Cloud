@@ -23,5 +23,5 @@ variable "ai_instance_type" {
 variable "dashboard_name" {
   description = "AI-only CloudWatch dashboard name"
   type        = string
-  default     = "stockspoon-v1-ai-basic"
+  default     = "stockspoon-v1-ai-app-use"
 }
