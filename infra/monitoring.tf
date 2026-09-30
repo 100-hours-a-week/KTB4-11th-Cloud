@@ -3,10 +3,13 @@ data "aws_caller_identity" "monitoring" {}
 data "aws_partition" "monitoring" {}
 
 locals {
-  app_cloudwatch_namespace       = "CWAgent"
-  app_system_log_group_name      = "/stockspoon/app/system"
-  app_system_log_group_arn       = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_system_log_group_name}"
-  app_system_log_stream_arn_glob = "${local.app_system_log_group_arn}:log-stream:*"
+  app_cloudwatch_namespace          = "CWAgent"
+  app_system_log_group_name         = "/stockspoon/app/system"
+  app_system_log_group_arn          = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_system_log_group_name}"
+  app_system_log_stream_arn_glob    = "${local.app_system_log_group_arn}:log-stream:*"
+  app_container_log_group_name      = "/stockspoon/app/containers"
+  app_container_log_group_arn       = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_container_log_group_name}"
+  app_container_log_stream_arn_glob = "${local.app_container_log_group_arn}:log-stream:*"
 }
 
 resource "aws_cloudwatch_log_group" "app_system" {
@@ -18,6 +21,33 @@ resource "aws_cloudwatch_log_group" "app_system" {
     Project     = "stockspoon"
     Environment = "v1"
     ManagedBy   = "Terraform"
+  }
+}
+
+# Docker's awslogs driver sends each container's stdout/stderr here. Keep a
+# shorter retention period for higher-volume application logs.
+resource "aws_cloudwatch_log_group" "app_containers" {
+  name              = local.app_container_log_group_name
+  retention_in_days = 7
+
+  tags = {
+    Name        = "stockspoon-v1-app-container-logs"
+    Project     = "stockspoon"
+    Environment = "v1"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "app_storage_errors" {
+  name           = "stockspoon-v1-app-storage-errors"
+  log_group_name = aws_cloudwatch_log_group.app_system.name
+  pattern        = "?\"I/O error\" ?blk_update_request ?\"EXT4-fs error\" ?\"Buffer I/O error\" ?\"I/O timeout\" ?\"critical medium error\""
+
+  metric_transformation {
+    name      = "StorageDeviceErrorCount"
+    namespace = "Stockspoon/USE"
+    value     = "1"
+    unit      = "Count"
   }
 }
 
@@ -71,6 +101,16 @@ data "aws_iam_policy_document" "app_cloudwatch_agent" {
     effect    = "Allow"
     actions   = ["logs:DescribeLogStreams"]
     resources = [local.app_system_log_group_arn]
+  }
+
+  statement {
+    sid    = "PublishAppContainerLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+    ]
+    resources = [local.app_container_log_stream_arn_glob]
   }
 
   statement {

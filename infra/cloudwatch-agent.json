@@ -11,31 +11,20 @@
     },
     "metrics_collected": {
       "cpu": {
-        "resources": ["*"],
-        "measurement": [
-          "usage_active",
-          "usage_user",
-          "usage_system",
-          "usage_iowait",
-          "usage_steal"
-        ],
+        "measurement": ["usage_active", "usage_iowait"],
         "totalcpu": true
       },
       "mem": {
-        "measurement": ["used_percent", "available_percent"]
+        "measurement": ["used_percent"]
       },
       "disk": {
         "resources": ["/"],
-        "measurement": ["used_percent", "inodes_free"],
+        "measurement": ["used_percent"],
         "drop_device": true
       },
       "diskio": {
         "resources": ["*"],
         "measurement": [
-          "reads",
-          "writes",
-          "read_bytes",
-          "write_bytes",
           "io_time",
           "iops_in_progress"
         ]
@@ -44,38 +33,44 @@
         "measurement": [
           "bytes_sent",
           "bytes_recv",
-          "packets_sent",
-          "packets_recv",
           "drop_in",
           "drop_out",
           "err_in",
           "err_out"
         ]
       },
-      "netstat": {
-        "measurement": [
-          "tcp_established",
-          "tcp_time_wait",
-          "tcp_syn_sent",
-          "tcp_syn_recv"
-        ]
-      },
       "processes": {
-        "measurement": ["blocked", "running", "zombies"]
-      },
-      "swap": {
-        "measurement": ["used_percent"]
+        "measurement": ["running"]
       }
     }
   },
   "logs": {
     "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/cloud-init.log*",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloud-init"
+          },
+          {
+            "file_path": "/var/log/cloud-init-output.log*",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloud-init-output"
+          },
+          {
+            "file_path": "/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloudwatch-agent"
+          }
+        ]
+      },
       "journald": {
         "collect_list": [
           {
             "log_group_name": "/stockspoon/app/system",
-            "log_stream_name": "{instance_id}",
-            "units": ["docker.service", "ssh.service"]
+            "log_stream_name": "{instance_id}-system-info-and-above",
+            "priority": "info"
           }
         ]
       }
