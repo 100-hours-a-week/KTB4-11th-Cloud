@@ -135,3 +135,9 @@ variable "github_deployment_branch" {
   type        = string
   default     = "main"
 }
+
+variable "app_alert_email_recipient" {
+  description = "Email address that receives CloudWatch alarm notifications through Amazon SES"
+  type        = string
+  default     = "ruby0656@naver.com"
+}
