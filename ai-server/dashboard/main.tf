@@ -194,7 +194,7 @@ resource "aws_cloudwatch_dashboard" "ai_basic" {
           stat  = "Maximum"
           metrics = [
             [local.vllm_metric_namespace, "vllm:prompt_tokens_total", { id = "prompt_tokens", visible = false }],
-            [{ expression = "RATE(prompt_tokens)", id = "prefill_tps", label = "tokens/s", color = "#1f77b4" }]
+            [{ expression = "IF(RATE(prompt_tokens) >= 0, RATE(prompt_tokens), 0)", id = "prefill_tps", label = "tokens/s", color = "#1f77b4" }]
           ]
         })
       },
@@ -229,7 +229,7 @@ resource "aws_cloudwatch_dashboard" "ai_basic" {
           metrics = [
             [local.vllm_metric_namespace, "vllm:prefix_cache_hits", { id = "cache_hits", visible = false }],
             [".", "vllm:prefix_cache_queries", { id = "cache_queries", visible = false }],
-            [{ expression = "IF(RATE(cache_queries) > 0, 100 * RATE(cache_hits) / RATE(cache_queries), 0)", id = "cache_hit_rate", label = "hit rate (%)", color = "#2ca02c" }]
+            [{ expression = "IF(RATE(cache_queries) > 0, IF(RATE(cache_hits) >= 0, 100 * RATE(cache_hits) / RATE(cache_queries), 0), 0)", id = "cache_hit_rate", label = "hit rate (%)", color = "#2ca02c" }]
           ]
         })
       },
