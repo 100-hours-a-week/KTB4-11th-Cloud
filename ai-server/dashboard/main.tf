@@ -155,7 +155,8 @@ resource "aws_cloudwatch_dashboard" "ai_basic" {
           start                = "-P7D"
           setPeriodToTimeRange = true
           metrics = [
-            [local.business_metric_namespace, "ModelPortfoliosCreated", { label = "생성 수", color = "#2ca02c" }]
+            [local.business_metric_namespace, "ModelPortfoliosCreated", { id = "portfolio_created", visible = false }],
+            [{ expression = "FILL(portfolio_created, 0)", id = "portfolio_created_filled", label = "생성 수", color = "#2ca02c" }]
           ]
         }
       },
