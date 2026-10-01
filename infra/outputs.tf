@@ -70,8 +70,13 @@ output "app_cloudwatch_agent_role_arn" {
 }
 
 output "app_container_log_group_name" {
-  description = "CloudWatch Logs group receiving application container stdout/stderr"
+  description = "Legacy aggregate CloudWatch Logs group retained for existing container logs"
   value       = aws_cloudwatch_log_group.app_containers.name
+}
+
+output "app_container_service_log_group_names" {
+  description = "CloudWatch Logs groups receiving each Compose service's stdout/stderr"
+  value       = { for service, log_group in aws_cloudwatch_log_group.app_container_services : service => log_group.name }
 }
 
 output "app_discord_webhook_secret_name" {

@@ -3,13 +3,24 @@ data "aws_caller_identity" "monitoring" {}
 data "aws_partition" "monitoring" {}
 
 locals {
-  app_cloudwatch_namespace          = "CWAgent"
-  app_system_log_group_name         = "/stockspoon/app/system"
-  app_system_log_group_arn          = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_system_log_group_name}"
-  app_system_log_stream_arn_glob    = "${local.app_system_log_group_arn}:log-stream:*"
-  app_container_log_group_name      = "/stockspoon/app/containers"
-  app_container_log_group_arn       = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_container_log_group_name}"
-  app_container_log_stream_arn_glob = "${local.app_container_log_group_arn}:log-stream:*"
+  app_cloudwatch_namespace           = "CWAgent"
+  app_system_log_group_name          = "/stockspoon/app/system"
+  app_system_log_group_arn           = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_system_log_group_name}"
+  app_system_log_stream_arn_glob     = "${local.app_system_log_group_arn}:log-stream:*"
+  app_container_log_group_name       = "/stockspoon/app/containers"
+  app_container_log_group_arn_prefix = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:"
+  app_container_log_group_arn        = "${local.app_container_log_group_arn_prefix}${local.app_container_log_group_name}"
+  app_container_log_stream_arn_glob  = "${local.app_container_log_group_arn}:log-stream:*"
+  app_container_service_log_group_names = {
+    nginx    = "${local.app_container_log_group_name}/nginx"
+    frontend = "${local.app_container_log_group_name}/frontend"
+    backend  = "${local.app_container_log_group_name}/backend"
+    db       = "${local.app_container_log_group_name}/db"
+  }
+  app_container_service_log_stream_arn_globs = [
+    for log_group_name in values(local.app_container_service_log_group_names) :
+    "${local.app_container_log_group_arn_prefix}${log_group_name}:log-stream:*"
+  ]
 }
 
 resource "aws_cloudwatch_log_group" "app_system" {
@@ -24,14 +35,28 @@ resource "aws_cloudwatch_log_group" "app_system" {
   }
 }
 
-# Docker's awslogs driver sends each container's stdout/stderr here. Keep a
-# shorter retention period for higher-volume application logs.
+# Keep the old aggregate group during migration so its existing events remain
+# available while Compose containers move to the per-service groups below.
 resource "aws_cloudwatch_log_group" "app_containers" {
   name              = local.app_container_log_group_name
   retention_in_days = 7
 
   tags = {
     Name        = "stockspoon-v1-app-container-logs"
+    Project     = "stockspoon"
+    Environment = "v1"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "app_container_services" {
+  for_each = local.app_container_service_log_group_names
+
+  name              = each.value
+  retention_in_days = 7
+
+  tags = {
+    Name        = "stockspoon-v1-app-${each.key}-logs"
     Project     = "stockspoon"
     Environment = "v1"
     ManagedBy   = "Terraform"
@@ -110,7 +135,10 @@ data "aws_iam_policy_document" "app_cloudwatch_agent" {
       "logs:CreateLogStream",
       "logs:PutLogEvents",
     ]
-    resources = [local.app_container_log_stream_arn_glob]
+    resources = concat(
+      [local.app_container_log_stream_arn_glob],
+      local.app_container_service_log_stream_arn_globs
+    )
   }
 
   statement {
