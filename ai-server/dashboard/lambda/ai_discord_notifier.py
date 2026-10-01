@@ -12,7 +12,7 @@ import boto3
 secrets_manager = boto3.client("secretsmanager")
 ssm = boto3.client("ssm")
 
-DOCKER_STATS_ALARM_KEYWORDS = ("cpu", "container")
+DOCKER_STATS_ALARM_KEYWORDS = ("cpu", "memory", "container")
 DOCKER_DIAGNOSTIC_COMMANDS = [
     "set -e",
     "printf 'CONTAINER STATUS\\n'",

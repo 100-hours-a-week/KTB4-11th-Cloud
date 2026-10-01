@@ -40,6 +40,6 @@
 
 모든 알람은 데이터가 없을 때 정상으로 간주합니다. 현재 구성은 장애 상태 진입 알림만 전송하며 정상 복구 알림은 전송하지 않습니다.
 
-CPU 또는 이름에 `container`가 포함된 알람이 `ALARM` 상태로 진입하면 알림 Lambda가 AI EC2에서 SSM Run Command로 `docker ps -a`와 `docker stats --no-stream`을 실행합니다. 전체 컨테이너의 상태·이미지와 실행 중인 컨테이너의 CPU·메모리·네트워크·블록 I/O·PID 정보를 같은 Discord 메시지에 첨부합니다. SSM 또는 Docker가 응답하지 않아도 수집 실패 원인을 첨부하고 원래 장애 알림은 계속 전송합니다. 이를 위해 AI EC2 역할에는 `AmazonSSMManagedInstanceCore`가 연결되며 인스턴스에서 SSM Agent가 실행 중이어야 합니다.
+CPU·메모리 또는 이름에 `container`가 포함된 알람이 `ALARM` 상태로 진입하면 알림 Lambda가 AI EC2에서 SSM Run Command로 `docker ps -a`와 `docker stats --no-stream`을 실행합니다. 전체 컨테이너의 상태·이미지와 실행 중인 컨테이너의 CPU·메모리·네트워크·블록 I/O·PID 정보를 같은 Discord 메시지에 첨부합니다. SSM 또는 Docker가 응답하지 않아도 수집 실패 원인을 첨부하고 원래 장애 알림은 계속 전송합니다. 이를 위해 AI EC2 역할에는 `AmazonSSMManagedInstanceCore`가 연결되며 인스턴스에서 SSM Agent가 실행 중이어야 합니다.
 
 Terraform은 `stockspoon/v1/ai/discord-webhook` Secret 리소스만 생성하며 Webhook 값은 state에 저장하지 않습니다. 최초 apply 후, 채팅에 노출되지 않은 새 Webhook URL을 AWS 콘솔 또는 CLI로 Secret에 직접 저장해야 합니다.
