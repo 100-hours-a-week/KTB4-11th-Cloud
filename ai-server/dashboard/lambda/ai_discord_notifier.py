@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -9,6 +10,27 @@ import boto3
 
 
 secrets_manager = boto3.client("secretsmanager")
+ssm = boto3.client("ssm")
+
+DOCKER_STATS_ALARM_KEYWORDS = ("cpu", "container")
+DOCKER_DIAGNOSTIC_COMMANDS = [
+    "set -e",
+    "printf 'CONTAINER STATUS\\n'",
+    "docker ps -a --format 'table {{.Names}}\\t{{.Status}}\\t{{.Image}}'",
+    "printf '\\nRESOURCE SNAPSHOT\\n'",
+    (
+        "docker stats --no-stream --format "
+        "'table {{.Name}}\\t{{.CPUPerc}}\\t{{.MemUsage}}\\t{{.MemPerc}}"
+        "\\t{{.NetIO}}\\t{{.BlockIO}}\\t{{.PIDs}}'"
+    ),
+]
+SSM_TERMINAL_STATUSES = {
+    "Success",
+    "Cancelled",
+    "TimedOut",
+    "Failed",
+    "Cancelling",
+}
 
 
 def _get_webhook_url():
@@ -53,7 +75,67 @@ def _alarm_details(event):
     }
 
 
-def _discord_payload(alarm):
+def _should_collect_docker_stats(alarm):
+    if alarm["state"] != "ALARM":
+        return False
+
+    alarm_name = alarm["name"].lower()
+    return any(keyword in alarm_name for keyword in DOCKER_STATS_ALARM_KEYWORDS)
+
+
+def _collect_docker_stats():
+    instance_id = os.environ["AI_INSTANCE_ID"]
+    response = ssm.send_command(
+        InstanceIds=[instance_id],
+        DocumentName="AWS-RunShellScript",
+        Parameters={"commands": DOCKER_DIAGNOSTIC_COMMANDS},
+        TimeoutSeconds=30,
+        Comment="Collect Docker stats for an AI CloudWatch alarm",
+    )
+    command_id = response["Command"]["CommandId"]
+    deadline = time.monotonic() + 12
+
+    while time.monotonic() < deadline:
+        try:
+            invocation = ssm.get_command_invocation(
+                CommandId=command_id,
+                InstanceId=instance_id,
+            )
+        except ssm.exceptions.InvocationDoesNotExist:
+            time.sleep(1)
+            continue
+
+        status = invocation["Status"]
+        if status not in SSM_TERMINAL_STATUSES:
+            time.sleep(1)
+            continue
+
+        stdout = invocation.get("StandardOutputContent", "").strip()
+        stderr = invocation.get("StandardErrorContent", "").strip()
+        if status == "Success":
+            return stdout or "No running containers were returned."
+
+        detail = stderr or stdout or "No command output was returned."
+        return f"Collection failed ({status}): {detail}"
+
+    return "Collection timed out while waiting for SSM Run Command."
+
+
+def _docker_stats_content(docker_stats):
+    if not docker_stats:
+        return None
+
+    # Discord content is limited to 2,000 characters. Keep room for the title
+    # and code fences, and prevent command errors from closing the code block.
+    safe_stats = docker_stats.replace("```", "'''")
+    max_stats_length = 1900
+    if len(safe_stats) > max_stats_length:
+        safe_stats = f"{safe_stats[:max_stats_length - 16]}\n... (truncated)"
+
+    return f"**AI EC2 Docker diagnostics**\n```text\n{safe_stats}\n```"
+
+
+def _discord_payload(alarm, docker_stats=None):
     colors = {
         "ALARM": 0xE74C3C,
         "OK": 0x2ECC71,
@@ -79,17 +161,22 @@ def _discord_payload(alarm):
     if alarm["timestamp"]:
         embed["timestamp"] = alarm["timestamp"]
 
-    return {
+    payload = {
         "username": "Stockspoon AI CloudWatch",
         "allowed_mentions": {"parse": []},
         "embeds": [embed],
     }
+    content = _docker_stats_content(docker_stats)
+    if content:
+        payload["content"] = content
+
+    return payload
 
 
-def _send_discord(alarm):
+def _send_discord(alarm, docker_stats=None):
     request = urllib.request.Request(
         _get_webhook_url(),
-        data=json.dumps(_discord_payload(alarm)).encode("utf-8"),
+        data=json.dumps(_discord_payload(alarm, docker_stats)).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "User-Agent": "StockspoonAICloudWatchNotifier/1.0",
@@ -117,5 +204,20 @@ def _send_discord(alarm):
 
 def handler(event, context):
     alarm = _alarm_details(event)
-    _send_discord(alarm)
-    return {"sent": ["discord"], "alarm": alarm["name"], "state": alarm["state"]}
+    docker_stats = None
+    if _should_collect_docker_stats(alarm):
+        try:
+            docker_stats = _collect_docker_stats()
+        except Exception as error:
+            # The primary alarm must still be delivered when the instance is
+            # unreachable or SSM/Docker is temporarily unavailable.
+            print(f"Docker stats collection failed: {type(error).__name__}: {error}")
+            docker_stats = f"Collection failed: {type(error).__name__}: {error}"
+
+    _send_discord(alarm, docker_stats)
+    return {
+        "sent": ["discord"],
+        "alarm": alarm["name"],
+        "state": alarm["state"],
+        "docker_stats_included": docker_stats is not None,
+    }
