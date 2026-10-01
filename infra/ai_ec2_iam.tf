@@ -56,6 +56,13 @@ resource "aws_iam_role_policy_attachment" "ai_ssm_get_parameter" {
   policy_arn = aws_iam_policy.ai_ssm_get_parameter.arn
 }
 
+# AI 알람 Lambda가 SSM Run Command로 docker stats를 조회할 수 있도록
+# AI EC2를 Systems Manager 관리형 인스턴스로 등록한다.
+resource "aws_iam_role_policy_attachment" "ai_ssm_managed_instance" {
+  role       = aws_iam_role.ai_ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # EC2 인스턴스에 붙이는 프로필
 # 이 프로필을 AI EC2 인스턴스에 연결하면, 인스턴스 내부에서 AWS CLI가 역할을 사용
 resource "aws_iam_instance_profile" "ai_ec2" {
