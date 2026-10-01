@@ -64,12 +64,27 @@ output "github_actions_oidc_provider_arn" {
   value       = aws_iam_openid_connect_provider.github_actions.arn
 }
 
-output "github_cloud_deploy_role_arn" {
-  description = "IAM role ARN used by Cloud CD to verify deployment images"
-  value       = aws_iam_role.github_cloud_deploy.arn
+output "app_cloudwatch_agent_role_arn" {
+  description = "IAM role attached to the application EC2 for CloudWatch Agent publishing"
+  value       = aws_iam_role.app_cloudwatch_agent.arn
 }
 
-output "cloudwatch_agent_role_arn" {
-  description = "EC2 role used by the manually installed CloudWatch Agent"
-  value       = aws_iam_role.app_cloudwatch_agent.arn
+output "app_container_log_group_name" {
+  description = "Legacy aggregate CloudWatch Logs group retained for existing container logs"
+  value       = aws_cloudwatch_log_group.app_containers.name
+}
+
+output "app_container_service_log_group_names" {
+  description = "CloudWatch Logs groups receiving each Compose service's stdout/stderr"
+  value       = { for service, log_group in aws_cloudwatch_log_group.app_container_services : service => log_group.name }
+}
+
+output "app_discord_webhook_secret_name" {
+  description = "Secrets Manager secret where the Discord incoming webhook URL must be stored"
+  value       = aws_secretsmanager_secret.app_discord_webhook.name
+}
+
+output "app_alert_email_from" {
+  description = "Verified SES sender address for application alarm notifications"
+  value       = local.app_alert_email_from
 }
