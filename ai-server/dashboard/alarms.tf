@@ -69,6 +69,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_cpu_high" {
   unit                = "Percent"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -95,6 +96,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_memory_high" {
   unit                = "Percent"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -120,6 +122,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_root_disk_high" {
   unit                = "Percent"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -146,6 +149,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_ec2_status_check_failed" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -170,6 +174,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_storage_device_error" {
   unit                = "Count"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -190,6 +195,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_application_log_errors" {
   unit                = "Count"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
