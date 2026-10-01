@@ -12,6 +12,7 @@ output "dashboard_url" {
 output "alarm_names" {
   value = [
     aws_cloudwatch_metric_alarm.ai_cpu_high.alarm_name,
+    aws_cloudwatch_metric_alarm.ai_metrics_missing.alarm_name,
     aws_cloudwatch_metric_alarm.ai_memory_high.alarm_name,
     aws_cloudwatch_metric_alarm.ai_root_disk_high.alarm_name,
     aws_cloudwatch_metric_alarm.ai_ec2_status_check_failed.alarm_name,
