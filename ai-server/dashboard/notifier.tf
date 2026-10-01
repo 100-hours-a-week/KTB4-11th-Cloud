@@ -45,6 +45,23 @@ data "aws_iam_policy_document" "ai_discord_lambda" {
   }
 
   statement {
+    sid     = "RunAIDockerStatsCommand"
+    effect  = "Allow"
+    actions = ["ssm:SendCommand"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}::document/AWS-RunShellScript",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/${var.ai_instance_id}",
+    ]
+  }
+
+  statement {
+    sid       = "ReadAIDockerStatsCommand"
+    effect    = "Allow"
+    actions   = ["ssm:GetCommandInvocation"]
+    resources = ["*"]
+  }
+
+  statement {
     sid    = "WriteAIDiscordNotifierLogs"
     effect = "Allow"
     actions = [
@@ -78,12 +95,13 @@ resource "aws_lambda_function" "ai_discord_notifier" {
   handler          = "ai_discord_notifier.handler"
   filename         = "${path.module}/lambda/ai_discord_notifier.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda/ai_discord_notifier.zip")
-  timeout          = 20
+  timeout          = 30
   memory_size      = 128
 
   environment {
     variables = {
       DISCORD_WEBHOOK_SECRET_ARN = aws_secretsmanager_secret.ai_discord_webhook.arn
+      AI_INSTANCE_ID             = var.ai_instance_id
     }
   }
 
