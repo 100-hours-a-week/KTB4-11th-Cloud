@@ -11,7 +11,10 @@
     },
     "metrics_collected": {
       "cpu": {
-        "measurement": ["usage_active", "usage_iowait"],
+        "measurement": [
+          { "name": "usage_active", "rename": "used_percent", "unit": "Percent" },
+          "usage_iowait"
+        ],
         "totalcpu": true
       },
       "mem": {

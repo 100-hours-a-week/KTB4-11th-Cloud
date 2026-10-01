@@ -1,106 +1,90 @@
-# CloudWatch Logs for application containers
+# CloudWatch Logs for Docker containers
 
-Terraform creates a seven-day log group for each long-running Compose service:
+Terraform creates `/stockspoon/app/containers` with seven-day retention and
+grants the EC2 instance profile permission to create streams and publish log
+events only in that group. The `awslogs` driver sends container stdout/stderr
+directly to CloudWatch Logs; the CloudWatch Agent continues to collect host
+metrics, cloud-init logs, the CloudWatch Agent's own log, and info-or-higher
+system journal entries. Journald collection includes all systemd units, so
+Docker daemon and host service messages are included when they reach the
+journal.
 
-| Service | CloudWatch Logs group |
-| --- | --- |
-| Nginx | `/stockspoon/app/containers/nginx` |
-| Frontend | `/stockspoon/app/containers/frontend` |
-| Backend | `/stockspoon/app/containers/backend` |
-| MySQL | `/stockspoon/app/containers/db` |
-
-The former aggregate group, `/stockspoon/app/containers`, remains managed with
-seven-day retention during migration so old log events are preserved. Docker's
-`awslogs` driver sends each service's stdout/stderr directly to its own group in
-`ap-northeast-2`. Stream names use the container name and short ID. The driver
-uses `non-blocking` mode with a 4 MiB buffer; if CloudWatch is temporarily slow,
-container writes continue while logs queue in memory, but records can be lost
-if the buffer fills.
-
-The CloudWatch Agent continues to collect host metrics and host logs. It does
-not tail Nginx files. The official Nginx image forwards its access and error
-logs to container stdout/stderr, which Docker sends to CloudWatch.
-
-## Nginx access log fields
-
-`nginx/conf.d/default.conf` writes access events as JSON. It records the time,
-client and forwarded IPs, host, method, URI, HTTP status, bytes sent, request
-duration, upstream address/status/duration, referer, and user agent. `status`
-is numeric, so the Nginx 5xx metric filter matches responses from 500 through
-599. `$request_time` and `$upstream_response_time` are durations in seconds;
-upstream values can be `-` when no upstream was contacted, or comma-separated
-when Nginx tried multiple upstreams.
-
-These latency values are structured log fields, not separate CloudWatch metric
-time series. Use Logs Insights to find slow or failing requests:
-
-```sql
-fields @timestamp, status, request_time, upstream_status,
-       upstream_response_time, uri
-| filter status >= 500 or request_time >= 1
-| sort @timestamp desc
-| limit 100
-```
-
-## Error metrics and alarms
-
-Metric filters and alarms are separated by service. Nginx error-log severity
-events and frontend, backend, and database error text each get their own
-`Stockspoon/Logs` metric. Each service error alarm fires after at least five
-matching log events in five minutes. Nginx also has a separate HTTP 5xx metric
-and alarm that fires on the first 5xx response in a five-minute window.
-
-The application error filters match the common `ERROR`, `Error`, and `error`
-spellings. The Nginx filter matches its bracketed `error`, `crit`, `alert`, and
-`emerg` severities. Metric filters count matching log events, not repeated
-occurrences of a word within one event.
+The Docker daemon configuration to merge into `/etc/docker/daemon.json` is in
+`docker-daemon-cloudwatch-logging.json`. It gives each container a stream named
+from its name and short ID, and uses a 4 MiB non-blocking buffer so a logging
+backlog does not block the application. If that buffer fills, new log messages
+can be dropped.
 
 ## Apply
 
-1. Review a saved Terraform plan. The expected changes create per-service log
-   groups, service-specific error filters/alarms, the Nginx HTTP 5xx
-   filter/alarm, and update the EC2 role's log-publishing permissions. The old
-   aggregate log group, filter, and alarm remain active during migration so
-   existing containers keep their current alert path. Stop if the plan
-   proposes destroying or replacing the application EC2, VPC, subnet, security
-   group, EIP, or database volume.
+1. Review the Terraform plan and apply it before changing Docker. The planned
+   change should not replace or destroy the application EC2 instance. If the
+   plan shows an EC2, VPC, subnet, security group, EIP, or data-volume destroy,
+   stop and review the plan instead of applying it.
 
    ```sh
-   terraform -chdir=infra plan -out=app.service-logs.tfplan
-   terraform -chdir=infra show -no-color app.service-logs.tfplan
-   terraform -chdir=infra apply app.service-logs.tfplan
+   terraform -chdir=infra plan -out=app.container-logs.tfplan
+   terraform -chdir=infra show -no-color app.container-logs.tfplan
+   terraform -chdir=infra apply app.container-logs.tfplan
    ```
 
-2. Deploy the updated `docker-compose.yaml` and Nginx config to the EC2 host.
-   Compose-level logging settings take precedence over the Docker daemon's
-   default logging configuration, so changing `/etc/docker/daemon.json` is not
-   required for these four services.
-
-3. Recreate the containers during a maintenance window so they adopt the new
-   log groups and Nginx access format. This briefly restarts the selected
-   services; the database data remains in the named `db-data` volume.
+2. SSH to the application EC2 and inspect the current Docker logging
+   configuration before changing it:
 
    ```sh
-   docker compose up -d --force-recreate nginx frontend backend db
+   sudo cat /etc/docker/daemon.json
+   docker info --format '{{.LoggingDriver}}'
+   docker ps -q | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.LogConfig.Type}}'
    ```
 
-4. Confirm the new logging configuration and streams:
+3. Copy `infra/docker-daemon-cloudwatch-logging.json` to the EC2. Merge its
+   `log-driver` and `log-opts` keys into `/etc/docker/daemon.json`; preserve any
+   existing Docker daemon settings. If the application Compose file sets a
+   service-level `logging:` driver, update or remove that override too, because
+   it takes precedence over the daemon default.
+
+4. At a time when a brief application restart is acceptable, restart Docker
+   and recreate the Compose containers so they adopt the new logging driver:
 
    ```sh
-   docker ps -q | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogConfig.Config}}'
-   docker logs --tail 50 nginx
+   sudo systemctl restart docker
+   cd <directory-containing-compose.yaml>
+   docker compose up -d --force-recreate
    ```
 
-   Then inspect the four new groups in CloudWatch Logs. The old aggregate group
-   filter/alarm should be removed in a later reviewed Terraform change after
-   all containers have moved and the new alarms have been confirmed. The old
-   aggregate group can be retained until its historical events are no longer
-   needed.
+5. Confirm each recreated container reports `awslogs`, then check the
+   `/stockspoon/app/containers` log group in CloudWatch Logs. Existing
+   containers keep their previous logging driver until they are recreated.
 
-## Buffer sizing
+The generic `ERROR` metric filter now reads the container log group, so the
+existing application log-error alarm can count container errors. The storage
+device error filter remains attached to `/stockspoon/app/system`.
 
-The 4 MiB buffer is the current baseline. Measure each service's peak
-CloudWatch `IncomingBytes` during a load test or incident before increasing it.
-Use short intervals to capture bursts. The published Moby benchmark is an
-experiment, not a guarantee; its results depend on Docker version, log rate,
-message sizes, and CloudWatch latency.
+## Apply CloudWatch Agent metric and log changes
+
+The Agent configuration publishes the CPU `usage_active` measurement under the
+CloudWatch metric name `used_percent`, while memory remains `mem_used_percent`.
+It also collects system journal entries at `info` priority and above, plus the
+Agent's own diagnostic log. From the repository root on your local machine,
+copy the full config to EC2:
+
+```sh
+scp -i <key.pem> infra/cloudwatch-agent.json ubuntu@<EC2_PUBLIC_IP>:/tmp/cloudwatch-agent.json
+```
+
+Then SSH to EC2 and apply the full configuration (including the existing
+metrics and host log sources):
+
+```sh
+sudo install -m 0644 /tmp/cloudwatch-agent.json /opt/aws/amazon-cloudwatch-agent/etc/config.json
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json \
+  -s
+```
+
+The CPU alarm and USE dashboard use the renamed CPU metric `used_percent`; the
+memory alarm and dashboard use `mem_used_percent`. The CPU and memory metrics
+remain distinct because their dimensions differ: the CPU metric includes the
+`cpu=cpu-total` dimension.

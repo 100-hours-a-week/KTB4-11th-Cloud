@@ -67,9 +67,9 @@ resource "aws_cloudwatch_log_metric_filter" "app_nginx_http_5xx" {
 
 resource "aws_cloudwatch_metric_alarm" "app_cpu_high" {
   alarm_name          = "stockspoon-v1-app-cpu-high"
-  alarm_description   = "Average host CPU active is at least 85% for 3 of 5 one-minute periods."
+  alarm_description   = "Renamed host CPU usage_active metric (used_percent) is at least 85% for 3 of 5 one-minute periods."
   namespace           = "CWAgent"
-  metric_name         = "cpu_usage_active"
+  metric_name         = "used_percent"
   statistic           = "Average"
   period              = 60
   evaluation_periods  = 5

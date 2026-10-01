@@ -22,13 +22,13 @@ resource "aws_cloudwatch_dashboard" "app" {
         width  = 8
         height = 4
         properties = {
-          title     = "CPU active · all cores"
-          view      = "singleValue"
-          sparkline = true
+          title     = "CPU used_percent · all cores"
+          view      = "timeSeries"
+          stacked   = false
           region    = var.aws_region
           period    = 60
           metrics = [[
-            "CWAgent", "cpu_usage_active",
+            "CWAgent", "used_percent",
             "InstanceId", aws_instance.app.id,
             "InstanceType", var.ec2_instance_type,
             "cpu", "cpu-total",
@@ -44,8 +44,8 @@ resource "aws_cloudwatch_dashboard" "app" {
         height = 4
         properties = {
           title     = "Memory used"
-          view      = "singleValue"
-          sparkline = true
+          view      = "timeSeries"
+          stacked   = false
           region    = var.aws_region
           period    = 60
           metrics = [[
@@ -64,8 +64,8 @@ resource "aws_cloudwatch_dashboard" "app" {
         height = 4
         properties = {
           title     = "Root filesystem used"
-          view      = "singleValue"
-          sparkline = true
+          view      = "timeSeries"
+          stacked   = false
           region    = var.aws_region
           period    = 60
           metrics = [[
