@@ -33,14 +33,17 @@
 | --- | --- |
 | CPU 사용률 | 85% 이상, 최근 5분 중 3분 |
 | 시스템 지표 수집 중단 | CloudWatch Agent CPU 지표가 5분 연속 누락 |
+| 필수 컨테이너 장애 | `postgres` 또는 `questdb`가 2분 연속 실행·헬스체크 실패하거나 모니터 지표가 누락 |
 | 메모리 사용률 | 85% 이상, 최근 5분 중 3분 |
 | 루트 디스크 사용률 | 85% 이상, 5분 연속 |
 | EC2 상태 검사 | 실패 상태가 2분 연속 |
 | 스토리지 장치 오류 | 최근 5분에 1건 이상 |
 | 애플리케이션 오류 로그 | 최근 5분에 5건 이상 |
 
-시스템 지표 수집 중단 알람은 데이터 누락을 장애로 간주하고, 나머지 알람은 데이터가 없을 때 정상으로 간주합니다. 장애 상태 진입 시 `ALARM` 알림을 전송하고 정상 상태로 복구되면 `OK` 알림을 전송합니다. 복구 알림에는 Docker 진단 정보를 첨부하지 않습니다.
+시스템 지표 수집 중단 및 필수 컨테이너 장애 알람은 데이터 누락을 장애로 간주하고, 나머지 알람은 데이터가 없을 때 정상으로 간주합니다. 장애 상태 진입 시 `ALARM` 알림을 전송하고 정상 상태로 복구되면 `OK` 알림을 전송합니다. 복구 알림에는 Docker 진단 정보를 첨부하지 않습니다.
 
 CPU·메모리 또는 이름에 `container`가 포함된 알람이 `ALARM` 상태로 진입하면 알림 Lambda가 AI EC2에서 SSM Run Command로 `docker ps -a`와 `docker stats --no-stream`을 실행합니다. 전체 컨테이너의 상태·이미지와 실행 중인 컨테이너의 CPU·메모리·네트워크·블록 I/O·PID 정보를 같은 Discord 메시지에 첨부합니다. SSM 또는 Docker가 응답하지 않아도 수집 실패 원인을 첨부하고 원래 장애 알림은 계속 전송합니다. 이를 위해 AI EC2 역할에는 `AmazonSSMManagedInstanceCore`가 연결되며 인스턴스에서 SSM Agent가 실행 중이어야 합니다.
+
+필수 컨테이너 장애 감시는 AI EC2의 systemd timer가 1분마다 실행합니다. Compose 프로젝트 `ktb4-ai`에서 서비스 라벨이 `postgres` 또는 `questdb`인 실행 중인 컨테이너를 찾아 Docker health 상태가 `healthy`인지 확인하고, 결과를 `AI_CWAgent/ContainerFailureCount`로 발행합니다. 스케줄 컨테이너는 감시 대상에 포함하지 않습니다. EC2에 복사할 스크립트와 systemd 원본은 저장소 루트의 `scripts copy`와 `infrastructure/systemd`에 있습니다.
 
 Terraform은 `stockspoon/v1/ai/discord-webhook` Secret 리소스만 생성하며 Webhook 값은 state에 저장하지 않습니다. 최초 apply 후, 채팅에 노출되지 않은 새 Webhook URL을 AWS 콘솔 또는 CLI로 Secret에 직접 저장해야 합니다.
