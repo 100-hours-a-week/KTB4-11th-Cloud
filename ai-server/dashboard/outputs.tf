@@ -12,11 +12,18 @@ output "dashboard_url" {
 output "alarm_names" {
   value = [
     aws_cloudwatch_metric_alarm.ai_cpu_high.alarm_name,
+    aws_cloudwatch_metric_alarm.ai_metrics_missing.alarm_name,
+    aws_cloudwatch_metric_alarm.ai_container_failure.alarm_name,
     aws_cloudwatch_metric_alarm.ai_memory_high.alarm_name,
     aws_cloudwatch_metric_alarm.ai_root_disk_high.alarm_name,
     aws_cloudwatch_metric_alarm.ai_ec2_status_check_failed.alarm_name,
     aws_cloudwatch_metric_alarm.ai_storage_device_error.alarm_name,
     aws_cloudwatch_metric_alarm.ai_application_log_errors.alarm_name,
+    aws_cloudwatch_metric_alarm.ai_scheduled_job_failure["market-collector"].alarm_name,
+    aws_cloudwatch_metric_alarm.ai_scheduled_job_failure["news-preprocessor"].alarm_name,
+    aws_cloudwatch_metric_alarm.ai_scheduled_job_failure["market-syncer"].alarm_name,
+    aws_cloudwatch_metric_alarm.ai_scheduled_job_failure["morning-pipeline"].alarm_name,
+    aws_cloudwatch_metric_alarm.ai_scheduled_job_failure["portfolio-rebalancer"].alarm_name,
   ]
 }
 
