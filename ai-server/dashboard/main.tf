@@ -2,7 +2,6 @@
 locals {
   namespace                 = "AI_CWAgent"
   business_metric_namespace = var.business_metric_namespace
-  vllm_metric_namespace     = var.vllm_metric_namespace
 
   widget_defaults = {
     region = var.aws_region
@@ -182,74 +181,6 @@ resource "aws_cloudwatch_dashboard" "ai_basic" {
             "| limit 100"
           ])
         }
-      },
-      # 누적 prompt token counter의 분당 변화율을 prefill TPS로 환산합니다.
-      {
-        type   = "metric"
-        x      = 0
-        y      = 31
-        width  = 8
-        height = 6
-        properties = merge(local.widget_defaults, {
-          title = "vLLM Prefill TPS"
-          stat  = "Maximum"
-          metrics = [
-            [local.vllm_metric_namespace, "vllm:prompt_tokens_total", { id = "prompt_tokens", visible = false }],
-            [{ expression = "IF(RATE(prompt_tokens) >= 0, RATE(prompt_tokens), 0)", id = "prefill_tps", label = "tokens/s", color = "#1f77b4" }]
-          ]
-        })
-      },
-      # vLLM KV cache 사용률은 0~1 gauge를 백분율로 변환해 표시합니다.
-      {
-        type   = "metric"
-        x      = 8
-        y      = 31
-        width  = 8
-        height = 6
-        properties = merge(local.widget_defaults, {
-          title = "vLLM KV cache usage"
-          stat  = "Average"
-          yAxis = { left = { min = 0, max = 100 } }
-          metrics = [
-            [local.vllm_metric_namespace, "vllm:kv_cache_usage_perc", { id = "kv_cache", visible = false }],
-            [{ expression = "100 * kv_cache", id = "kv_cache_percent", label = "KV cache (%)", color = "#9467bd" }]
-          ]
-        })
-      },
-      # prefix cache의 query 대비 hit 증가율을 백분율로 표시합니다.
-      {
-        type   = "metric"
-        x      = 16
-        y      = 31
-        width  = 8
-        height = 6
-        properties = merge(local.widget_defaults, {
-          title = "vLLM Prefill cache hit rate"
-          stat  = "Maximum"
-          yAxis = { left = { min = 0, max = 100 } }
-          metrics = [
-            [local.vllm_metric_namespace, "vllm:prefix_cache_hits", { id = "cache_hits", visible = false }],
-            [".", "vllm:prefix_cache_queries", { id = "cache_queries", visible = false }],
-            [{ expression = "IF(RATE(cache_queries) > 0, IF(RATE(cache_hits) >= 0, 100 * RATE(cache_hits) / RATE(cache_queries), 0), 0)", id = "cache_hit_rate", label = "hit rate (%)", color = "#2ca02c" }]
-          ]
-        })
-      },
-      # vLLM 스케줄러에서 실행 중이거나 대기 중인 요청 수를 함께 표시합니다.
-      {
-        type   = "metric"
-        x      = 0
-        y      = 37
-        width  = 24
-        height = 6
-        properties = merge(local.widget_defaults, {
-          title = "vLLM 요청 상태"
-          stat  = "Maximum"
-          yAxis = { left = { min = 0 } }
-          metrics = [
-            [local.vllm_metric_namespace, "vllm:num_requests_waiting", { label = "waiting", color = "#ff7f0e" }],
-            [".", "vllm:num_requests_running", { label = "running", color = "#1f77b4" }]
-          ]
-        })
       }
     ]
   })
