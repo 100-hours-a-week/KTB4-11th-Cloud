@@ -11,7 +11,7 @@ resource "aws_instance" "ai" {
   iam_instance_profile        = aws_iam_instance_profile.ai_ec2.name
   vpc_security_group_ids      = [aws_security_group.ai.id]
 
-  user_data = templatefile("${path.module}/ai_user_data.sh", {
+  user_data = templatefile("${path.module}/../ai-server/infra/templates/user-data.sh", {
     docker_compose_version = var.docker_compose_version
   })
 
