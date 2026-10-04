@@ -1,17 +1,16 @@
-# Dedicated Ubuntu host for AI containers in the existing public subnet/VPC.
-# The instance keeps subnet-level public IPv4 assignment enabled to avoid
-# replacing the existing host; the Elastic IP below becomes its stable public
-# address after association.
+# 기존 공통 VPC의 public subnet에서 AI 컨테이너를 실행하는 EC2입니다.
 resource "aws_instance" "ai" {
-  ami                         = data.aws_ssm_parameter.ubuntu_2604_ami.value
+  # 빈 destination state에서 import plan을 만들 때 ForceNew 필드가 unknown이
+  # 되지 않도록 기존 AMI를 사용합니다. Migration 완료 후 SSM 조회로 복원합니다.
+  ami                         = local.migration_ai_ami_id
   instance_type               = var.ai_ec2_instance_type
   key_name                    = var.ec2_key_name
-  subnet_id                   = aws_subnet.public.id
+  subnet_id                   = data.terraform_remote_state.core.outputs.public_subnet_id
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.ai_ec2.name
   vpc_security_group_ids      = [aws_security_group.ai.id]
 
-  user_data = templatefile("${path.module}/../ai-server/infra/templates/user-data.sh", {
+  user_data = templatefile("${path.module}/templates/user-data.sh", {
     docker_compose_version = var.docker_compose_version
   })
 
@@ -34,8 +33,6 @@ resource "aws_instance" "ai" {
     http_tokens   = "required"
   }
 
-  depends_on = [aws_route_table_association.public]
-
   tags = {
     Name        = "stockspoon-v1-ai-app"
     Project     = "stockspoon"
@@ -44,11 +41,8 @@ resource "aws_instance" "ai" {
   }
 }
 
-# Stable public address
 resource "aws_eip" "ai" {
   domain = "vpc"
-
-  depends_on = [aws_internet_gateway.main]
 
   tags = {
     Name        = "stockspoon-v1-ai-eip"
@@ -59,6 +53,7 @@ resource "aws_eip" "ai" {
 }
 
 resource "aws_eip_association" "ai" {
-  instance_id   = aws_instance.ai.id
+  # 빈 destination state에서도 기존 association을 순수 import할 수 있게 고정합니다.
+  instance_id   = local.migration_ai_instance_id
   allocation_id = aws_eip.ai.id
 }
