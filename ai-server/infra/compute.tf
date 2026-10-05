@@ -35,6 +35,7 @@ resource "aws_instance" "ai" {
 
   lifecycle {
     prevent_destroy = true
+    ignore_changes  = [user_data]
   }
 
   tags = {
