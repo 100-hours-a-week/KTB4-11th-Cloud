@@ -41,6 +41,12 @@ variable "ai_ec2_instance_type" {
   default     = "t3a.medium"
 }
 
+variable "ai_ec2_ami_id" {
+  description = "Pinned AMI ID for the V1 AI host to prevent unintended instance replacement"
+  type        = string
+  default     = "ami-0ebb55ce78339fc0c"
+}
+
 variable "ai_ec2_root_volume_size_gib" {
   description = "Encrypted gp3 root EBS volume size for the AI EC2 host"
   type        = number

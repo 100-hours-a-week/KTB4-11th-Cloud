@@ -1,8 +1,7 @@
 # 기존 공통 VPC의 public subnet에서 AI 컨테이너를 실행하는 EC2입니다.
 resource "aws_instance" "ai" {
-  # 빈 destination state에서 import plan을 만들 때 ForceNew 필드가 unknown이
-  # 되지 않도록 기존 AMI를 사용합니다. Migration 완료 후 SSM 조회로 복원합니다.
-  ami                         = local.migration_ai_ami_id
+  # 운영 인스턴스가 최신 AMI 조회 결과 변경만으로 교체되지 않도록 AMI를 고정합니다.
+  ami                         = var.ai_ec2_ami_id
   instance_type               = var.ai_ec2_instance_type
   key_name                    = var.ec2_key_name
   subnet_id                   = data.terraform_remote_state.core.outputs.public_subnet_id
@@ -58,7 +57,6 @@ resource "aws_eip" "ai" {
 }
 
 resource "aws_eip_association" "ai" {
-  # 빈 destination state에서도 기존 association을 순수 import할 수 있게 고정합니다.
-  instance_id   = local.migration_ai_instance_id
+  instance_id   = aws_instance.ai.id
   allocation_id = aws_eip.ai.id
 }

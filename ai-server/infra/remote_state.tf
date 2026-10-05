@@ -8,8 +8,3 @@ data "terraform_remote_state" "core" {
     region = "ap-northeast-2"
   }
 }
-
-# AI EC2 이전 후 사용할 최신 Ubuntu Server 26.04 LTS x86_64 AMI 조회입니다.
-data "aws_ssm_parameter" "ubuntu_2604_ami" {
-  name = "/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id"
-}
