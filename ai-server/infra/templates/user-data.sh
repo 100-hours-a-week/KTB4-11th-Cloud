@@ -5,7 +5,7 @@ DOCKER_COMPOSE_VERSION="${docker_compose_version}"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y docker.io curl ca-certificates
+apt-get install -y docker.io curl ca-certificates unzip
 systemctl enable --now docker
 usermod -aG docker ubuntu
 
@@ -25,6 +25,17 @@ printf '%s\n' \
   > /etc/ssh/sshd_config.d/99-stockspoon-ai.conf
 /usr/sbin/sshd -t
 systemctl restart ssh
+
+# AWS CLI v2 설치 (Ubuntu 24.04+ apt에는 awscli 패키지가 없음)
+# 아래 SSM 조회와 예약 작업 실패 지표 발행(/usr/local/bin/aws)에서 사용합니다.
+AWS_CLI_WORK_DIR="$(mktemp -d)"
+curl --fail --silent --show-error --location \
+  "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+  --output "$AWS_CLI_WORK_DIR/awscliv2.zip"
+unzip -q "$AWS_CLI_WORK_DIR/awscliv2.zip" -d "$AWS_CLI_WORK_DIR"
+"$AWS_CLI_WORK_DIR/aws/install" --update
+rm -rf "$AWS_CLI_WORK_DIR"
+/usr/local/bin/aws --version
 
 # Tailscale 인증 키 가져오기
 TAILSCALE_AUTH_KEY=$(aws ssm get-parameter \
