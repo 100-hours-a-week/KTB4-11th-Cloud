@@ -33,6 +33,10 @@ resource "aws_instance" "ai" {
     http_tokens   = "required"
   }
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   tags = {
     Name        = "stockspoon-v1-ai-app"
     Project     = "stockspoon"
