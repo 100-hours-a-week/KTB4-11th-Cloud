@@ -1,14 +1,11 @@
 name: stockspoon-v1
 
-x-logging: &default-logging
-  driver: awslogs
-  options:
-    awslogs-region: ap-northeast-2
-    awslogs-group: /stockspoon/app/containers
-    awslogs-create-group: "false"
-    mode: non-blocking
-    max-buffer-size: 4m
-    tag: "{{.Name}}-{{.ID}}"
+x-logging-options: &default-logging-options
+  awslogs-region: ap-northeast-2
+  awslogs-create-group: "false"
+  mode: non-blocking
+  max-buffer-size: 4m
+  tag: "{{.Name}}-{{.ID}}"
 
 services:
   nginx:
@@ -29,9 +26,13 @@ services:
         condition: service_healthy
     networks:
       - app-net
-    cpus: ${NGINX_CPUS:-0.25}
+    cpus: ${NGINX_CPUS:-0.30}
     mem_limit: ${NGINX_MEMORY_LIMIT:-128m}
-    logging: *default-logging
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/app/containers/nginx
 
   certbot:
     image: certbot/certbot
@@ -59,7 +60,11 @@ services:
       start_period: 20s
     cpus: ${FRONTEND_CPUS:-0.5}
     mem_limit: ${FRONTEND_MEMORY_LIMIT:-512m}
-    logging: *default-logging
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/app/containers/frontend
 
   backend:
     image: ${ECR_REGISTRY:?ECR_REGISTRY is required}/${BACKEND_ECR_REPOSITORY:?BACKEND_ECR_REPOSITORY is required}:${BE_TAG:?BE_TAG is required}
@@ -81,6 +86,9 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      KIWOOM_APP_KEY: ${KIWOOM_APP_KEY:?KIWOOM_APP_KEY is required}
+      KIWOOM_APP_SECRET: ${KIWOOM_APP_SECRET:?KIWOOM_APP_SECRET is required}
+      KIWOOM_STREAM_ENABLED: "true"
     depends_on:
       db:
         condition: service_healthy
@@ -95,7 +103,11 @@ services:
       start_period: 40s
     cpus: ${BACKEND_CPUS:-1.0}
     mem_limit: ${BACKEND_MEMORY_LIMIT:-1500m}
-    logging: *default-logging
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/app/containers/backend
 
   db:
     image: ${MYSQL_IMAGE:?MYSQL_IMAGE is required}
@@ -122,7 +134,11 @@ services:
       start_period: 30s
     cpus: ${MYSQL_CPUS:-0.75}
     mem_limit: ${MYSQL_MEMORY_LIMIT:-1024m}
-    logging: *default-logging
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/app/containers/db
 
 volumes:
   certbot-data:
