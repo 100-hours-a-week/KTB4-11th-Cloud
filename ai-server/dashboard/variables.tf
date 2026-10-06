@@ -46,10 +46,3 @@ variable "business_metric_namespace" {
   type        = string
   default     = "Stockspoon/AI"
 }
-
-# Prometheus에서 전달된 vLLM 지표가 발행되는 CloudWatch 네임스페이스를 설정합니다.
-variable "vllm_metric_namespace" {
-  description = "CloudWatch namespace containing dimensionless vLLM metrics"
-  type        = string
-  default     = "Stockspoon/vLLM"
-}

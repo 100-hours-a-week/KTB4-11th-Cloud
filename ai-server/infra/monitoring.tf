@@ -39,7 +39,7 @@ data "aws_iam_policy_document" "ai_cloudwatch" {
   statement {
     sid       = "PublishAIMetrics"
     effect    = "Allow"
-    actions   = ["cloudwatch:PutMetricData"] # 지정된 namespace에 대한 메트릭 전송 허용
+    actions   = ["cloudwatch:PutMetricData"]
     resources = ["*"]
 
     condition {
@@ -49,7 +49,6 @@ data "aws_iam_policy_document" "ai_cloudwatch" {
     }
   }
 
-  # 로그 전송 대상 그룹 제한
   statement {
     sid       = "DescribeAILogGroups"
     effect    = "Allow"
