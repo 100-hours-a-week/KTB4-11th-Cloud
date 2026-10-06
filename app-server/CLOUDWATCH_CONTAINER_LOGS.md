@@ -22,9 +22,9 @@ group. Stop and review the plan if it proposes deleting or replacing the
 application EC2, VPC, subnet, security group, EIP, or data volume.
 
 ```sh
-terraform -chdir=infra plan -out=app.remove-aggregate-container-log-group.tfplan
-terraform -chdir=infra show -no-color app.remove-aggregate-container-log-group.tfplan
-terraform -chdir=infra apply app.remove-aggregate-container-log-group.tfplan
+terraform -chdir=app-server plan -out=app.remove-aggregate-container-log-group.tfplan
+terraform -chdir=app-server show -no-color app.remove-aggregate-container-log-group.tfplan
+terraform -chdir=app-server apply app.remove-aggregate-container-log-group.tfplan
 ```
 
 The old group's historical log export is saved locally at

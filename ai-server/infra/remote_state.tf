@@ -9,13 +9,13 @@ data "terraform_remote_state" "shared" {
   }
 }
 
-# AI API ingress에서 참조하는 App Security Group은 기존 infra가 관리합니다.
+# AI API ingress에서 참조하는 App Security Group은 app-server가 관리합니다.
 data "terraform_remote_state" "app" {
   backend = "s3"
 
   config = {
     bucket = "stockspoon-terraform-state-v1"
-    key    = "terraform.tfstate"
+    key    = "app-server/terraform.tfstate"
     region = "ap-northeast-2"
   }
 }
