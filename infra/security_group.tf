@@ -2,7 +2,7 @@
 resource "aws_security_group" "app" {
   name        = "stockspoon-v1-app-sg"
   description = "Security group for StockSpoon V1 application server"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
 
   tags = {
     Name = "stockspoon-v1-app-sg"
