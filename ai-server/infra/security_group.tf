@@ -1,10 +1,7 @@
-# Separate security group for the AI host. The API is reachable only from the
-# existing application EC2 security group; SSH follows the existing key-only
-# deployment access CIDRs.
 resource "aws_security_group" "ai" {
   name        = "stockspoon-v1-ai-sg"
   description = "Security group for StockSpoon V1 AI EC2"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.terraform_remote_state.core.outputs.vpc_id
 
   tags = {
     Name        = "stockspoon-v1-ai-sg"
@@ -25,10 +22,10 @@ resource "aws_vpc_security_group_ingress_rule" "ai_ssh" {
   description       = "Allow key-only SSH access to the AI host"
 }
 
-# The AI news-clusterer API listens on 8000; expose it only to the BE host.
+# App 서버만 AI API 포트에 접근할 수 있습니다.
 resource "aws_vpc_security_group_ingress_rule" "ai_api_from_app" {
   security_group_id            = aws_security_group.ai.id
-  referenced_security_group_id = aws_security_group.app.id
+  referenced_security_group_id = data.terraform_remote_state.core.outputs.app_security_group_id
   from_port                    = 8000
   to_port                      = 8000
   ip_protocol                  = "tcp"
