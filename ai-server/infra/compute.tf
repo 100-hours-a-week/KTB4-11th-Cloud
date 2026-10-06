@@ -1,10 +1,10 @@
-# 기존 공통 VPC의 public subnet에서 AI 컨테이너를 실행하는 EC2입니다.
+# 공통 public subnet에서 AI 컨테이너를 실행하는 EC2입니다.
 resource "aws_instance" "ai" {
   # 운영 인스턴스가 최신 AMI 조회 결과 변경만으로 교체되지 않도록 AMI를 고정합니다.
   ami                         = var.ai_ec2_ami_id
   instance_type               = var.ai_ec2_instance_type
   key_name                    = var.ec2_key_name
-  subnet_id                   = data.terraform_remote_state.core.outputs.public_subnet_id
+  subnet_id                   = data.terraform_remote_state.shared.outputs.public_subnet_id
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.ai_ec2.name
   vpc_security_group_ids      = [aws_security_group.ai.id]

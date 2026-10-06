@@ -9,7 +9,7 @@ resource "aws_instance" "app" {
   ami                    = data.aws_ssm_parameter.ubuntu_2604_ami.value
   instance_type          = var.ec2_instance_type
   key_name               = var.ec2_key_name
-  subnet_id              = aws_subnet.public.id
+  subnet_id              = data.terraform_remote_state.shared.outputs.public_subnet_id
   vpc_security_group_ids = [aws_security_group.app.id]
   iam_instance_profile   = aws_iam_instance_profile.app_cloudwatch_agent.name
 
@@ -43,7 +43,8 @@ resource "aws_instance" "app" {
   # The SSM parameter points to Canonical's newest 26.04 image. Do not replace
   # this stateful V1 host automatically whenever Canonical publishes a new AMI.
   lifecycle {
-    ignore_changes = [ami]
+    prevent_destroy = true
+    ignore_changes  = [ami]
   }
 
   tags = {
@@ -57,8 +58,6 @@ resource "aws_instance" "app" {
 # Stable public address used by GitHub Actions as the EC2_HOST secret.
 resource "aws_eip" "app" {
   domain = "vpc"
-
-  depends_on = [aws_internet_gateway.main]
 
   tags = {
     Name        = "stockspoon-v1-app-eip"
