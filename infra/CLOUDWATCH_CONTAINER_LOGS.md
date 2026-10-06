@@ -1,82 +1,53 @@
-# CloudWatch Logs for Docker containers
+# CloudWatch Logs for the application EC2
 
-Terraform creates `/stockspoon/app/containers` with seven-day retention and
-grants the EC2 instance profile permission to create streams and publish log
-events only in that group. The `awslogs` driver sends container stdout/stderr
-directly to CloudWatch Logs; the CloudWatch Agent continues to collect host
-metrics, cloud-init logs, the CloudWatch Agent's own log, and info-or-higher
-system journal entries. Journald collection includes all systemd units, so
-Docker daemon and host service messages are included when they reach the
-journal.
+Docker Compose sends each service's stdout and stderr directly through the
+Docker `awslogs` driver to its own log group:
 
-The Docker daemon configuration to merge into `/etc/docker/daemon.json` is in
-`docker-daemon-cloudwatch-logging.json`. It gives each container a stream named
-from its name and short ID, and uses a 4 MiB non-blocking buffer so a logging
-backlog does not block the application. If that buffer fills, new log messages
-can be dropped.
+- `/stockspoon/app/containers/nginx`
+- `/stockspoon/app/containers/frontend`
+- `/stockspoon/app/containers/backend`
+- `/stockspoon/app/containers/db`
 
-## Apply
+Terraform manages these four groups with seven-day retention. The former
+aggregate group `/stockspoon/app/containers` is no longer managed. The local
+CloudWatch Agent config collects host logs under `/stockspoon/app/system` and
+host metrics; it does not collect container stdout/stderr.
 
-1. Review the Terraform plan and apply it before changing Docker. The planned
-   change should not replace or destroy the application EC2 instance. If the
-   plan shows an EC2, VPC, subnet, security group, EIP, or data-volume destroy,
-   stop and review the plan instead of applying it.
+## Remove the former aggregate group
 
-   ```sh
-   terraform -chdir=infra plan -out=app.container-logs.tfplan
-   terraform -chdir=infra show -no-color app.container-logs.tfplan
-   terraform -chdir=infra apply app.container-logs.tfplan
-   ```
-
-2. SSH to the application EC2 and inspect the current Docker logging
-   configuration before changing it:
-
-   ```sh
-   sudo cat /etc/docker/daemon.json
-   docker info --format '{{.LoggingDriver}}'
-   docker ps -q | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.LogConfig.Type}}'
-   ```
-
-3. Copy `infra/docker-daemon-cloudwatch-logging.json` to the EC2. Merge its
-   `log-driver` and `log-opts` keys into `/etc/docker/daemon.json`; preserve any
-   existing Docker daemon settings. If the application Compose file sets a
-   service-level `logging:` driver, update or remove that override too, because
-   it takes precedence over the daemon default.
-
-4. At a time when a brief application restart is acceptable, restart Docker
-   and recreate the Compose containers so they adopt the new logging driver:
-
-   ```sh
-   sudo systemctl restart docker
-   cd <directory-containing-compose.yaml>
-   docker compose up -d --force-recreate
-   ```
-
-5. Confirm each recreated container reports `awslogs`, then check the
-   `/stockspoon/app/containers` log group in CloudWatch Logs. Existing
-   containers keep their previous logging driver until they are recreated.
-
-The generic `ERROR` metric filter now reads the container log group, so the
-existing application log-error alarm can count container errors. The storage
-device error filter remains attached to `/stockspoon/app/system`.
-
-## Apply CloudWatch Agent metric and log changes
-
-The Agent configuration publishes the CPU `usage_active` measurement under the
-CloudWatch metric name `used_percent`, while memory remains `mem_used_percent`.
-It also collects system journal entries at `info` priority and above, plus the
-Agent's own diagnostic log. From the repository root on your local machine,
-copy the full config to EC2:
+Review the saved Terraform plan before applying. It should destroy only
+`aws_cloudwatch_log_group.app_containers` among infrastructure resources. The
+CloudWatch Agent IAM policy will also stop granting access to that former
+group. Stop and review the plan if it proposes deleting or replacing the
+application EC2, VPC, subnet, security group, EIP, or data volume.
 
 ```sh
-scp -i <key.pem> infra/cloudwatch-agent.json ubuntu@<EC2_PUBLIC_IP>:/tmp/cloudwatch-agent.json
+terraform -chdir=infra plan -out=app.remove-aggregate-container-log-group.tfplan
+terraform -chdir=infra show -no-color app.remove-aggregate-container-log-group.tfplan
+terraform -chdir=infra apply app.remove-aggregate-container-log-group.tfplan
 ```
 
-Then SSH to EC2 and apply the full configuration (including the existing
-metrics and host log sources):
+The old group's historical log export is saved locally at
+`artifacts/cloudwatch-log-exports/stockspoon-app-containers-2026-09-30_1300-1400_KST.json`.
+
+## Check the EC2 CloudWatch Agent
+
+The Agent should only publish host logs to `/stockspoon/app/system`. Check its
+configuration and status over SSH:
 
 ```sh
-sudo install -m 0644 /tmp/cloudwatch-agent.json /opt/aws/amazon-cloudwatch-agent/etc/config.json
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
+sudo grep -R -n -F '/stockspoon/app/containers' /opt/aws/amazon-cloudwatch-agent/etc
+```
+
+No grep result means the Agent is not configured to collect that container log
+group, so no Agent change or restart is needed. If an old entry is found in
+`/opt/aws/amazon-cloudwatch-agent/etc/config.json`, edit that file with `vi`,
+remove only the matching object from `logs.logs_collected.files.collect_list`,
+save, then reload the full config:
+
+```sh
+sudo vi /opt/aws/amazon-cloudwatch-agent/etc/config.json
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a fetch-config \
   -m ec2 \
@@ -84,7 +55,16 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -s
 ```
 
-The CPU alarm and USE dashboard use the renamed CPU metric `used_percent`; the
-memory alarm and dashboard use `mem_used_percent`. The CPU and memory metrics
-remain distinct because their dimensions differ: the CPU metric includes the
-`cpu=cpu-total` dimension.
+Container logs use Docker's logging driver, not the CloudWatch Agent. Confirm
+the running containers point to the four service groups:
+
+```sh
+docker ps -q | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogConfig.Config}}'
+```
+
+If `/etc/docker/daemon.json` still sets the former aggregate group as the
+daemon-wide default, remove that stale `awslogs-group` configuration while
+preserving unrelated Docker settings. Compose's per-service logging settings
+take precedence. Existing containers keep their current logging configuration
+until recreated, so recreate only a container that inspection shows is still
+using the former group.

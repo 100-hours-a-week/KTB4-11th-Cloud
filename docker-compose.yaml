@@ -86,6 +86,9 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      KIWOOM_APP_KEY: ${KIWOOM_APP_KEY:?KIWOOM_APP_KEY is required}
+      KIWOOM_APP_SECRET: ${KIWOOM_APP_SECRET:?KIWOOM_APP_SECRET is required}
+      KIWOOM_STREAM_ENABLED: "true"
     depends_on:
       db:
         condition: service_healthy

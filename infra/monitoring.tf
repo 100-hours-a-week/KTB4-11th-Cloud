@@ -7,19 +7,16 @@ locals {
   app_system_log_group_name          = "/stockspoon/app/system"
   app_system_log_group_arn           = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_system_log_group_name}"
   app_system_log_stream_arn_glob     = "${local.app_system_log_group_arn}:log-stream:*"
-  app_container_log_group_name       = "/stockspoon/app/containers"
-  app_container_log_group_arn_prefix = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:"
-  app_container_log_group_arn        = "${local.app_container_log_group_arn_prefix}${local.app_container_log_group_name}"
-  app_container_log_stream_arn_glob  = "${local.app_container_log_group_arn}:log-stream:*"
+  app_log_group_arn_prefix           = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:"
   app_container_service_log_group_names = {
-    nginx    = "${local.app_container_log_group_name}/nginx"
-    frontend = "${local.app_container_log_group_name}/frontend"
-    backend  = "${local.app_container_log_group_name}/backend"
-    db       = "${local.app_container_log_group_name}/db"
+    nginx    = "/stockspoon/app/containers/nginx"
+    frontend = "/stockspoon/app/containers/frontend"
+    backend  = "/stockspoon/app/containers/backend"
+    db       = "/stockspoon/app/containers/db"
   }
   app_container_service_log_stream_arn_globs = [
     for log_group_name in values(local.app_container_service_log_group_names) :
-    "${local.app_container_log_group_arn_prefix}${log_group_name}:log-stream:*"
+    "${local.app_log_group_arn_prefix}${log_group_name}:log-stream:*"
   ]
 }
 
@@ -29,20 +26,6 @@ resource "aws_cloudwatch_log_group" "app_system" {
 
   tags = {
     Name        = "stockspoon-v1-app-system-logs"
-    Project     = "stockspoon"
-    Environment = "v1"
-    ManagedBy   = "Terraform"
-  }
-}
-
-# Keep the old aggregate group during migration so its existing events remain
-# available while Compose containers move to the per-service groups below.
-resource "aws_cloudwatch_log_group" "app_containers" {
-  name              = local.app_container_log_group_name
-  retention_in_days = 7
-
-  tags = {
-    Name        = "stockspoon-v1-app-container-logs"
     Project     = "stockspoon"
     Environment = "v1"
     ManagedBy   = "Terraform"
@@ -135,10 +118,7 @@ data "aws_iam_policy_document" "app_cloudwatch_agent" {
       "logs:CreateLogStream",
       "logs:PutLogEvents",
     ]
-    resources = concat(
-      [local.app_container_log_stream_arn_glob],
-      local.app_container_service_log_stream_arn_globs
-    )
+    resources = local.app_container_service_log_stream_arn_globs
   }
 
   statement {
