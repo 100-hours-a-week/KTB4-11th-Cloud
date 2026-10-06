@@ -1,59 +1,46 @@
 {
   "agent": {
-    "metrics_collection_interval": 60
+    "metrics_collection_interval": 60,
+    "region": "ap-northeast-2"
   },
   "metrics": {
     "namespace": "CWAgent",
     "append_dimensions": {
-      "InstanceId": "${aws:InstanceId}"
+      "InstanceId": "${aws:InstanceId}",
+      "InstanceType": "${aws:InstanceType}"
     },
     "metrics_collected": {
       "cpu": {
-        "measurement": [
-          "usage_active",
-          "usage_idle",
-          "usage_iowait",
-          "usage_system",
-          "usage_user"
-        ],
+        "measurement": ["usage_active", "usage_iowait"],
         "totalcpu": true
       },
       "mem": {
-        "measurement": [
-          "available_percent",
-          "used_percent"
-        ]
+        "measurement": ["used_percent"]
       },
       "disk": {
-        "resources": [
-          "/"
-        ],
-        "measurement": [
-          "used_percent",
-          "inodes_free"
-        ]
+        "resources": ["/"],
+        "measurement": ["used_percent"],
+        "drop_device": true
       },
       "diskio": {
+        "resources": ["*"],
         "measurement": [
-          "reads",
-          "writes",
-          "read_bytes",
-          "write_bytes",
           "io_time",
           "iops_in_progress"
         ]
       },
-      "netstat": {
+      "net": {
         "measurement": [
-          "tcp_established",
-          "tcp_time_wait",
-          "tcp_close_wait"
+          "bytes_sent",
+          "bytes_recv",
+          "drop_in",
+          "drop_out",
+          "err_in",
+          "err_out"
         ]
       },
-      "swap": {
-        "measurement": [
-          "used_percent"
-        ]
+      "processes": {
+        "measurement": ["running"]
       }
     }
   },
@@ -62,14 +49,28 @@
       "files": {
         "collect_list": [
           {
-            "file_path": "/var/log/syslog",
-            "log_group_name": "/stockspoon/v1/host/system",
-            "log_stream_name": "{instance_id}-syslog"
+            "file_path": "/var/log/cloud-init.log*",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloud-init"
           },
           {
-            "file_path": "/var/log/auth.log",
-            "log_group_name": "/stockspoon/v1/host/auth",
-            "log_stream_name": "{instance_id}-auth"
+            "file_path": "/var/log/cloud-init-output.log*",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloud-init-output"
+          },
+          {
+            "file_path": "/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloudwatch-agent"
+          }
+        ]
+      },
+      "journald": {
+        "collect_list": [
+          {
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-system-info-and-above",
+            "priority": "info"
           }
         ]
       }
