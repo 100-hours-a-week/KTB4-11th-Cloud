@@ -37,3 +37,13 @@ output "order_dlq_arn" {
   description = "ARN of the FIFO order dead-letter queue"
   value       = aws_sqs_queue.order_dlq.arn
 }
+
+output "backend_sqs_policy_arn" {
+  description = "ARN of the managed IAM policy for the Backend SQS access"
+  value       = aws_iam_policy.backend_sqs.arn
+}
+
+output "ai_sqs_policy_arn" {
+  description = "ARN of the managed IAM policy for the AI service SQS access"
+  value       = aws_iam_policy.ai_sqs.arn
+}

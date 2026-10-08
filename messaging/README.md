@@ -1,8 +1,10 @@
 # StockSpoon V2 messaging infrastructure
 
 This Terraform root manages the SQS queues shared by the V2 Backend and AI
-services. The first deployment target is `dev`; ECS roles, IAM policies, and
-CloudWatch alarms are added in later stages.
+services. The first deployment target is `dev`. It also creates the managed
+IAM policies that will be attached to future EC2 or ECS roles; role creation
+and policy attachment remain with the compute stacks. CloudWatch alarms are
+added in a later stage.
 
 ## Dev queues
 
@@ -10,6 +12,14 @@ CloudWatch alarms are added in later stages.
 - `stockspoon-v2-dev-report-dlq`
 - `stockspoon-v2-dev-order.fifo`
 - `stockspoon-v2-dev-order-dlq.fifo`
+
+## Dev IAM policies
+
+- `stockspoon-v2-dev-backend-sqs`
+- `stockspoon-v2-dev-ai-sqs`
+
+The policies are not attached to a role in this stack. Their ARNs are exposed
+as Terraform outputs for a future EC2 instance role or ECS task role.
 
 ## Validation without a remote backend
 
