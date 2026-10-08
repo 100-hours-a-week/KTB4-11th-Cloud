@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 AWS_REGION="${aws_region}"
+CLOUDWATCH_AGENT_CONFIG_BASE64="${cloudwatch_agent_config_base64}"
 DOCKER_COMPOSE_VERSION="${docker_compose_version}"
 TAILSCALE_AUTH_PARAMETER="${tailscale_auth_parameter}"
 TAILSCALE_HOSTNAME="${tailscale_hostname}"
@@ -36,6 +37,27 @@ curl --fail --silent --show-error --location \
 unzip -q "$AWS_CLI_WORK_DIR/awscliv2.zip" -d "$AWS_CLI_WORK_DIR"
 "$AWS_CLI_WORK_DIR/aws/install" --update
 rm -rf "$AWS_CLI_WORK_DIR"
+
+CLOUDWATCH_AGENT_PACKAGE="/tmp/amazon-cloudwatch-agent.deb"
+CLOUDWATCH_AGENT_CONFIG="/opt/aws/amazon-cloudwatch-agent/etc/stockspoon-ai-dev-cloudwatch-agent.json"
+CLOUDWATCH_AGENT_CONTROL="/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl"
+
+curl --fail --silent --show-error --location \
+  "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb" \
+  --output "$CLOUDWATCH_AGENT_PACKAGE"
+dpkg -i -E "$CLOUDWATCH_AGENT_PACKAGE"
+install -d -o root -g root -m 0755 "$(dirname "$CLOUDWATCH_AGENT_CONFIG")"
+printf '%s' "$CLOUDWATCH_AGENT_CONFIG_BASE64" \
+  | base64 --decode \
+  > "$CLOUDWATCH_AGENT_CONFIG"
+chmod 0644 "$CLOUDWATCH_AGENT_CONFIG"
+"$CLOUDWATCH_AGENT_CONTROL" \
+  -a fetch-config \
+  -m ec2 \
+  -s \
+  -c "file:$CLOUDWATCH_AGENT_CONFIG"
+unset CLOUDWATCH_AGENT_CONFIG_BASE64
+rm -f "$CLOUDWATCH_AGENT_PACKAGE"
 
 install -d -m 0755 /etc/stockspoon
 cat > /etc/stockspoon/ai.env <<'ENVIRONMENT'

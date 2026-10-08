@@ -8,12 +8,13 @@ resource "aws_instance" "ai" {
   vpc_security_group_ids      = [aws_security_group.ai.id]
 
   user_data = templatefile("${path.module}/templates/user-data.sh", {
-    aws_region               = var.aws_region
-    docker_compose_version   = var.docker_compose_version
-    order_queue_url          = data.terraform_remote_state.messaging.outputs.order_queue_url
-    report_queue_url         = data.terraform_remote_state.messaging.outputs.report_queue_url
-    tailscale_auth_parameter = var.tailscale_auth_parameter_name
-    tailscale_hostname       = local.name_prefix
+    aws_region                     = var.aws_region
+    cloudwatch_agent_config_base64 = filebase64("${path.module}/config/cloudwatch-agent.json")
+    docker_compose_version         = var.docker_compose_version
+    order_queue_url                = data.terraform_remote_state.messaging.outputs.order_queue_url
+    report_queue_url               = data.terraform_remote_state.messaging.outputs.report_queue_url
+    tailscale_auth_parameter       = var.tailscale_auth_parameter_name
+    tailscale_hostname             = local.name_prefix
   })
 
   root_block_device {

@@ -63,12 +63,13 @@ s3://stockspoon-terraform-state-ai-dev/ai-server/dev-infra/terraform.tfstate
 최초 부팅 시 `templates/user-data.sh`가 다음 작업을 수행한다.
 
 1. Docker, Docker Compose, AWS CLI를 설치한다.
-2. SSH 비밀번호 로그인과 root 로그인을 차단한다.
-3. `/etc/stockspoon/ai.env`에 AWS 리전과 개발용 SQS Queue URL을 기록한다.
-4. EC2 Role 권한으로 SSM Parameter Store에서 Tailscale 인증 키를 읽는다.
-5. Tailscale을 설치하고 호스트 이름 `stockspoon-v2-dev-ai`로 연결한다.
+2. CloudWatch Agent를 설치하고 `config/cloudwatch-agent.json` 설정으로 실행한다.
+3. SSH 비밀번호 로그인과 root 로그인을 차단한다.
+4. `/etc/stockspoon/ai.env`에 AWS 리전과 개발용 SQS Queue URL을 기록한다.
+5. EC2 Role 권한으로 SSM Parameter Store에서 Tailscale 인증 키를 읽는다.
+6. Tailscale을 설치하고 호스트 이름 `stockspoon-v2-dev-ai`로 연결한다.
 
-`config/cloudwatch-agent.json`은 이후 CloudWatch Agent 설치 시 사용할 설정 파일이다. 현재 user data는 CloudWatch Agent를 설치하거나 이 파일을 EC2로 복사하지 않으므로, 로그 그룹과 IAM 권한만 준비된 상태다.
+`config/cloudwatch-agent.json`은 base64로 인코딩되어 user data에 전달된다. 부팅 과정에서 `/opt/aws/amazon-cloudwatch-agent/etc/stockspoon-ai-dev-cloudwatch-agent.json`으로 저장되며, Agent가 시스템 로그와 호스트 메트릭을 CloudWatch로 전송한다. 대시보드는 생성하지 않는다.
 
 ## SQS 권한
 
@@ -82,6 +83,13 @@ Queue URL은 다음 경로에 기록된다.
 
 Queue URL은 인증 정보가 아니며, 실제 SQS 호출 권한은 EC2 Role과 연결된 IAM 정책으로 제어한다.
 
+## CloudWatch Agent 적용 상태
+
+2026-10-08 기준 현재 EC2에도 SSM Run Command로 같은 설정을 적용했다. Agent 서비스는 `enabled`, `active` 상태다.
+
+- 로그 스트림: `/stockspoon/v2/dev/ai/system`의 `i-01a64c0fbc3521618`
+- 메트릭 네임스페이스: `AI_DEV_CWAgent`
+- 확인된 메트릭: `mem_used_percent`, `mem_available_percent`, `disk_used_percent`
 
 ## 변경 및 삭제 시 주의 사항
 
