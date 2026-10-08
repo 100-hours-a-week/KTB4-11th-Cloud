@@ -1,10 +1,11 @@
 # Load-test infrastructure
 
-This directory owns the separate load-test VPC and its two EC2 instances. Its Terraform state is stored under the separate S3 object key test-infra/terraform.tfstate, so it does not share the production infra state key.
+This directory owns the separate load-test VPC and its two EC2 instances. The same VPC is also reused as the StockSpoon V2 development network. Its Terraform state is stored under the separate S3 object key test-infra/terraform.tfstate, so it does not share the production infra state key.
 
 ## Resources
 
 - A new VPC using 10.20.0.0/16, a public subnet, an Internet Gateway, and a default route. Confirm that this CIDR does not overlap any other VPC or connected network before applying.
+- Two shared development private subnets, `10.20.10.0/24` in `ap-northeast-2a` and `10.20.11.0/24` in `ap-northeast-2c`. Their dedicated route table has only the VPC local route and no Internet Gateway or NAT Gateway route.
 - An application EC2 sized like the current V1 host by default. It gets a stable Elastic IP, Docker and Docker Compose, and the Cloud repository cloned under /opt/cloud.
 - A k6 EC2 with k6 installed from Grafana's official Debian/Ubuntu package repository.
 - Separate security groups and EC2 instance profiles. HTTP and HTTPS reach the test app publicly. Both EC2s use the existing stockspoon-v1-deploy key pair. SSH is allowed from 0.0.0.0/0 by default, matching infra; set ssh_allowed_cidrs to your public IP /32 to narrow access. SSM remains available as an optional fallback.
@@ -32,4 +33,4 @@ Run from this directory:
     terraform plan
     terraform apply
 
-Useful outputs include app_public_ip, app_private_ip, k6_public_ip, and k6_app_private_url. k6 can use the private target from inside the VPC.
+Useful outputs include app_public_ip, app_private_ip, k6_public_ip, k6_app_private_url, private_subnet_ids, and private_route_table_id. Valkey and future development services consume private_subnet_ids through Terraform Remote State.

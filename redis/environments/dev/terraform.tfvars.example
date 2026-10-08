@@ -7,3 +7,5 @@ test_infra_state_key    = "test-infra/terraform.tfstate"
 
 ai_dev_state_bucket = "stockspoon-terraform-state-ai-dev"
 ai_dev_state_key    = "ai-server/dev-infra/terraform.tfstate"
+
+valkey_port = 6379

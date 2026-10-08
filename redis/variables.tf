@@ -49,3 +49,14 @@ variable "ai_dev_state_key" {
   type        = string
   default     = "ai-server/dev-infra/terraform.tfstate"
 }
+
+variable "valkey_port" {
+  description = "TLS port used by the Valkey serverless cache"
+  type        = number
+  default     = 6379
+
+  validation {
+    condition     = var.valkey_port >= 1 && var.valkey_port <= 65535
+    error_message = "valkey_port must be between 1 and 65535."
+  }
+}

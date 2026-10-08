@@ -2,7 +2,7 @@
 
 이 디렉터리는 Amazon ElastiCache Serverless for Valkey 개발 환경을 관리하는 Terraform Root다.
 
-현재 2단계에서는 Terraform Backend, Provider, 공통 변수와 태그, 기존 인프라 Remote State 연결만 구성한다. Private Subnet, Security Group, Valkey, IAM Policy와 CloudWatch Alarm은 이후 단계에서 추가한다.
+현재 3단계까지 Terraform Backend, Provider, 공통 변수와 태그, 기존 인프라 Remote State와 Valkey Security Group을 구성한다. Private Subnet과 Route Table은 `test-infra`가 소유하며 Redis는 해당 Output을 참조한다. Valkey, IAM Policy와 CloudWatch Alarm은 이후 단계에서 추가한다.
 
 ## 참조하는 기존 인프라
 
@@ -35,6 +35,19 @@ Redis Terraform에서는 다음 항목만 미리 생성한다.
 - 향후 연결에 사용할 IAM Policy ARN Output
 
 기존 `stockspoon-loadtest-app`은 Backend 개발 서버로 간주하지 않으며 Valkey 접근 권한을 부여하지 않는다. Backend 서버를 구축할 때 해당 인프라에서 IAM Role과 Instance Profile을 만들고 Redis가 출력한 Policy ARN을 연결한다. Backend Security Group이 생긴 뒤 Valkey `6379` 인바운드 규칙도 추가한다.
+
+## 네트워크 구성
+
+Valkey는 `test-infra` VPC 안의 공용 개발 Private Subnet 두 개를 사용한다. Subnet과 Route Table은 `test-infra` Terraform State가 관리하고 Redis는 `private_subnet_ids` Output을 Remote State로 참조한다.
+
+| 이름 | CIDR | 가용 영역 | Public IP 자동 할당 |
+| --- | --- | --- | --- |
+| `stockspoon-loadtest-private-a` | `10.20.10.0/24` | `ap-northeast-2a` | 비활성화 |
+| `stockspoon-loadtest-private-c` | `10.20.11.0/24` | `ap-northeast-2c` | 비활성화 |
+
+두 Subnet은 `test-infra`의 별도 Private Route Table에 연결한다. Route Table에는 AWS가 자동으로 만드는 VPC `local` 경로만 존재하며 Internet Gateway와 NAT Gateway 경로를 추가하지 않는다. 기존 Public Subnet, Route Table, EC2 Network Interface는 수정하지 않는다.
+
+Valkey Security Group의 TCP `6379` 인바운드는 현재 AI 개발 서버 Security Group에서만 허용한다. `0.0.0.0/0`, 기존 Load Test App 및 개발자 개인 IP에는 열지 않는다. Backend 개발 서버가 생기면 Backend Security Group 참조 규칙을 별도로 추가한다.
 
 ## Terraform 상태
 

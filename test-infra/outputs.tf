@@ -8,6 +8,16 @@ output "public_subnet_id" {
   value       = aws_subnet.public.id
 }
 
+output "private_subnet_ids" {
+  description = "IDs of the private subnets shared by development services"
+  value       = [for key in sort(keys(aws_subnet.private)) : aws_subnet.private[key].id]
+}
+
+output "private_route_table_id" {
+  description = "ID of the route table associated with the development private subnets"
+  value       = aws_route_table.private.id
+}
+
 output "app_instance_id" {
   description = "ID of the load-test application EC2"
   value       = aws_instance.app.id
