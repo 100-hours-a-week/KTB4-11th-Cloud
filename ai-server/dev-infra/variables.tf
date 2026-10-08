@@ -11,13 +11,16 @@ variable "ec2_key_name" {
 }
 
 variable "ssh_allowed_cidrs" {
-  description = "IPv4 CIDR blocks allowed to make key-only SSH connections; leave empty when using SSM or Tailscale"
+  description = "IPv4 CIDR blocks allowed to make key-only SSH connections"
   type        = list(string)
-  default     = []
+  default     = ["0.0.0.0/0"]
 
   validation {
-    condition     = alltrue([for cidr in var.ssh_allowed_cidrs : can(cidrnetmask(cidr))])
-    error_message = "ssh_allowed_cidrs must contain only valid IPv4 CIDR blocks."
+    condition = (
+      length(var.ssh_allowed_cidrs) > 0 &&
+      alltrue([for cidr in var.ssh_allowed_cidrs : can(cidrnetmask(cidr))])
+    )
+    error_message = "ssh_allowed_cidrs must contain at least one valid IPv4 CIDR block."
   }
 }
 

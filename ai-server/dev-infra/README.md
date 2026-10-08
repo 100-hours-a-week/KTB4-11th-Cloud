@@ -52,8 +52,8 @@ s3://stockspoon-terraform-state-ai-dev/ai-server/dev-infra/terraform.tfstate
 ## 네트워크와 접근 제어
 
 - AI API의 TCP 8000 포트는 `stockspoon-loadtest-app-sg`가 연결된 리소스에서만 접근할 수 있다.
-- `ssh_allowed_cidrs` 기본값이 빈 목록이므로 인터넷에서 들어오는 SSH 규칙은 생성되지 않는다.
-- 서버 관리는 기본적으로 AWS Systems Manager Session Manager 또는 Tailscale을 사용한다.
+- TCP 22는 기본적으로 `0.0.0.0/0`에 열려 있으며 EC2 Key Pair `stockspoon-v1-deploy`를 사용하는 공개키 인증만 허용한다. 가능하면 `ssh_allowed_cidrs`를 관리자 IP 대역으로 제한한다.
+- AWS Systems Manager Session Manager와 Tailscale도 서버 관리 경로로 사용할 수 있다.
 - EC2의 외부 통신은 SQS, SSM, Tailscale 설치와 패키지 다운로드를 위해 전체 허용되어 있다.
 - EC2 Instance Metadata Service는 IMDSv2 토큰을 반드시 사용하도록 설정한다.
 - 애플리케이션에는 Access Key를 저장하지 않는다. EC2 Instance Profile의 임시 자격 증명을 사용한다.
