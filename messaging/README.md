@@ -3,8 +3,8 @@
 This Terraform root manages the SQS queues shared by the V2 Backend and AI
 services. The first deployment target is `dev`. It also creates the managed
 IAM policies that will be attached to future EC2 or ECS roles; role creation
-and policy attachment remain with the compute stacks. CloudWatch alarms are
-added in a later stage.
+and policy attachment remain with the compute stacks. The SQS dashboard and
+DLQ alarms use a dedicated Discord notifier Lambda in this stack.
 
 ## Dev queues
 
@@ -20,6 +20,20 @@ added in a later stage.
 
 The policies are not attached to a role in this stack. Their ARNs are exposed
 as Terraform outputs for a future EC2 instance role or ECS task role.
+
+## Monitoring and Discord notifications
+
+The CloudWatch dashboard shows the main queues' backlog, in-flight messages,
+oldest message age, and throughput. Each DLQ has an alarm that enters `ALARM`
+when at least one visible message exists and returns to `OK` after the DLQ is
+empty.
+
+The alarms invoke the dedicated `stockspoon-v2-dev-sqs-discord-notifier`
+Lambda. This stack creates the empty
+`stockspoon/v2/dev/sqs/discord-webhook` Secrets Manager secret but deliberately
+does not manage a secret value. After apply, store a newly generated Discord
+webhook URL directly in that secret outside Terraform. Never commit the URL or
+pass it as a Terraform variable.
 
 ## Validation without a remote backend
 
