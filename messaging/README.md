@@ -48,9 +48,9 @@ require the real dev state bucket.
 
 ## Dev plan
 
-Replace the placeholder bucket in
-`environments/dev/backend.hcl.example`, save the approved configuration as
-`environments/dev/backend.hcl`, and run:
+The dev state is stored in the pre-created
+`stockspoon-terraform-state-sqs` S3 bucket under the
+`messaging/dev/terraform.tfstate` key. Initialize it with:
 
 ```bash
 terraform -chdir=messaging init \
