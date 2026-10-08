@@ -1,0 +1,9 @@
+aws_region   = "ap-northeast-2"
+environment  = "dev"
+project_name = "stockspoon"
+
+test_infra_state_bucket = "stockspoon-terraform-state-v1"
+test_infra_state_key    = "test-infra/terraform.tfstate"
+
+ai_dev_state_bucket = "stockspoon-terraform-state-ai-dev"
+ai_dev_state_key    = "ai-server/dev-infra/terraform.tfstate"
