@@ -15,11 +15,14 @@ DLQ alarms use a dedicated Discord notifier Lambda in this stack.
 
 ## Dev IAM policies
 
-- `stockspoon-v2-dev-backend-sqs`
+- `stockspoon-v2-dev-backend-producer-sqs`
+- `stockspoon-v2-dev-order-consumer-sqs`
 - `stockspoon-v2-dev-ai-sqs`
 
 The policies are not attached to a role in this stack. Their ARNs are exposed
-as Terraform outputs for a future EC2 instance role or ECS task role.
+as Terraform outputs for a future EC2 instance role or ECS task role. A single
+development EC2 role can attach both Backend policies; separate ECS tasks can
+attach only the producer or consumer policy they require.
 
 ## Monitoring and Discord notifications
 

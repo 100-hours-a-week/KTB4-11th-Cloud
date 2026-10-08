@@ -38,9 +38,14 @@ output "order_dlq_arn" {
   value       = aws_sqs_queue.order_dlq.arn
 }
 
-output "backend_sqs_policy_arn" {
-  description = "ARN of the managed IAM policy for the Backend SQS access"
-  value       = aws_iam_policy.backend_sqs.arn
+output "backend_producer_sqs_policy_arn" {
+  description = "ARN of the managed IAM policy for Backend report and order publishing"
+  value       = aws_iam_policy.backend_producer_sqs.arn
+}
+
+output "order_consumer_sqs_policy_arn" {
+  description = "ARN of the managed IAM policy for order consumption"
+  value       = aws_iam_policy.order_consumer_sqs.arn
 }
 
 output "ai_sqs_policy_arn" {

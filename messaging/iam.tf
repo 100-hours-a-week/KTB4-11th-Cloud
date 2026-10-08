@@ -1,4 +1,4 @@
-data "aws_iam_policy_document" "backend_sqs" {
+data "aws_iam_policy_document" "backend_producer_sqs" {
   statement {
     sid       = "SendReportRequests"
     effect    = "Allow"
@@ -13,6 +13,19 @@ data "aws_iam_policy_document" "backend_sqs" {
     resources = [aws_sqs_queue.order.arn]
   }
 
+}
+
+resource "aws_iam_policy" "backend_producer_sqs" {
+  name        = "${local.name_prefix}-backend-producer-sqs"
+  description = "Allows the V2 ${var.environment} Backend API to publish report and order requests"
+  policy      = data.aws_iam_policy_document.backend_producer_sqs.json
+
+  tags = {
+    Name = "${local.name_prefix}-backend-producer-sqs"
+  }
+}
+
+data "aws_iam_policy_document" "order_consumer_sqs" {
   statement {
     sid    = "ConsumeOrders"
     effect = "Allow"
@@ -26,13 +39,13 @@ data "aws_iam_policy_document" "backend_sqs" {
   }
 }
 
-resource "aws_iam_policy" "backend_sqs" {
-  name        = "${local.name_prefix}-backend-sqs"
-  description = "Allows the V2 ${var.environment} Backend to publish report and order requests and consume orders"
-  policy      = data.aws_iam_policy_document.backend_sqs.json
+resource "aws_iam_policy" "order_consumer_sqs" {
+  name        = "${local.name_prefix}-order-consumer-sqs"
+  description = "Allows the V2 ${var.environment} order consumer to process order requests"
+  policy      = data.aws_iam_policy_document.order_consumer_sqs.json
 
   tags = {
-    Name = "${local.name_prefix}-backend-sqs"
+    Name = "${local.name_prefix}-order-consumer-sqs"
   }
 }
 
