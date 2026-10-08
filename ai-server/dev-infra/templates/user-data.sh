@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+AWS_REGION="${aws_region}"
 CLOUDWATCH_AGENT_CONFIG_BASE64="${cloudwatch_agent_config_base64}"
 DOCKER_COMPOSE_VERSION="${docker_compose_version}"
+TAILSCALE_AUTH_PARAMETER="${tailscale_auth_parameter}"
+TAILSCALE_HOSTNAME="${tailscale_hostname}"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -23,12 +26,10 @@ printf '%s\n' \
   'PermitRootLogin no' \
   'PubkeyAuthentication yes' \
   'AllowUsers ubuntu' \
-  > /etc/ssh/sshd_config.d/99-stockspoon-ai.conf
+  > /etc/ssh/sshd_config.d/99-stockspoon-ai-dev.conf
 /usr/sbin/sshd -t
 systemctl restart ssh
 
-# AWS CLI v2 설치 (Ubuntu 24.04+ apt에는 awscli 패키지가 없음)
-# 아래 SSM 조회와 예약 작업 실패 지표 발행(/usr/local/bin/aws)에서 사용합니다.
 AWS_CLI_WORK_DIR="$(mktemp -d)"
 curl --fail --silent --show-error --location \
   "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
@@ -36,11 +37,9 @@ curl --fail --silent --show-error --location \
 unzip -q "$AWS_CLI_WORK_DIR/awscliv2.zip" -d "$AWS_CLI_WORK_DIR"
 "$AWS_CLI_WORK_DIR/aws/install" --update
 rm -rf "$AWS_CLI_WORK_DIR"
-/usr/local/bin/aws --version
 
-# CloudWatch Agent 설치 및 운영 AI 전용 설정 적용
 CLOUDWATCH_AGENT_PACKAGE="/tmp/amazon-cloudwatch-agent.deb"
-CLOUDWATCH_AGENT_CONFIG="/opt/aws/amazon-cloudwatch-agent/etc/stockspoon-ai-cloudwatch-agent.json"
+CLOUDWATCH_AGENT_CONFIG="/opt/aws/amazon-cloudwatch-agent/etc/stockspoon-ai-dev-cloudwatch-agent.json"
 CLOUDWATCH_AGENT_CONTROL="/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl"
 
 curl --fail --silent --show-error --location \
@@ -60,25 +59,27 @@ chmod 0644 "$CLOUDWATCH_AGENT_CONFIG"
 unset CLOUDWATCH_AGENT_CONFIG_BASE64
 rm -f "$CLOUDWATCH_AGENT_PACKAGE"
 
-# Tailscale 인증 키 가져오기
-TAILSCALE_AUTH_KEY=$(aws ssm get-parameter \
-  --name "/stockspoon/ai/tailscale-auth-key" \
+install -d -m 0755 /etc/stockspoon
+cat > /etc/stockspoon/ai.env <<'ENVIRONMENT'
+AWS_REGION=${aws_region}
+REPORT_QUEUE_URL=${report_queue_url}
+ORDER_QUEUE_URL=${order_queue_url}
+ENVIRONMENT
+chmod 0644 /etc/stockspoon/ai.env
+
+TAILSCALE_AUTH_KEY="$(aws ssm get-parameter \
+  --name "$TAILSCALE_AUTH_PARAMETER" \
   --with-decryption \
   --query 'Parameter.Value' \
   --output text \
-  --region ap-northeast-2)
+  --region "$AWS_REGION")"
 
-# Tailscale 설치
 curl -fsSL https://tailscale.com/install.sh | sh
 systemctl enable --now tailscaled
-
-# Tailscale 연결
 tailscale up \
   --auth-key="$TAILSCALE_AUTH_KEY" \
-  --hostname="stockspoon-ai"
-
-# 확인
-tailscale status
-tailscale ip -4
+  --hostname="$TAILSCALE_HOSTNAME"
+unset TAILSCALE_AUTH_KEY
 
 docker compose version
+tailscale status

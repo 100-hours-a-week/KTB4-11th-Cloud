@@ -1,17 +1,20 @@
-# 공통 public subnet에서 AI 컨테이너를 실행하는 EC2입니다.
 resource "aws_instance" "ai" {
-  # 운영 인스턴스가 최신 AMI 조회 결과 변경만으로 교체되지 않도록 AMI를 고정합니다.
   ami                         = var.ai_ec2_ami_id
   instance_type               = var.ai_ec2_instance_type
   key_name                    = var.ec2_key_name
-  subnet_id                   = data.terraform_remote_state.shared.outputs.public_subnet_id
+  subnet_id                   = data.terraform_remote_state.test.outputs.public_subnet_id
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.ai_ec2.name
   vpc_security_group_ids      = [aws_security_group.ai.id]
 
   user_data = templatefile("${path.module}/templates/user-data.sh", {
+    aws_region                     = var.aws_region
     cloudwatch_agent_config_base64 = filebase64("${path.module}/config/cloudwatch-agent.json")
     docker_compose_version         = var.docker_compose_version
+    order_queue_url                = data.terraform_remote_state.messaging.outputs.order_queue_url
+    report_queue_url               = data.terraform_remote_state.messaging.outputs.report_queue_url
+    tailscale_auth_parameter       = var.tailscale_auth_parameter_name
+    tailscale_hostname             = local.name_prefix
   })
 
   root_block_device {
@@ -21,10 +24,7 @@ resource "aws_instance" "ai" {
     delete_on_termination = true
 
     tags = {
-      Name        = "stockspoon-v1-ai-root"
-      Project     = "stockspoon"
-      Environment = "v1"
-      ManagedBy   = "Terraform"
+      Name = "${local.name_prefix}-root"
     }
   }
 
@@ -39,10 +39,7 @@ resource "aws_instance" "ai" {
   }
 
   tags = {
-    Name        = "stockspoon-v1-ai-app"
-    Project     = "stockspoon"
-    Environment = "v1"
-    ManagedBy   = "Terraform"
+    Name = local.name_prefix
   }
 }
 
@@ -50,10 +47,7 @@ resource "aws_eip" "ai" {
   domain = "vpc"
 
   tags = {
-    Name        = "stockspoon-v1-ai-eip"
-    Project     = "stockspoon"
-    Environment = "v1"
-    ManagedBy   = "Terraform"
+    Name = "${local.name_prefix}-eip"
   }
 }
 
