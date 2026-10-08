@@ -106,7 +106,10 @@ resource "aws_instance" "k6" {
   ]
 
   lifecycle {
-    ignore_changes = [ami]
+    ignore_changes = [
+      ami,
+      associate_public_ip_address,
+    ]
   }
 
   tags = {
