@@ -10,7 +10,8 @@ resource "aws_instance" "ai" {
   vpc_security_group_ids      = [aws_security_group.ai.id]
 
   user_data = templatefile("${path.module}/templates/user-data.sh", {
-    docker_compose_version = var.docker_compose_version
+    cloudwatch_agent_config_base64 = filebase64("${path.module}/config/cloudwatch-agent.json")
+    docker_compose_version         = var.docker_compose_version
   })
 
   root_block_device {
