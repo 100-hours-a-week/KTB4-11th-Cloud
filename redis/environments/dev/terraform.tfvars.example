@@ -9,6 +9,4 @@ valkey_port = 6379
 
 valkey_major_engine_version  = "8"
 valkey_max_data_storage_gb   = 1
-valkey_max_ecpu_per_second   = 1000
-
-discord_webhook_secret_name = "stockspoon/v2/dev/sqs/discord-webhook"
+valkey_max_ecpu_per_second  = 1000

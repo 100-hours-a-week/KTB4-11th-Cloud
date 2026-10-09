@@ -62,3 +62,8 @@ output "valkey_discord_notifier_lambda_name" {
   description = "Name of the Lambda that sends Valkey alarm notifications to Discord"
   value       = aws_lambda_function.discord_notifier.function_name
 }
+
+output "valkey_discord_webhook_secret_name" {
+  description = "Secrets Manager secret where the Valkey Discord webhook URL must be stored outside Terraform"
+  value       = aws_secretsmanager_secret.discord_webhook.name
+}

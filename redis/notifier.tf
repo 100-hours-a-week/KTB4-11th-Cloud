@@ -2,8 +2,13 @@ data "aws_caller_identity" "current" {}
 
 data "aws_partition" "current" {}
 
-data "aws_secretsmanager_secret" "discord_webhook" {
-  name = var.discord_webhook_secret_name
+resource "aws_secretsmanager_secret" "discord_webhook" {
+  name        = local.discord_webhook_secret_name
+  description = "Discord webhook URL for StockSpoon V2 ${var.environment} Valkey alarms"
+
+  tags = {
+    Name = "${local.name_prefix}-discord-webhook"
+  }
 }
 
 data "aws_iam_policy_document" "discord_notifier_assume_role" {
@@ -41,7 +46,7 @@ data "aws_iam_policy_document" "discord_notifier" {
     sid       = "ReadDiscordWebhookSecret"
     effect    = "Allow"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [data.aws_secretsmanager_secret.discord_webhook.arn]
+    resources = [aws_secretsmanager_secret.discord_webhook.arn]
   }
 
   statement {
@@ -80,7 +85,7 @@ resource "aws_lambda_function" "discord_notifier" {
 
   environment {
     variables = {
-      DISCORD_WEBHOOK_SECRET_ARN = data.aws_secretsmanager_secret.discord_webhook.arn
+      DISCORD_WEBHOOK_SECRET_ARN = aws_secretsmanager_secret.discord_webhook.arn
     }
   }
 
