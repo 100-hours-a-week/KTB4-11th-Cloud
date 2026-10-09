@@ -95,7 +95,7 @@ Serverless Cache의 CloudWatch Dimension은 `clusterId=stockspoon-v2-dev-valkey`
 
 Valkey 전용 Lambda `stockspoon-v2-dev-valkey-discord-notifier`가 경보를 기존 Discord 채널로 전달한다. Lambda 내부에서도 `ALARM` 상태가 아닌 이벤트는 무시한다.
 
-Webhook URL은 Terraform 코드나 State에 저장하지 않는다. 기존 Secrets Manager Secret `stockspoon/v2/dev/sqs/discord-webhook`의 ARN만 조회하고, Lambda 실행 시 `secretsmanager:GetSecretValue`로 값을 읽는다. Secret 이름은 기존 SQS 리소스 이름을 유지하지만 같은 Discord 채널을 공유하는 용도로 사용한다.
+Terraform은 Valkey 전용 빈 Secrets Manager Secret `stockspoon/v2/dev/valkey/discord-webhook`을 생성한다. Webhook URL 값은 Terraform 코드나 State에 저장하지 않는다. Apply 후 사용자가 Secrets Manager에서 같은 Discord 채널의 Webhook URL을 직접 입력하고, Lambda는 실행 시 `secretsmanager:GetSecretValue`로 값을 읽는다.
 
 알림 Lambda의 CloudWatch Log Group 보존 기간은 14일이다.
 

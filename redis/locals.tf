@@ -6,6 +6,7 @@ locals {
 
   alarm_prefix                  = local.name_prefix
   discord_notifier_name         = "${local.name_prefix}-discord-notifier"
+  discord_webhook_secret_name   = "${var.project_name}/v2/${var.environment}/valkey/discord-webhook"
   storage_alarm_threshold_bytes = var.valkey_max_data_storage_gb * 1024 * 1024 * 1024 * 0.75
   ecpu_alarm_threshold_per_min  = var.valkey_max_ecpu_per_second * 60 * 0.75
 
@@ -16,7 +17,9 @@ locals {
     "~quote:*",
     "~session:*",
     "~token:*",
+    "resetchannels",
     "&quotes:*",
+    "-@all",
     "+@read",
     "+@write",
     "+@pubsub",
