@@ -42,3 +42,23 @@ output "backend_valkey_connect_policy_arn" {
   description = "IAM policy ARN to attach to the future development Backend EC2 role"
   value       = aws_iam_policy.backend_connect.arn
 }
+
+output "valkey_storage_alarm_name" {
+  description = "Name of the Valkey storage usage CloudWatch alarm"
+  value       = aws_cloudwatch_metric_alarm.storage_usage_high.alarm_name
+}
+
+output "valkey_ecpu_alarm_name" {
+  description = "Name of the Valkey ECPU usage CloudWatch alarm"
+  value       = aws_cloudwatch_metric_alarm.ecpu_usage_high.alarm_name
+}
+
+output "valkey_throttled_commands_alarm_name" {
+  description = "Name of the Valkey throttled commands CloudWatch alarm"
+  value       = aws_cloudwatch_metric_alarm.throttled_commands.alarm_name
+}
+
+output "valkey_discord_notifier_lambda_name" {
+  description = "Name of the Lambda that sends Valkey alarm notifications to Discord"
+  value       = aws_lambda_function.discord_notifier.function_name
+}

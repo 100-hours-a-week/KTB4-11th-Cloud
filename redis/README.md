@@ -2,7 +2,7 @@
 
 이 디렉터리는 Amazon ElastiCache Serverless for Valkey 개발 환경을 관리하는 Terraform Root다.
 
-현재 4단계까지 Terraform Backend, 기존 인프라 Remote State, Valkey Security Group, IAM 인증과 Serverless Cache를 구성한다. Private Subnet과 Route Table은 `test-infra`가 소유하며 Redis는 해당 Output을 참조한다. CloudWatch Alarm은 다음 단계에서 추가한다.
+현재 5단계까지 Terraform Backend, 기존 인프라 Remote State, Valkey Security Group, IAM 인증, Serverless Cache와 Discord 장애 알림을 구성한다. Private Subnet과 Route Table은 `test-infra`가 소유하며 Redis는 해당 Output을 참조한다.
 
 ## 참조하는 기존 인프라
 
@@ -81,6 +81,24 @@ Redis Terraform은 다음 Managed Policy를 생성하고 ARN을 출력하지만 
 
 Policy는 `elasticache:Connect`를 해당 Cache ARN과 Backend ElastiCache User ARN으로 제한한다. Backend 서버 생성 시 Backend 인프라에서 해당 Policy를 연결한다.
 
+## 모니터링 및 Discord 알림
+
+별도 CloudWatch Dashboard는 생성하지 않는다. 다음 세 CloudWatch Alarm만 구성한다.
+
+| 경보 | 1분 기준 | 누락 데이터 |
+| --- | ---: | --- |
+| 저장 용량 | 1GB 상한의 75%인 `805,306,368 bytes` 이상 | 정상 처리 |
+| ECPU | 1,000 ECPU/초 상한의 75%인 `45,000 ECPU/분` 이상 | 정상 처리 |
+| 명령 제한 | `ThrottledCmds` 합계 1개 이상 | 정상 처리 |
+
+Serverless Cache의 CloudWatch Dimension은 `clusterId=stockspoon-v2-dev-valkey`를 사용한다. 세 경보 모두 `ALARM` Action만 설정하며 `ok_actions`는 설정하지 않는다.
+
+Valkey 전용 Lambda `stockspoon-v2-dev-valkey-discord-notifier`가 경보를 기존 Discord 채널로 전달한다. Lambda 내부에서도 `ALARM` 상태가 아닌 이벤트는 무시한다.
+
+Webhook URL은 Terraform 코드나 State에 저장하지 않는다. 기존 Secrets Manager Secret `stockspoon/v2/dev/sqs/discord-webhook`의 ARN만 조회하고, Lambda 실행 시 `secretsmanager:GetSecretValue`로 값을 읽는다. Secret 이름은 기존 SQS 리소스 이름을 유지하지만 같은 Discord 채널을 공유하는 용도로 사용한다.
+
+알림 Lambda의 CloudWatch Log Group 보존 기간은 14일이다.
+
 ## 로컬 정적 검사
 
 Remote Backend에 연결하지 않고 구성 문법만 확인할 때 사용한다.
@@ -104,4 +122,4 @@ terraform -chdir=redis plan \
   -var-file=environments/dev/terraform.tfvars.example
 ```
 
-현재 Plan 결과는 `6 to add, 0 to change, 0 to destroy`다. CloudWatch Alarm을 추가하고 최종 Plan을 다시 검토하기 전에는 `terraform apply`를 실행하지 않는다.
+현재 Plan 결과는 `14 to add, 0 to change, 0 to destroy`다. Plan과 예상 비용을 검토하기 전에는 `terraform apply`를 실행하지 않는다.

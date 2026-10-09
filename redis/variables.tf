@@ -81,3 +81,9 @@ variable "valkey_max_ecpu_per_second" {
     error_message = "valkey_max_ecpu_per_second must be at least 1000."
   }
 }
+
+variable "discord_webhook_secret_name" {
+  description = "Existing Secrets Manager secret containing the Discord webhook URL"
+  type        = string
+  default     = "stockspoon/v2/dev/sqs/discord-webhook"
+}
