@@ -1,0 +1,14 @@
+aws_region   = "ap-northeast-2"
+environment  = "dev"
+project_name = "stockspoon"
+
+test_infra_state_bucket = "stockspoon-terraform-state-v1"
+test_infra_state_key    = "test-infra/terraform.tfstate"
+
+valkey_port = 6379
+
+valkey_major_engine_version  = "8"
+valkey_max_data_storage_gb   = 1
+valkey_max_ecpu_per_second   = 1000
+
+discord_webhook_secret_name = "stockspoon/v2/dev/sqs/discord-webhook"

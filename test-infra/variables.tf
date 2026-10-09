@@ -33,6 +33,38 @@ variable "availability_zone" {
   default     = "ap-northeast-2a"
 }
 
+variable "private_subnets" {
+  description = "Private subnets shared by development services in this VPC"
+  type = map(object({
+    cidr_block        = string
+    availability_zone = string
+  }))
+
+  default = {
+    a = {
+      cidr_block        = "10.20.10.0/24"
+      availability_zone = "ap-northeast-2a"
+    }
+    c = {
+      cidr_block        = "10.20.11.0/24"
+      availability_zone = "ap-northeast-2c"
+    }
+  }
+
+  validation {
+    condition = (
+      length(var.private_subnets) >= 2 &&
+      alltrue([
+        for subnet in values(var.private_subnets) : can(cidrnetmask(subnet.cidr_block))
+      ]) &&
+      length(distinct([
+        for subnet in values(var.private_subnets) : subnet.availability_zone
+      ])) == length(var.private_subnets)
+    )
+    error_message = "private_subnets must contain at least two valid CIDRs in distinct availability zones."
+  }
+}
+
 variable "ec2_key_name" {
   description = "Existing EC2 key pair name; SSM Session Manager is also enabled"
   type        = string
