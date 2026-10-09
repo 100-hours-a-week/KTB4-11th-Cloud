@@ -38,18 +38,6 @@ variable "test_infra_state_key" {
   default     = "test-infra/terraform.tfstate"
 }
 
-variable "ai_dev_state_bucket" {
-  description = "S3 bucket containing the V2 development AI Terraform state"
-  type        = string
-  default     = "stockspoon-terraform-state-ai-dev"
-}
-
-variable "ai_dev_state_key" {
-  description = "S3 key containing the V2 development AI Terraform state"
-  type        = string
-  default     = "ai-server/dev-infra/terraform.tfstate"
-}
-
 variable "valkey_port" {
   description = "TLS port used by the Valkey serverless cache"
   type        = number
@@ -58,5 +46,38 @@ variable "valkey_port" {
   validation {
     condition     = var.valkey_port >= 1 && var.valkey_port <= 65535
     error_message = "valkey_port must be between 1 and 65535."
+  }
+}
+
+variable "valkey_major_engine_version" {
+  description = "Major Valkey engine version used by the serverless cache"
+  type        = string
+  default     = "8"
+
+  validation {
+    condition     = contains(["7", "8", "9"], var.valkey_major_engine_version)
+    error_message = "valkey_major_engine_version must be a supported major version: 7, 8, or 9."
+  }
+}
+
+variable "valkey_max_data_storage_gb" {
+  description = "Maximum data storage allowed for the development serverless cache in GB"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.valkey_max_data_storage_gb >= 1
+    error_message = "valkey_max_data_storage_gb must be at least 1 GB."
+  }
+}
+
+variable "valkey_max_ecpu_per_second" {
+  description = "Maximum ECPU allowed per second for the development serverless cache"
+  type        = number
+  default     = 1000
+
+  validation {
+    condition     = var.valkey_max_ecpu_per_second >= 1000
+    error_message = "valkey_max_ecpu_per_second must be at least 1000."
   }
 }

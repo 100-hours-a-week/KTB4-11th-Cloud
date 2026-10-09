@@ -2,7 +2,7 @@
 
 이 디렉터리는 Amazon ElastiCache Serverless for Valkey 개발 환경을 관리하는 Terraform Root다.
 
-현재 3단계까지 Terraform Backend, Provider, 공통 변수와 태그, 기존 인프라 Remote State와 Valkey Security Group을 구성한다. Private Subnet과 Route Table은 `test-infra`가 소유하며 Redis는 해당 Output을 참조한다. Valkey, IAM Policy와 CloudWatch Alarm은 이후 단계에서 추가한다.
+현재 4단계까지 Terraform Backend, 기존 인프라 Remote State, Valkey Security Group, IAM 인증과 Serverless Cache를 구성한다. Private Subnet과 Route Table은 `test-infra`가 소유하며 Redis는 해당 Output을 참조한다. CloudWatch Alarm은 다음 단계에서 추가한다.
 
 ## 참조하는 기존 인프라
 
@@ -10,19 +10,8 @@
 
 - 상태 버킷: `stockspoon-terraform-state-v1`
 - 상태 Key: `test-infra/terraform.tfstate`
-- 사용 Output: `vpc_id`
+- 사용 Output: `vpc_id`, `private_subnet_ids`
 - 목적: Valkey를 배치할 개발 VPC 참조
-
-### AI 개발 서버
-
-- 소스 디렉터리: `ai-server/dev-infra`
-- 소스 브랜치: `feat/42-ai-dev-ec2`
-- 상태 버킷: `stockspoon-terraform-state-ai-dev`
-- 상태 Key: `ai-server/dev-infra/terraform.tfstate`
-- 사용 Output: `ai_security_group_id`, `ai_iam_role_arn`
-- 목적: Valkey 네트워크 접근과 IAM 접속 권한 연결 대상 참조
-
-`ai-server/dev-infra`는 현재 Redis 작업 브랜치에 아직 병합되지 않았다. 해당 브랜치가 기준 브랜치에 병합된 뒤 다음 단계의 리소스 연결을 진행한다.
 
 ### 향후 Backend 개발 서버
 
@@ -47,7 +36,7 @@ Valkey는 `test-infra` VPC 안의 공용 개발 Private Subnet 두 개를 사용
 
 두 Subnet은 `test-infra`의 별도 Private Route Table에 연결한다. Route Table에는 AWS가 자동으로 만드는 VPC `local` 경로만 존재하며 Internet Gateway와 NAT Gateway 경로를 추가하지 않는다. 기존 Public Subnet, Route Table, EC2 Network Interface는 수정하지 않는다.
 
-Valkey Security Group의 TCP `6379` 인바운드는 현재 AI 개발 서버 Security Group에서만 허용한다. `0.0.0.0/0`, 기존 Load Test App 및 개발자 개인 IP에는 열지 않는다. Backend 개발 서버가 생기면 Backend Security Group 참조 규칙을 별도로 추가한다.
+Backend 개발 서버가 아직 없으므로 Valkey Security Group에는 인바운드 규칙을 만들지 않는다. `0.0.0.0/0`, 기존 Load Test App, AI 서버 및 개발자 개인 IP에는 열지 않는다. Backend 개발 서버가 생기면 Backend Security Group을 소스로 하는 TCP `6379` 규칙만 추가한다.
 
 ## Terraform 상태
 
@@ -59,7 +48,38 @@ Redis 상태는 SQS와 동일한 버킷 이름 형식으로 분리한다.
 - Locking: S3 Lockfile
 - 암호화: 활성화
 
-이 버킷은 아직 생성되지 않았다. `terraform init` 전에 SQS 상태 버킷과 동일하게 Versioning, AES256 기본 암호화, Public Access Block을 적용해 별도로 준비해야 한다.
+버킷에는 SQS 상태 버킷과 동일하게 Versioning, AES256 기본 암호화, Public Access Block이 적용되어 있다. `redis/environments/dev/backend.hcl`을 사용해 Remote Backend 초기화를 완료했다.
+
+## Valkey Serverless 구성
+
+| 항목 | 값 |
+| --- | --- |
+| Cache 이름 | `stockspoon-v2-dev-valkey` |
+| Engine | Valkey 8 |
+| Network | IPv4, Private Subnet 2개 |
+| TLS | 필수 |
+| 인증 | IAM 기반 RBAC |
+| 최대 저장 용량 | 1GB |
+| 최대 처리량 | 1,000 ECPU/초 |
+| Snapshot | 개발 환경에서는 비활성화 |
+
+Valkey User Group에는 비밀번호 사용자를 넣지 않고 Backend용 IAM 인증 사용자 한 명만 포함한다.
+
+| 사용자 | 허용 범위 |
+| --- | --- |
+| Backend | `quote:*`, `session:*`, `token:*` Key와 `quotes:*` 채널 |
+
+Backend 사용자는 읽기, 쓰기, Pub/Sub, 연결 및 Cluster 토폴로지 조회에 필요한 명령만 사용할 수 있다. 위험 명령은 제외한다. 애플리케이션의 실제 Key 규칙이 달라지면 Apply 전에 Access String을 조정해야 한다.
+
+Valkey Serverless에서는 `PSUBSCRIBE`와 `PUNSUBSCRIBE`를 지원하지 않는다. 구독자는 필요한 채널을 `SUBSCRIBE`로 개별 구독하거나 애플리케이션 구조에 맞춰 Sharded Pub/Sub 사용 여부를 검토해야 한다.
+
+## IAM Policy 연결
+
+Redis Terraform은 다음 Managed Policy를 생성하고 ARN을 출력하지만 EC2 Role에는 직접 연결하지 않는다.
+
+- `stockspoon-v2-dev-valkey-backend-connect`
+
+Policy는 `elasticache:Connect`를 해당 Cache ARN과 Backend ElastiCache User ARN으로 제한한다. Backend 서버 생성 시 Backend 인프라에서 해당 Policy를 연결한다.
 
 ## 로컬 정적 검사
 
@@ -84,4 +104,4 @@ terraform -chdir=redis plan \
   -var-file=environments/dev/terraform.tfvars.example
 ```
 
-현재 단계에서는 생성할 AWS 리소스가 없으며 `terraform apply`를 실행하지 않는다. 이후 리소스가 추가되더라도 Plan에서 기존 인프라의 변경이나 삭제가 없는지 먼저 확인한다.
+현재 Plan 결과는 `6 to add, 0 to change, 0 to destroy`다. CloudWatch Alarm을 추가하고 최종 Plan을 다시 검토하기 전에는 `terraform apply`를 실행하지 않는다.

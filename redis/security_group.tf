@@ -8,16 +8,8 @@ resource "aws_security_group" "valkey" {
   }
 }
 
-# 현재 존재하는 AI 개발 서버만 Valkey에 연결할 수 있습니다.
-# Backend 개발 서버 Security Group이 생성되면 별도 규칙을 추가합니다.
-resource "aws_vpc_security_group_ingress_rule" "valkey_from_ai" {
-  security_group_id            = aws_security_group.valkey.id
-  referenced_security_group_id = data.terraform_remote_state.ai_dev.outputs.ai_security_group_id
-  from_port                    = var.valkey_port
-  to_port                      = var.valkey_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow TLS Valkey traffic from the V2 development AI server"
-}
+# Backend 개발 서버가 아직 없으므로 인바운드 규칙을 만들지 않습니다.
+# 서버 생성 후 Backend Security Group을 소스로 하는 TCP 6379 규칙을 추가합니다.
 
 # 응답 트래픽과 VPC 내부 통신만 허용하며 인터넷 목적지 규칙은 만들지 않습니다.
 resource "aws_vpc_security_group_egress_rule" "valkey_to_vpc" {
