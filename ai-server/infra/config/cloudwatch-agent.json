@@ -1,0 +1,40 @@
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "region": "ap-northeast-2"
+  },
+  "metrics": {
+    "namespace": "AI_CWAgent",
+    "append_dimensions": {
+      "InstanceId": "${aws:InstanceId}",
+      "InstanceType": "${aws:InstanceType}"
+    },
+    "metrics_collected": {
+      "cpu": {
+        "measurement": ["usage_active"],
+        "totalcpu": true
+      },
+      "mem": {
+        "measurement": ["used_percent", "available_percent"]
+      },
+      "disk": {
+        "resources": ["/"],
+        "measurement": ["used_percent"],
+        "drop_device": true
+      }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "journald": {
+        "collect_list": [
+          {
+            "log_group_name": "/stockspoon/ai/system",
+            "log_stream_name": "{instance_id}",
+            "units": ["docker.service", "ssh.service"]
+          }
+        ]
+      }
+    }
+  }
+}

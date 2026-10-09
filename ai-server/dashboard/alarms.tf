@@ -69,6 +69,37 @@ resource "aws_cloudwatch_metric_alarm" "ai_cpu_high" {
   unit                = "Percent"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
+
+  depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
+
+  dimensions = {
+    InstanceId   = var.ai_instance_id
+    InstanceType = var.ai_instance_type
+    cpu          = "cpu-total"
+  }
+
+  tags = local.ai_alarm_tags
+}
+
+# CloudWatch Agent가 중단되어 시스템 지표가 조용히 사라지는 상황을 감지합니다.
+# CPU 사용률은 음수가 될 수 없으므로 실제 데이터는 임계값을 위반하지 않고,
+# 5분 연속 누락된 데이터만 breaching으로 평가됩니다.
+resource "aws_cloudwatch_metric_alarm" "ai_metrics_missing" {
+  alarm_name          = "${local.ai_alarm_prefix}-metrics-missing"
+  alarm_description   = "AI CloudWatch Agent CPU metrics have been missing for five consecutive minutes."
+  namespace           = local.namespace
+  metric_name         = "cpu_usage_active"
+  statistic           = "Average"
+  period              = 60
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  threshold           = 0
+  comparison_operator = "LessThanThreshold"
+  unit                = "Percent"
+  treat_missing_data  = "breaching"
+  alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -95,6 +126,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_memory_high" {
   unit                = "Percent"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -120,6 +152,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_root_disk_high" {
   unit                = "Percent"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -146,6 +179,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_ec2_status_check_failed" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -170,6 +204,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_storage_device_error" {
   unit                = "Count"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
@@ -190,6 +225,7 @@ resource "aws_cloudwatch_metric_alarm" "ai_application_log_errors" {
   unit                = "Count"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [local.ai_alarm_notifier_lambda_arn]
+  ok_actions          = [local.ai_alarm_notifier_lambda_arn]
 
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 

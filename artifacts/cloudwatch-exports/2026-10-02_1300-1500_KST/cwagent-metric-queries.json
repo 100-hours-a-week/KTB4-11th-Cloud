@@ -1,0 +1,1872 @@
+[
+  {
+    "Id": "m001_avg",
+    "Label": "cpu_usage_active Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_active",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m001_max",
+    "Label": "cpu_usage_active Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_active",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m001_min",
+    "Label": "cpu_usage_active Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_active",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m001_sum",
+    "Label": "cpu_usage_active Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_active",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m001_count",
+    "Label": "cpu_usage_active SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_active",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m002_avg",
+    "Label": "cpu_usage_iowait Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_iowait",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m002_max",
+    "Label": "cpu_usage_iowait Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_iowait",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m002_min",
+    "Label": "cpu_usage_iowait Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_iowait",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m002_sum",
+    "Label": "cpu_usage_iowait Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_iowait",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m002_count",
+    "Label": "cpu_usage_iowait SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "cpu_usage_iowait",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m003_avg",
+    "Label": "disk_used_percent Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,fstype=ext4,path=/",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "disk_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "fstype",
+            "Value": "ext4"
+          },
+          {
+            "Name": "path",
+            "Value": "/"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m003_max",
+    "Label": "disk_used_percent Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,fstype=ext4,path=/",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "disk_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "fstype",
+            "Value": "ext4"
+          },
+          {
+            "Name": "path",
+            "Value": "/"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m003_min",
+    "Label": "disk_used_percent Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,fstype=ext4,path=/",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "disk_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "fstype",
+            "Value": "ext4"
+          },
+          {
+            "Name": "path",
+            "Value": "/"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m003_sum",
+    "Label": "disk_used_percent Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,fstype=ext4,path=/",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "disk_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "fstype",
+            "Value": "ext4"
+          },
+          {
+            "Name": "path",
+            "Value": "/"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m003_count",
+    "Label": "disk_used_percent SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,fstype=ext4,path=/",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "disk_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "fstype",
+            "Value": "ext4"
+          },
+          {
+            "Name": "path",
+            "Value": "/"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m004_avg",
+    "Label": "diskio_io_time Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_io_time",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m004_max",
+    "Label": "diskio_io_time Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_io_time",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m004_min",
+    "Label": "diskio_io_time Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_io_time",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m004_sum",
+    "Label": "diskio_io_time Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_io_time",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m004_count",
+    "Label": "diskio_io_time SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_io_time",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m005_avg",
+    "Label": "diskio_iops_in_progress Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_iops_in_progress",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m005_max",
+    "Label": "diskio_iops_in_progress Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_iops_in_progress",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m005_min",
+    "Label": "diskio_iops_in_progress Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_iops_in_progress",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m005_sum",
+    "Label": "diskio_iops_in_progress Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_iops_in_progress",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m005_count",
+    "Label": "diskio_iops_in_progress SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,name=nvme0n1",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "diskio_iops_in_progress",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "name",
+            "Value": "nvme0n1"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m006_avg",
+    "Label": "mem_used_percent Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "mem_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m006_max",
+    "Label": "mem_used_percent Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "mem_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m006_min",
+    "Label": "mem_used_percent Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "mem_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m006_sum",
+    "Label": "mem_used_percent Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "mem_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m006_count",
+    "Label": "mem_used_percent SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "mem_used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m007_avg",
+    "Label": "net_bytes_recv Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_recv",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m007_max",
+    "Label": "net_bytes_recv Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_recv",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m007_min",
+    "Label": "net_bytes_recv Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_recv",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m007_sum",
+    "Label": "net_bytes_recv Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_recv",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m007_count",
+    "Label": "net_bytes_recv SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_recv",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m008_avg",
+    "Label": "net_bytes_sent Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_sent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m008_max",
+    "Label": "net_bytes_sent Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_sent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m008_min",
+    "Label": "net_bytes_sent Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_sent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m008_sum",
+    "Label": "net_bytes_sent Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_sent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m008_count",
+    "Label": "net_bytes_sent SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_bytes_sent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m009_avg",
+    "Label": "net_drop_in Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m009_max",
+    "Label": "net_drop_in Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m009_min",
+    "Label": "net_drop_in Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m009_sum",
+    "Label": "net_drop_in Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m009_count",
+    "Label": "net_drop_in SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m010_avg",
+    "Label": "net_drop_out Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m010_max",
+    "Label": "net_drop_out Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m010_min",
+    "Label": "net_drop_out Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m010_sum",
+    "Label": "net_drop_out Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m010_count",
+    "Label": "net_drop_out SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_drop_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m011_avg",
+    "Label": "net_err_in Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m011_max",
+    "Label": "net_err_in Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m011_min",
+    "Label": "net_err_in Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m011_sum",
+    "Label": "net_err_in Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m011_count",
+    "Label": "net_err_in SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_in",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m012_avg",
+    "Label": "net_err_out Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m012_max",
+    "Label": "net_err_out Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m012_min",
+    "Label": "net_err_out Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m012_sum",
+    "Label": "net_err_out Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m012_count",
+    "Label": "net_err_out SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,interface=ens5",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "net_err_out",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "interface",
+            "Value": "ens5"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m013_avg",
+    "Label": "processes_running Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "processes_running",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m013_max",
+    "Label": "processes_running Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "processes_running",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m013_min",
+    "Label": "processes_running Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "processes_running",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m013_sum",
+    "Label": "processes_running Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "processes_running",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m013_count",
+    "Label": "processes_running SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "processes_running",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m014_avg",
+    "Label": "used_percent Average InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Average"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m014_max",
+    "Label": "used_percent Maximum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Maximum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m014_min",
+    "Label": "used_percent Minimum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Minimum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m014_sum",
+    "Label": "used_percent Sum InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "Sum"
+    },
+    "ReturnData": true
+  },
+  {
+    "Id": "m014_count",
+    "Label": "used_percent SampleCount InstanceId=i-0b4b096567c84b58b,InstanceType=t3a.medium,cpu=cpu-total",
+    "MetricStat": {
+      "Metric": {
+        "Namespace": "CWAgent",
+        "MetricName": "used_percent",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": "i-0b4b096567c84b58b"
+          },
+          {
+            "Name": "InstanceType",
+            "Value": "t3a.medium"
+          },
+          {
+            "Name": "cpu",
+            "Value": "cpu-total"
+          }
+        ]
+      },
+      "Period": 60,
+      "Stat": "SampleCount"
+    },
+    "ReturnData": true
+  }
+]

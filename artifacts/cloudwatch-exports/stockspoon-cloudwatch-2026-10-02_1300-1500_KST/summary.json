@@ -1,0 +1,45 @@
+{
+  "window_kst": "2026-10-02 13:00:00 to 15:00:00",
+  "window_utc": "2026-10-02 04:00:00Z to 06:00:00Z",
+  "region": "ap-northeast-2",
+  "instance_id": "i-0b4b096567c84b58b",
+  "log_groups": {
+    "aggregate": {
+      "events": 0,
+      "bytes": 222,
+      "status": "not_found"
+    },
+    "nginx": {
+      "events": 71968,
+      "bytes": 56472216,
+      "status": "ok"
+    },
+    "frontend": {
+      "events": 2924,
+      "bytes": 1025643,
+      "status": "ok"
+    },
+    "backend": {
+      "events": 1465,
+      "bytes": 628542,
+      "status": "ok"
+    },
+    "db": {
+      "events": 0,
+      "bytes": 51,
+      "status": "ok"
+    },
+    "system": {
+      "events": 75,
+      "bytes": 117069,
+      "status": "ok"
+    }
+  },
+  "metric_series": 14,
+  "metric_queries": 70,
+  "metric_query_statuses": {
+    "Complete": 70
+  },
+  "metric_datapoints": 7800,
+  "metric_csv_rows": 7800
+}

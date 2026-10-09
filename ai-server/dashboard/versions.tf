@@ -1,6 +1,6 @@
 # Terraform과 AWS Provider 버전 및 AI 대시보드 전용 원격 state를 설정합니다.
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.10.0"
 
   required_providers {
     aws = {

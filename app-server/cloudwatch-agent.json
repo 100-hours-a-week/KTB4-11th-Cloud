@@ -1,0 +1,82 @@
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "region": "ap-northeast-2"
+  },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": {
+      "InstanceId": "${aws:InstanceId}",
+      "InstanceType": "${aws:InstanceType}"
+    },
+    "metrics_collected": {
+      "cpu": {
+        "measurement": [
+          { "name": "usage_active", "rename": "used_percent", "unit": "Percent" },
+          "usage_iowait"
+        ],
+        "totalcpu": true
+      },
+      "mem": {
+        "measurement": ["used_percent"]
+      },
+      "disk": {
+        "resources": ["/"],
+        "measurement": ["used_percent"],
+        "drop_device": true
+      },
+      "diskio": {
+        "resources": ["*"],
+        "measurement": [
+          "io_time",
+          "iops_in_progress"
+        ]
+      },
+      "net": {
+        "measurement": [
+          "bytes_sent",
+          "bytes_recv",
+          "drop_in",
+          "drop_out",
+          "err_in",
+          "err_out"
+        ]
+      },
+      "processes": {
+        "measurement": ["running"]
+      }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/cloud-init.log*",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloud-init"
+          },
+          {
+            "file_path": "/var/log/cloud-init-output.log*",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloud-init-output"
+          },
+          {
+            "file_path": "/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log",
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-cloudwatch-agent"
+          }
+        ]
+      },
+      "journald": {
+        "collect_list": [
+          {
+            "log_group_name": "/stockspoon/app/system",
+            "log_stream_name": "{instance_id}-system-info-and-above",
+            "priority": "info"
+          }
+        ]
+      }
+    }
+  }
+}

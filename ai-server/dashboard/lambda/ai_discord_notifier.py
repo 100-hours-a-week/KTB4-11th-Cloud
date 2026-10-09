@@ -52,6 +52,7 @@ def _get_webhook_url():
 def _alarm_details(event):
     alarm_data = event.get("alarmData", {})
     state_data = alarm_data.get("state", {})
+    previous_state_data = alarm_data.get("previousState", {})
     alarm_config = alarm_data.get("configuration", {})
 
     timestamp = state_data.get("timestamp") or event.get("time")
@@ -66,6 +67,7 @@ def _alarm_details(event):
     return {
         "name": alarm_data.get("alarmName", "AI CloudWatch alarm"),
         "state": state_data.get("value", "UNKNOWN"),
+        "previous_state": previous_state_data.get("value", "UNKNOWN"),
         "reason": state_data.get("reason", "No alarm details were included."),
         "region": event.get("region", "ap-northeast-2"),
         "account": event.get("accountId", "unknown"),
@@ -202,8 +204,25 @@ def _send_discord(alarm, docker_stats=None):
         ) from error
 
 
+def _is_recovery_without_prior_alarm(alarm):
+    # 알람 생성 직후 INSUFFICIENT_DATA -> OK 전환처럼 실제 장애가 없던 OK는 알리지 않습니다.
+    return alarm["state"] == "OK" and alarm["previous_state"] != "ALARM"
+
+
 def handler(event, context):
     alarm = _alarm_details(event)
+    if _is_recovery_without_prior_alarm(alarm):
+        print(
+            f"Skipped OK notification without prior ALARM: {alarm['name']} "
+            f"(previous={alarm['previous_state']})"
+        )
+        return {
+            "sent": [],
+            "alarm": alarm["name"],
+            "state": alarm["state"],
+            "skipped": "ok_without_prior_alarm",
+        }
+
     docker_stats = None
     if _should_collect_docker_stats(alarm):
         try:

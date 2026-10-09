@@ -1,0 +1,8 @@
+services:
+  backend:
+    ports:
+      - "10.20.1.79:8080:8080"
+    environment:
+      KIWOOM_APP_KEY: ${KIWOOM_APP_KEY:?KIWOOM_APP_KEY is required}
+      KIWOOM_APP_SECRET: ${KIWOOM_APP_SECRET:?KIWOOM_APP_SECRET is required}
+      KIWOOM_STREAM_ENABLED: "true"
