@@ -1,0 +1,252 @@
+{
+  "Metrics": [
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "net_drop_out",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        },
+        {
+          "Name": "interface",
+          "Value": "ens5"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "disk_used_percent",
+      "Dimensions": [
+        {
+          "Name": "path",
+          "Value": "/"
+        },
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        },
+        {
+          "Name": "fstype",
+          "Value": "ext4"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "net_drop_in",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        },
+        {
+          "Name": "interface",
+          "Value": "ens5"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "used_percent",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "cpu",
+          "Value": "cpu-total"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "cpu_usage_active",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "cpu",
+          "Value": "cpu-total"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "net_bytes_sent",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        },
+        {
+          "Name": "interface",
+          "Value": "ens5"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "mem_used_percent",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "diskio_io_time",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "name",
+          "Value": "nvme0n1"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "net_bytes_recv",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        },
+        {
+          "Name": "interface",
+          "Value": "ens5"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "processes_running",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "diskio_iops_in_progress",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "name",
+          "Value": "nvme0n1"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "cpu_usage_iowait",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "cpu",
+          "Value": "cpu-total"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "net_err_in",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        },
+        {
+          "Name": "interface",
+          "Value": "ens5"
+        }
+      ]
+    },
+    {
+      "Namespace": "CWAgent",
+      "MetricName": "net_err_out",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-0b4b096567c84b58b"
+        },
+        {
+          "Name": "InstanceType",
+          "Value": "t3a.medium"
+        },
+        {
+          "Name": "interface",
+          "Value": "ens5"
+        }
+      ]
+    }
+  ]
+}

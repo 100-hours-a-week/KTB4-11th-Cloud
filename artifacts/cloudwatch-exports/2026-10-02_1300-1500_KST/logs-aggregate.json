@@ -1,0 +1,5 @@
+{
+  "logGroupName": "/stockspoon/app/containers",
+  "status": "not_found",
+  "note": "CloudWatch returned ResourceNotFoundException during the requested time-window export; no log events exported from this legacy group."
+}

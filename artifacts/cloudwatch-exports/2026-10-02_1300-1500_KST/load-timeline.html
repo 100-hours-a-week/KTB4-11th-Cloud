@@ -1,0 +1,379 @@
+<div id="stockspoon-load-timeline" class="load-timeline">
+  <h2>2026-10-02 · KST</h2>
+  <section class="load-chart" data-chart="requests">
+    <h3>Nginx access logs</h3>
+    <div class="load-legend" aria-label="Nginx access log series"></div>
+    <svg role="img" aria-label="Nginx JSON access records per five-minute bucket"></svg>
+  </section>
+  <section class="load-chart" data-chart="cpu">
+    <h3>Host CPU</h3>
+    <div class="load-legend" aria-label="Host CPU series"></div>
+    <svg role="img" aria-label="Host CPU average and maximum percentage per five-minute bucket"></svg>
+  </section>
+  <section class="load-chart" data-chart="errors">
+    <h3>Nginx HTTP errors</h3>
+    <div class="load-legend" aria-label="Nginx HTTP error series"></div>
+    <svg role="img" aria-label="Nginx HTTP 499 and 503 responses per five-minute bucket"></svg>
+  </section>
+  <div class="tooltip" role="tooltip" aria-live="polite"></div>
+</div>
+
+<style>
+  .load-timeline {
+    position: relative;
+    color: var(--foreground);
+    font-family: inherit;
+  }
+  .load-timeline h2,
+  .load-timeline h3 {
+    color: var(--foreground);
+    font-family: inherit;
+  }
+  .load-chart {
+    position: relative;
+    width: 100%;
+    margin-block: 1rem;
+  }
+  .load-chart svg {
+    display: block;
+    width: 100%;
+    height: 260px;
+    overflow: visible;
+  }
+  .load-chart .axis text {
+    fill: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .load-chart .axis path,
+  .load-chart .axis line {
+    stroke: var(--border);
+  }
+  .load-chart .grid line {
+    stroke: var(--border);
+    stroke-opacity: 0.55;
+  }
+  .load-chart .grid path {
+    display: none;
+  }
+  .load-chart .axis-title {
+    fill: var(--foreground);
+    font-size: 12px;
+  }
+  .load-chart .plot-frame {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 1px;
+  }
+  .load-chart .series-line {
+    fill: none;
+    stroke-width: 2px;
+  }
+  .load-chart .series-point {
+    stroke: var(--background);
+    stroke-width: 1px;
+  }
+  .load-chart .direct-label {
+    fill: var(--foreground);
+    font-size: 12px;
+  }
+  .load-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+  }
+  .load-legend button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    font: inherit;
+  }
+  .load-legend button[aria-pressed="false"] {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 0.8rem;
+    height: 0.2rem;
+    background: currentColor;
+  }
+  .load-timeline .tooltip {
+    position: absolute;
+    z-index: 2;
+    display: none;
+    max-width: 15rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+    background: var(--popover);
+    color: var(--popover-foreground);
+    pointer-events: none;
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+(() => {
+  const root = document.getElementById("stockspoon-load-timeline");
+  if (!root || !window.d3) return;
+
+  const rows = [
+    ["13:00", 5, 5.4, 6.3, 0, 1],
+    ["13:05", 0, 5.0, 5.2, 0, 0],
+    ["13:10", 10, 4.9, 5.2, 0, 6],
+    ["13:15", 3764, 5.8, 6.6, 0, 28],
+    ["13:20", 66104, 74.7, 83.9, 767, 11],
+    ["13:25", 81, 11.0, 27.9, 0, 36],
+    ["13:30", 67, 5.7, 6.7, 0, 57],
+    ["13:35", 26, 5.3, 5.5, 0, 26],
+    ["13:40", 24, 5.3, 5.7, 0, 22],
+    ["13:45", 84, 5.3, 5.9, 0, 23],
+    ["13:50", 29, 5.4, 5.6, 0, 16],
+    ["13:55", 8, 5.0, 5.2, 0, 0],
+    ["14:00", 2, 5.3, 5.6, 0, 0],
+    ["14:05", 22, 5.1, 5.3, 0, 4],
+    ["14:10", 21, 4.9, 5.0, 0, 2],
+    ["14:15", 5, 5.0, 5.2, 0, 3],
+    ["14:20", 13, 5.0, 5.2, 0, 3],
+    ["14:25", 54, 5.0, 5.2, 0, 6],
+    ["14:30", 48, 4.9, 5.1, 0, 2],
+    ["14:35", 0, 4.9, 5.1, 0, 0],
+    ["14:40", 210, 4.9, 5.1, 0, 0],
+    ["14:45", 231, 4.9, 5.0, 0, 0],
+    ["14:50", 28, 4.9, 5.0, 0, 0],
+    ["14:55", 7, 4.9, 5.0, 0, 1]
+  ].map(([label, requests, cpuAvg, cpuMax, http499, http503]) => ({
+    time: new Date(`2026-10-02T${label}:00+09:00`),
+    label,
+    requests,
+    cpuAvg,
+    cpuMax,
+    http499,
+    http503
+  }));
+
+  const charts = [
+    {
+      key: "requests",
+      yTitle: "Access records / 5 min",
+      format: d3.format("~s"),
+      step: true,
+      series: [{ key: "requests", label: "JSON access records", color: "var(--viz-series-1)" }]
+    },
+    {
+      key: "cpu",
+      yTitle: "CPU utilization (%)",
+      format: d3.format(".0f"),
+      step: false,
+      series: [
+        { key: "cpuAvg", label: "Average", color: "var(--viz-series-1)" },
+        { key: "cpuMax", label: "Maximum", color: "var(--viz-series-2)" }
+      ]
+    },
+    {
+      key: "errors",
+      yTitle: "Responses / 5 min",
+      format: d3.format("~s"),
+      step: true,
+      series: [
+        { key: "http499", label: "HTTP 499", color: "var(--viz-series-1)" },
+        { key: "http503", label: "HTTP 503", color: "var(--viz-series-2)" }
+      ]
+    }
+  ];
+
+  const tooltip = root.querySelector(".tooltip");
+  const timeEnd = new Date(rows[rows.length - 1].time.getTime() + 5 * 60 * 1000);
+  const savedState = window.openai?.widgetState?.modelContent || {};
+  const enabledState = new Map(charts.map(chart => [
+    chart.key,
+    new Map(chart.series.map(series => [series.key, savedState[chart.key]?.[series.key] !== false]))
+  ]));
+
+  function persistState() {
+    const modelContent = {};
+    for (const chart of charts) {
+      modelContent[chart.key] = Object.fromEntries(enabledState.get(chart.key));
+    }
+    window.openai?.setWidgetState?.({ modelContent, privateContent: null }).catch(() => {});
+  }
+
+  function draw(chart) {
+    const section = root.querySelector(`[data-chart="${chart.key}"]`);
+    const svgNode = section.querySelector("svg");
+    const svg = d3.select(svgNode);
+    const width = Math.max(320, section.getBoundingClientRect().width);
+    const height = 260;
+    const margin = { top: 12, right: 16, bottom: 48, left: 64 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const enabled = enabledState.get(chart.key);
+
+    svg.selectAll("*").remove();
+    svg.attr("viewBox", `0 0 ${width} ${height}`);
+    svg.append("title").text(section.querySelector("h3").textContent);
+    svg.append("desc").text(`${chart.yTitle} from 13:00 to 15:00 Korea time on October 2, 2026.`);
+
+    const maxValue = d3.max(chart.series, series => d3.max(rows, row => row[series.key])) || 1;
+    const x = d3.scaleTime().domain([rows[0].time, timeEnd]).range([margin.left, width - margin.right]);
+    const y = d3.scaleLinear().domain([0, maxValue * 1.08]).nice().range([height - margin.bottom, margin.top]);
+    const plot = svg.append("g");
+
+    plot.append("rect")
+      .attr("class", "plot-frame")
+      .attr("data-chart-frame", "")
+      .attr("x", margin.left)
+      .attr("y", margin.top)
+      .attr("width", plotWidth)
+      .attr("height", plotHeight);
+
+    plot.append("g")
+      .attr("class", "axis grid")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y).ticks(4).tickSize(-plotWidth).tickFormat(chart.format));
+
+    plot.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x).ticks(d3.timeMinute.every(width < 480 ? 60 : 30)).tickFormat(d3.timeFormat("%H:%M")));
+
+    svg.append("text")
+      .attr("class", "axis-title")
+      .attr("data-axis", "y")
+      .attr("text-anchor", "middle")
+      .attr("transform", `translate(16,${margin.top + plotHeight / 2}) rotate(-90)`)
+      .text(chart.yTitle);
+    svg.append("text")
+      .attr("class", "axis-title")
+      .attr("data-axis", "x")
+      .attr("text-anchor", "middle")
+      .attr("x", margin.left + plotWidth / 2)
+      .attr("y", height - 8)
+      .text("Time (KST)");
+
+    const lineFor = series => d3.line()
+      .x(row => x(row.time))
+      .y(row => y(row[series.key]))
+      .curve(chart.step ? d3.curveStepAfter : d3.curveLinear);
+
+    for (const series of chart.series) {
+      plot.append("path")
+        .datum(rows)
+        .attr("class", "series-line")
+        .attr("data-series-line", series.key)
+        .attr("stroke", series.color)
+        .attr("d", lineFor(series));
+      plot.append("g")
+        .attr("data-series-points", series.key)
+        .selectAll("circle")
+        .data(rows)
+        .join("circle")
+        .attr("class", "series-point")
+        .attr("cx", row => x(row.time))
+        .attr("cy", row => y(row[series.key]))
+        .attr("r", 2.5)
+        .attr("fill", series.color);
+    }
+
+    const hoverGuide = plot.append("line")
+      .attr("data-chart-hover-guide", "")
+      .attr("y1", margin.top)
+      .attr("y2", height - margin.bottom)
+      .attr("stroke", "var(--foreground)")
+      .attr("stroke-opacity", 0.55)
+      .style("display", "none");
+    const hoverMarkers = new Map(chart.series.map(series => [series.key,
+      plot.append("circle")
+        .attr("data-chart-hover-marker", series.key)
+        .attr("r", 5)
+        .attr("fill", series.color)
+        .style("display", "none")
+    ]));
+    const overlay = plot.append("rect")
+      .attr("data-chart-hit", "")
+      .attr("data-chart-hover-overlay", "cross-series")
+      .attr("x", margin.left)
+      .attr("y", margin.top)
+      .attr("width", plotWidth)
+      .attr("height", plotHeight)
+      .attr("fill", "transparent")
+      .style("pointer-events", "all");
+
+    const nearest = d3.bisector(row => row.time).center;
+    overlay.on("pointermove", event => {
+      const [cursorX] = d3.pointer(event, plot.node());
+      const cursorTime = x.invert(cursorX);
+      const index = nearest(rows, cursorTime);
+      const row = rows[index];
+      hoverGuide.attr("x1", cursorX).attr("x2", cursorX).style("display", null);
+      for (const series of chart.series) {
+        const marker = hoverMarkers.get(series.key);
+        if (enabled.get(series.key)) {
+          marker.attr("cx", cursorX).attr("cy", y(row[series.key])).style("display", null);
+        } else {
+          marker.style("display", "none");
+        }
+      }
+      const visible = chart.series.filter(series => enabled.get(series.key));
+      const values = visible.map(series => `<div>${series.label}: ${chart.format(row[series.key])}${chart.key === "cpu" ? "%" : ""}</div>`).join("");
+      tooltip.innerHTML = `<strong>${row.label}–${d3.timeFormat("%H:%M")(new Date(row.time.getTime() + 5 * 60 * 1000))} KST</strong>${values}`;
+      const [rootX, rootY] = d3.pointer(event, root);
+      tooltip.style.left = `${Math.min(root.clientWidth - 180, rootX + 10)}px`;
+      tooltip.style.top = `${Math.max(0, rootY + 10)}px`;
+      tooltip.style.display = "block";
+    }).on("pointerleave", () => {
+      hoverGuide.style("display", "none");
+      for (const marker of hoverMarkers.values()) marker.style("display", "none");
+      tooltip.style.display = "none";
+    });
+
+    const legend = section.querySelector(".load-legend");
+    legend.replaceChildren();
+    for (const series of chart.series) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "cursor-interaction";
+      button.setAttribute("aria-pressed", "true");
+      button.dataset.series = series.key;
+      const swatch = document.createElement("span");
+      swatch.className = "legend-swatch";
+      swatch.style.color = series.color;
+      const label = document.createElement("span");
+      label.textContent = series.label;
+      button.append(swatch, label);
+      button.addEventListener("click", () => {
+        const next = !enabled.get(series.key);
+        enabled.set(series.key, next);
+        button.setAttribute("aria-pressed", String(next));
+        plot.select(`[data-series-line="${series.key}"]`).style("display", next ? null : "none");
+        plot.select(`[data-series-points="${series.key}"]`).style("display", next ? null : "none");
+        persistState();
+      });
+      button.setAttribute("aria-pressed", String(enabled.get(series.key)));
+      plot.select(`[data-series-line="${series.key}"]`).style("display", enabled.get(series.key) ? null : "none");
+      plot.select(`[data-series-points="${series.key}"]`).style("display", enabled.get(series.key) ? null : "none");
+      legend.append(button);
+    }
+  }
+
+  charts.forEach(draw);
+  const observer = new ResizeObserver(() => charts.forEach(draw));
+  root.querySelectorAll(".load-chart").forEach(section => observer.observe(section));
+  window.addEventListener("openai:set_globals", event => {
+    const incoming = event.detail?.globals?.widgetState?.modelContent;
+    if (!incoming) return;
+    for (const chart of charts) {
+      for (const series of chart.series) {
+        if (typeof incoming[chart.key]?.[series.key] === "boolean") {
+          enabledState.get(chart.key).set(series.key, incoming[chart.key][series.key]);
+        }
+      }
+    }
+    charts.forEach(draw);
+  });
+})();
+</script>
