@@ -4,17 +4,6 @@ on:
   pull_request:
     branches: [main]
     types: [opened, reopened, synchronize, ready_for_review]
-    paths:
-      - "app-server/**"
-      - "shared-infra/**"
-      - "test-infra/**"
-      - "messaging/**"
-      - "redis/**"
-      - "ai-server/infra/**"
-      - "ai-server/dev-infra/**"
-      - "ai-server/dashboard/**"
-      - ".github/workflows/terraform-*.yml"
-      - ".github/scripts/terraform_*.py"
 
 permissions:
   contents: read
@@ -157,3 +146,58 @@ jobs:
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
+
+  terraform-pr-ci:
+    name: Terraform PR CI
+    needs:
+      - detect-roots
+      - validate
+      - validate-workflow-scripts
+      - plan
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require successful checks
+        env:
+          DETECT_RESULT: ${{ needs.detect-roots.result }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          SCRIPTS_RESULT: ${{ needs.validate-workflow-scripts.result }}
+          PLAN_RESULT: ${{ needs.plan.result }}
+          HAS_ROOTS: ${{ needs.detect-roots.outputs.has_roots }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+        run: |
+          if [[ "$DETECT_RESULT" != "success" ]]; then
+            echo "Root detection did not succeed: $DETECT_RESULT"
+            exit 1
+          fi
+
+          if [[ "$SCRIPTS_RESULT" != "success" ]]; then
+            echo "Workflow script validation did not succeed: $SCRIPTS_RESULT"
+            exit 1
+          fi
+
+          if [[ "$HAS_ROOTS" != "true" ]]; then
+            echo "No Terraform roots changed; required CI checks passed."
+            exit 0
+          fi
+
+          if [[ "$VALIDATE_RESULT" != "success" ]]; then
+            echo "Terraform validation did not succeed: $VALIDATE_RESULT"
+            exit 1
+          fi
+
+          case "$AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR)
+              if [[ "$PLAN_RESULT" != "success" ]]; then
+                echo "Terraform plan did not succeed: $PLAN_RESULT"
+                exit 1
+              fi
+              ;;
+            *)
+              if [[ "$PLAN_RESULT" != "skipped" && "$PLAN_RESULT" != "success" ]]; then
+                echo "Terraform plan has an unexpected result: $PLAN_RESULT"
+                exit 1
+              fi
+              echo "AWS plan is skipped for external contributors; validation passed."
+              ;;
+          esac

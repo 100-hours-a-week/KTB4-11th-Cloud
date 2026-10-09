@@ -46,11 +46,11 @@ terraform -chdir=app-server output -raw github_actions_terraform_apply_role_arn
 
 Apply 역할의 OIDC trust policy는 이 환경 이름과 저장소 ID에 고정되어 있습니다. 환경 이름을 바꾸면 IAM trust policy와 workflow도 함께 바꿔야 합니다.
 
-또한 **Settings → Rulesets**에서 `main` 직접 push를 막고 PR과 review를 요구하도록 설정하세요. 배포 environment 승인은 AWS apply의 추가 승인 단계입니다.
+또한 **Settings → Rules → Rulesets**에서 `main`을 대상으로 ruleset을 만들고 직접 push 차단, PR 필수, 리뷰 1명 이상, force push 차단을 설정하세요. CI status check에는 워크플로에서 한 번 실행된 뒤 나타나는 `Terraform PR CI`를 지정합니다. 배포 environment 승인은 AWS apply의 추가 승인 단계입니다.
 
 ## 실행 흐름
 
-- Terraform CI는 `main`을 대상으로 열린 PR에서만 실행됩니다. `feat/*` 브랜치에서 `main`으로 PR을 열면 변경된 root와 remote-state 소비 root를 찾아 각각 `fmt`, `validate`, `plan`을 실행합니다. `dev` 대상 PR과 `dev` push는 Terraform CI/CD를 실행하지 않습니다.
+- Terraform CI는 `main`을 대상으로 열린 모든 PR에서 실행되며, 변경된 Terraform root가 있을 때 해당 root와 remote-state 소비 root에 `fmt`, `validate`, `plan`을 실행합니다. 변경 root가 없는 PR도 고정 status check인 `Terraform PR CI`가 성공으로 완료되어 ruleset에서 사용할 수 있습니다. `dev` 대상 PR과 `dev` push는 Terraform CI/CD를 실행하지 않습니다.
 - plan은 root별로 리소스 추가·변경·삭제·교체 수와 대상 주소를 PR 댓글에 남깁니다. 저장소가 공개이므로 값이 포함된 전체 plan과 바이너리 plan 파일은 댓글이나 artifact에 게시하지 않습니다.
 - AWS plan 역할을 쓰는 PR plan은 저장소의 `OWNER`, `MEMBER`, `COLLABORATOR` 작성자에 한해 실행됩니다. 외부 fork PR에는 AWS 자격 증명을 주지 않고 포맷과 validate만 실행합니다.
 - PR이 `main`에 병합되면 main commit의 root별 plan이 생성되고, 결과 확인 후 `terraform-apply` 환경에서 승인해야 적용 단계가 시작됩니다. `dev` 브랜치는 Terraform 배포 흐름에서 사용하지 않습니다.
