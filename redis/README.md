@@ -99,27 +99,3 @@ Webhook URL은 Terraform 코드나 State에 저장하지 않는다. 기존 Secre
 
 알림 Lambda의 CloudWatch Log Group 보존 기간은 14일이다.
 
-## 로컬 정적 검사
-
-Remote Backend에 연결하지 않고 구성 문법만 확인할 때 사용한다.
-
-```bash
-terraform -chdir=redis fmt -check -recursive
-terraform -chdir=redis init -backend=false
-terraform -chdir=redis validate
-```
-
-## 개발 환경 초기화와 Plan
-
-상태 버킷을 준비한 후 다음 명령을 사용한다.
-
-```bash
-terraform -chdir=redis init \
-  -reconfigure \
-  -backend-config=environments/dev/backend.hcl
-
-terraform -chdir=redis plan \
-  -var-file=environments/dev/terraform.tfvars.example
-```
-
-현재 Plan 결과는 `14 to add, 0 to change, 0 to destroy`다. Plan과 예상 비용을 검토하기 전에는 `terraform apply`를 실행하지 않는다.
