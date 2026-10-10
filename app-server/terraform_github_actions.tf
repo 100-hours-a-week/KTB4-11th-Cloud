@@ -215,6 +215,13 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
   }
 
   statement {
+    sid       = "ReadRepositorySecretPolicies"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetResourcePolicy"]
+    resources = local.github_actions_terraform_secret_arns
+  }
+
+  statement {
     sid       = "ReadCanonicalUbuntuAmiParameter"
     effect    = "Allow"
     actions   = ["ssm:GetParameter"]
