@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Initialize and plan one Terraform root without printing plan values to logs."""
+"""Initialize and plan one Terraform root, then emit a redacted change summary."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="terraform-plan-") as temp_dir:
         plan_path = Path(temp_dir) / "tfplan"
         plan = create_plan(args.root, plan_path)
-        summary = render_summary(plan, args.root)
+        summary = render_summary(plan, args.root, include_value_details=True)
         Path(args.summary).write_text(summary, encoding="utf-8")
         step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
         if step_summary:
