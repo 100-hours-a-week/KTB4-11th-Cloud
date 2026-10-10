@@ -87,12 +87,10 @@ jobs:
         run: python3 .github/scripts/terraform_plan.py "$ROOT"
 
   apply:
-    name: Apply approved Terraform plans
+    name: Apply Terraform plans
     needs: [detect-roots, plan]
     if: needs.detect-roots.outputs.has_roots == 'true' && needs.plan.result == 'success'
     runs-on: ubuntu-24.04
-    environment:
-      name: terraform-apply
     permissions:
       contents: read
       id-token: write

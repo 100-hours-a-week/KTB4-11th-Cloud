@@ -150,7 +150,7 @@ data "aws_iam_policy_document" "github_actions_terraform_plan_assume_role" {
 
 data "aws_iam_policy_document" "github_actions_terraform_apply_assume_role" {
   statement {
-    sid     = "AllowProtectedTerraformApplyEnvironment"
+    sid     = "AllowMainBranchTerraformApply"
     effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
@@ -169,7 +169,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_assume_role" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:100-hours-a-week@167328634/KTB4-11th-Cloud@1350512544:environment:terraform-apply",
+        "repo:100-hours-a-week@167328634/KTB4-11th-Cloud@1350512544:ref:refs/heads/main",
       ]
     }
   }
