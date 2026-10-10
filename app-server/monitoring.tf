@@ -3,11 +3,11 @@ data "aws_caller_identity" "monitoring" {}
 data "aws_partition" "monitoring" {}
 
 locals {
-  app_cloudwatch_namespace           = "CWAgent"
-  app_system_log_group_name          = "/stockspoon/app/system"
-  app_system_log_group_arn           = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_system_log_group_name}"
-  app_system_log_stream_arn_glob     = "${local.app_system_log_group_arn}:log-stream:*"
-  app_log_group_arn_prefix           = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:"
+  app_cloudwatch_namespace       = "CWAgent"
+  app_system_log_group_name      = "/stockspoon/app/system"
+  app_system_log_group_arn       = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:${local.app_system_log_group_name}"
+  app_system_log_stream_arn_glob = "${local.app_system_log_group_arn}:log-stream:*"
+  app_log_group_arn_prefix       = "arn:${data.aws_partition.monitoring.partition}:logs:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:log-group:"
   app_container_service_log_group_names = {
     nginx    = "/stockspoon/app/containers/nginx"
     frontend = "/stockspoon/app/containers/frontend"
