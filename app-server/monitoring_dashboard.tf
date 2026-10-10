@@ -22,11 +22,11 @@ resource "aws_cloudwatch_dashboard" "app" {
         width  = 8
         height = 4
         properties = {
-          title     = "CPU used_percent · all cores"
-          view      = "timeSeries"
-          stacked   = false
-          region    = var.aws_region
-          period    = 60
+          title   = "CPU used_percent · all cores"
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          period  = 60
           metrics = [[
             "CWAgent", "used_percent",
             "InstanceId", aws_instance.app.id,
@@ -43,11 +43,11 @@ resource "aws_cloudwatch_dashboard" "app" {
         width  = 8
         height = 4
         properties = {
-          title     = "Memory used"
-          view      = "timeSeries"
-          stacked   = false
-          region    = var.aws_region
-          period    = 60
+          title   = "Memory used"
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          period  = 60
           metrics = [[
             "CWAgent", "mem_used_percent",
             "InstanceId", aws_instance.app.id,
@@ -63,11 +63,11 @@ resource "aws_cloudwatch_dashboard" "app" {
         width  = 8
         height = 4
         properties = {
-          title     = "Root filesystem used"
-          view      = "timeSeries"
-          stacked   = false
-          region    = var.aws_region
-          period    = 60
+          title   = "Root filesystem used"
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          period  = 60
           metrics = [[
             "CWAgent", "disk_used_percent",
             "path", "/",
