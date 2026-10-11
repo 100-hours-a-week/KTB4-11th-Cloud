@@ -12,7 +12,8 @@ locals {
   }
 }
 
-# 정상 타깃이 0개 = ALB 경로로는 서비스 불가하므로 데이터가 없을 때도 이상으로 간주
+# 정상 타깃이 0개면 ALB 경로로 서비스할 수 없다.
+# 현재는 트래픽이 적어 메트릭이 누락될 수 있으므로 누락 데이터는 장애로 처리하지 않는다.
 resource "aws_cloudwatch_metric_alarm" "app_alb_healthy_hosts_low" {
   alarm_name          = "stockspoon-v1-app-alb-healthy-hosts-low"
   alarm_description   = "ALB blue target group has no healthy targets."
@@ -24,7 +25,7 @@ resource "aws_cloudwatch_metric_alarm" "app_alb_healthy_hosts_low" {
   datapoints_to_alarm = 1
   threshold           = 1
   comparison_operator = "LessThanThreshold"
-  treat_missing_data  = "breaching"
+  treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_lambda_function.app_discord_notifier.arn]
   ok_actions          = [aws_lambda_function.app_discord_notifier.arn]
   dimensions          = local.alb_blue_target_dimensions
