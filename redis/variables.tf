@@ -81,4 +81,3 @@ variable "valkey_max_ecpu_per_second" {
     error_message = "valkey_max_ecpu_per_second must be at least 1000."
   }
 }
-

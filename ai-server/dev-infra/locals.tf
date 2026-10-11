@@ -10,6 +10,8 @@ locals {
 
   ai_cloudwatch_namespace = "AI_DEV_CWAgent"
 
+  dev_app_security_group_id = try(data.terraform_remote_state.test.outputs.dev_app_security_group_id, null)
+
   ai_log_groups = {
     system = {
       name              = "/stockspoon/v2/dev/ai/system"

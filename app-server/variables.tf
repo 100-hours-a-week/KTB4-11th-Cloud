@@ -88,6 +88,18 @@ variable "public_ecr_ai_repository_name" {
   default     = "stockspoon-v1-ai"
 }
 
+variable "public_ecr_v2_backend_repository_name" {
+  description = "Name of the public ECR repository for the V2 development backend image"
+  type        = string
+  default     = "stockspoon-v2-backend"
+}
+
+variable "public_ecr_v2_frontend_repository_name" {
+  description = "Name of the public ECR repository for the V2 development frontend image"
+  type        = string
+  default     = "stockspoon-v2-frontend"
+}
+
 variable "github_repository_owner" {
   description = "GitHub organization or user that owns the backend repository"
   type        = string

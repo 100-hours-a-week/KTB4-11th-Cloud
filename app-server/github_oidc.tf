@@ -95,3 +95,79 @@ resource "aws_iam_role_policy" "github_actions_ecr_push" {
   role   = aws_iam_role.github_actions_ecr_push.id
   policy = data.aws_iam_policy_document.github_actions_ecr_push.json
 }
+
+data "aws_iam_policy_document" "github_actions_v2_dev_ecr_push_assume_role" {
+  statement {
+    sid     = "AllowBackendAndFrontendDevBranches"
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:100-hours-a-week@167328634/KTB4-11th-BE@1352977792:ref:refs/heads/dev",
+        "repo:100-hours-a-week@167328634/KTB4-11th-FE@1352298546:ref:refs/heads/dev",
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions_v2_dev_ecr_push" {
+  name                 = "stockspoon-v2-dev-github-actions-ecr-push"
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_v2_dev_ecr_push_assume_role.json
+  max_session_duration = 3600
+
+  tags = {
+    Name        = "stockspoon-v2-dev-github-actions-ecr-push"
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_v2_dev_ecr_push" {
+  statement {
+    sid    = "GetPublicECRAuthorizationToken"
+    effect = "Allow"
+    actions = [
+      "ecr-public:GetAuthorizationToken",
+      "sts:GetServiceBearerToken",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PushV2DevelopmentImages"
+    effect = "Allow"
+    actions = [
+      "ecr-public:BatchCheckLayerAvailability",
+      "ecr-public:CompleteLayerUpload",
+      "ecr-public:DescribeImages",
+      "ecr-public:InitiateLayerUpload",
+      "ecr-public:PutImage",
+      "ecr-public:UploadLayerPart",
+    ]
+    resources = [
+      aws_ecrpublic_repository.backend_v2.arn,
+      aws_ecrpublic_repository.frontend_v2.arn,
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_v2_dev_ecr_push" {
+  name   = "stockspoon-v2-dev-public-ecr-push"
+  role   = aws_iam_role.github_actions_v2_dev_ecr_push.id
+  policy = data.aws_iam_policy_document.github_actions_v2_dev_ecr_push.json
+}

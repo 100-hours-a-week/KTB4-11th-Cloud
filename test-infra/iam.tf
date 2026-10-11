@@ -46,6 +46,7 @@ locals {
     for name in local.app_log_group_names :
     "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${name}"
   ]
+
 }
 
 data "aws_iam_policy_document" "app_cloudwatch" {
@@ -101,6 +102,41 @@ resource "aws_iam_instance_profile" "app" {
     Name        = "${var.name_prefix}-app-instance-profile"
     Project     = "stockspoon"
     Environment = "loadtest"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_iam_role" "dev_app" {
+  name               = "${var.dev_app_name_prefix}-ec2-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+
+  tags = {
+    Name        = "${var.dev_app_name_prefix}-ec2-role"
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "dev_app_ssm" {
+  role       = aws_iam_role.dev_app.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "dev_app_cloudwatch" {
+  name   = "${var.dev_app_name_prefix}-cloudwatch-policy"
+  role   = aws_iam_role.dev_app.id
+  policy = data.aws_iam_policy_document.app_cloudwatch.json
+}
+
+resource "aws_iam_instance_profile" "dev_app" {
+  name = "${var.dev_app_name_prefix}-instance-profile"
+  role = aws_iam_role.dev_app.name
+
+  tags = {
+    Name        = "${var.dev_app_name_prefix}-instance-profile"
+    Project     = "stockspoon"
+    Environment = "dev"
     ManagedBy   = "Terraform"
   }
 }

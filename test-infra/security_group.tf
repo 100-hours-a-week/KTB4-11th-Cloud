@@ -56,6 +56,46 @@ resource "aws_vpc_security_group_egress_rule" "app_all" {
   description       = "Allow outbound traffic"
 }
 
+resource "aws_security_group" "dev_app" {
+  name        = "${var.dev_app_name_prefix}-sg"
+  description = "Security group for the StockSpoon V2 development application EC2"
+  vpc_id      = aws_vpc.loadtest.id
+
+  tags = {
+    Name        = "${var.dev_app_name_prefix}-sg"
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "dev_app_http" {
+  security_group_id = aws_security_group.dev_app.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+  description       = "Allow HTTP traffic to the development application"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "dev_app_ssh" {
+  for_each = toset(var.ssh_allowed_cidrs)
+
+  security_group_id = aws_security_group.dev_app.id
+  cidr_ipv4         = each.value
+  from_port         = 22
+  to_port           = 22
+  ip_protocol       = "tcp"
+  description       = "Optional key-based SSH access to the development application"
+}
+
+resource "aws_vpc_security_group_egress_rule" "dev_app_all" {
+  security_group_id = aws_security_group.dev_app.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+  description       = "Allow outbound traffic for image pulls, AI, Valkey, and package downloads"
+}
+
 resource "aws_security_group" "k6" {
   name        = "${var.name_prefix}-k6-sg"
   description = "Security group for the k6 load generator"

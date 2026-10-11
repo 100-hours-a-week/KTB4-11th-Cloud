@@ -33,6 +33,17 @@ resource "aws_vpc_security_group_ingress_rule" "ai_api_from_test_app" {
   description                  = "Allow the test-infra application host to call the AI API"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "ai_api_from_dev_app" {
+  count = local.dev_app_security_group_id == null ? 0 : 1
+
+  security_group_id            = aws_security_group.ai.id
+  referenced_security_group_id = local.dev_app_security_group_id
+  from_port                    = var.ai_api_port
+  to_port                      = var.ai_api_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow the dedicated development application host to call the AI API"
+}
+
 resource "aws_vpc_security_group_egress_rule" "ai_all" {
   security_group_id = aws_security_group.ai.id
   cidr_ipv4         = "0.0.0.0/0"

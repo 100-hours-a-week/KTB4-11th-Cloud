@@ -106,6 +106,8 @@ locals {
       "stockspoon-v1-backend",
       "stockspoon-v1-frontend",
       "stockspoon-v1-ai",
+      "stockspoon-v2-backend",
+      "stockspoon-v2-frontend",
     ] :
     "arn:${data.aws_partition.github_actions_terraform.partition}:ecr-public::${data.aws_caller_identity.github_actions_terraform.account_id}:repository/${name}"
   ]
