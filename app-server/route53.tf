@@ -16,7 +16,7 @@ resource "aws_route53_record" "app" {
   zone_id = data.aws_route53_zone.app[0].zone_id
   name    = var.app_dns_record_name
   type    = "A"
-  ttl     = 300
+  ttl     = 60 # TODO: ALB DNS Cutover 및 롤백 시 캐시 영향 시간을 줄이기 위해 임시로 낮게 설정
   records = [aws_eip.app.public_ip]
 }
 

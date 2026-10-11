@@ -182,6 +182,9 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
     sid    = "ReadResourcesManagedByTerraform"
     effect = "Allow"
     actions = [
+      "acm:Describe*",
+      "acm:Get*",
+      "acm:List*",
       "cloudwatch:Describe*",
       "cloudwatch:Get*",
       "cloudwatch:List*",
@@ -194,6 +197,7 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
       "ecr-public:List*",
       "elasticache:Describe*",
       "elasticache:List*",
+      "elasticloadbalancing:Describe*",
       "iam:Get*",
       "iam:List*",
       "lambda:Get*",
@@ -214,6 +218,16 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
       "sts:GetServiceBearerToken",
     ]
     resources = ["*"]
+  }
+
+  statement {
+    sid    = "ReadAlbAccessLogBucketConfiguration"
+    effect = "Allow"
+    actions = [
+      "s3:Get*",
+      "s3:ListBucket",
+    ]
+    resources = [local.alb_access_log_bucket_arn]
   }
 
   statement {
@@ -374,6 +388,40 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
+    sid    = "ManageAlbAndCertificatesInSeoul"
+    effect = "Allow"
+    actions = [
+      "acm:AddTagsToCertificate",
+      "acm:DeleteCertificate",
+      "acm:RemoveTagsFromCertificate",
+      "acm:RequestCertificate",
+      "acm:UpdateCertificateOptions",
+      "elasticloadbalancing:*",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
+  }
+
+  statement {
+    sid    = "ManageAlbAccessLogBucket"
+    effect = "Allow"
+    actions = [
+      "s3:CreateBucket",
+      "s3:DeleteBucket",
+      "s3:DeleteBucketPolicy",
+      "s3:PutBucket*",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutLifecycleConfiguration",
+    ]
+    resources = [local.alb_access_log_bucket_arn]
+  }
+
+  statement {
     sid    = "ManageRepositoryLambdaFunctions"
     effect = "Allow"
     actions = [
@@ -509,6 +557,19 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
       test     = "StringEquals"
       variable = "iam:AWSServiceName"
       values   = ["elasticache.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid       = "CreateElasticLoadBalancingServiceLinkedRole"
+    effect    = "Allow"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values   = ["elasticloadbalancing.amazonaws.com"]
     }
   }
 }

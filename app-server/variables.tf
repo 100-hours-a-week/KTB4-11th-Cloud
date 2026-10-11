@@ -141,3 +141,14 @@ variable "app_alert_email_recipient" {
   type        = string
   default     = "ruby0656@naver.com"
 }
+
+variable "alb_access_log_retention_days" {
+  description = "Days to keep ALB access logs in S3 before expiration"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.alb_access_log_retention_days >= 1
+    error_message = "alb_access_log_retention_days must be at least 1."
+  }
+}
