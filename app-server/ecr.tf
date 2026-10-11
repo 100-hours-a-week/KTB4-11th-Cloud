@@ -55,3 +55,41 @@ resource "aws_ecrpublic_repository" "ai" {
     ManagedBy   = "Terraform"
   }
 }
+
+# V2 development images have separate public repositories so they do not
+# overwrite the V1 repositories used by the production and load-test stacks.
+resource "aws_ecrpublic_repository" "backend_v2" {
+  provider = aws.us_east_1
+
+  repository_name = var.public_ecr_v2_backend_repository_name
+
+  catalog_data {
+    description       = "StockSpoon V2 backend development image"
+    operating_systems = ["Linux"]
+  }
+
+  tags = {
+    Name        = var.public_ecr_v2_backend_repository_name
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_ecrpublic_repository" "frontend_v2" {
+  provider = aws.us_east_1
+
+  repository_name = var.public_ecr_v2_frontend_repository_name
+
+  catalog_data {
+    description       = "StockSpoon V2 frontend development image"
+    operating_systems = ["Linux"]
+  }
+
+  tags = {
+    Name        = var.public_ecr_v2_frontend_repository_name
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}

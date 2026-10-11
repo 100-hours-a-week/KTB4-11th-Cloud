@@ -8,8 +8,16 @@ resource "aws_security_group" "valkey" {
   }
 }
 
-# Backend 개발 서버가 아직 없으므로 인바운드 규칙을 만들지 않습니다.
-# 서버 생성 후 Backend Security Group을 소스로 하는 TCP 6379 규칙을 추가합니다.
+resource "aws_vpc_security_group_ingress_rule" "valkey_from_backend" {
+  count = local.backend_security_group_id == null ? 0 : 1
+
+  security_group_id            = aws_security_group.valkey.id
+  referenced_security_group_id = local.backend_security_group_id
+  from_port                    = var.valkey_port
+  to_port                      = var.valkey_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow the dedicated development application host to connect to Valkey over TLS"
+}
 
 # 응답 트래픽과 VPC 내부 통신만 허용하며 인터넷 목적지 규칙은 만들지 않습니다.
 resource "aws_vpc_security_group_egress_rule" "valkey_to_vpc" {

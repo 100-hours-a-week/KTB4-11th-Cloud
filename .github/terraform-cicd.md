@@ -26,6 +26,10 @@ CI apply 역할은 GitHub Actions IAM 역할·정책과 공용 OIDC provider를 
 ```bash
 terraform -chdir=app-server output -raw github_actions_terraform_plan_role_arn
 terraform -chdir=app-server output -raw github_actions_terraform_apply_role_arn
+terraform -chdir=app-server output -raw github_actions_dev_app_env_sync_role_arn
+terraform -chdir=app-server output -raw github_actions_v2_dev_ecr_push_role_arn
+terraform -chdir=app-server output -raw public_ecr_v2_backend_repository_uri
+terraform -chdir=app-server output -raw public_ecr_v2_frontend_repository_uri
 ```
 
 ### 2. GitHub Actions 변수 등록
@@ -36,6 +40,11 @@ terraform -chdir=app-server output -raw github_actions_terraform_apply_role_arn
 | --- | --- |
 | `AWS_TERRAFORM_PLAN_ROLE_ARN` | plan 역할 ARN |
 | `AWS_TERRAFORM_APPLY_ROLE_ARN` | apply 역할 ARN |
+| `AWS_DEV_APP_ENV_SYNC_ROLE_ARN` | 개발 환경 변수 동기화 역할 ARN |
+
+BE와 FE 저장소의 Actions **Variables**에 `AWS_V2_DEV_ECR_PUSH_ROLE_ARN`을 각각 등록한다. 역할 ARN은 위 Terraform output이며, 두 저장소의 `dev` 브랜치만 신뢰하고 V2 FE·BE Public ECR 저장소만 push할 수 있다. 개발 애플리케이션 배포는 BE·FE 저장소의 각 CD가 `development` Environment에 설정한 SSH 값으로 직접 EC2에 접속해 수행한다. Cloud 저장소는 앱 배포 workflow를 제공하지 않고, `DEV_APP_ENV` GitHub Secret을 Secrets Manager에 동기화하는 workflow만 제공한다.
+
+개발 환경 변수 동기화를 사용할 때는 Actions Secret `DEV_APP_ENV`도 등록합니다. 이 값은 개발 서버용 dotenv 파일 전체이며, 자세한 키와 배포 순서는 [`test-infra/README.md`](../test-infra/README.md)를 참고하세요.
 
 ### 3. main 병합 보호
 

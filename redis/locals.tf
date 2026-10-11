@@ -1,6 +1,9 @@
 locals {
   name_prefix = "${var.project_name}-v2-${var.environment}-valkey"
 
+  backend_security_group_id = try(data.terraform_remote_state.test.outputs.dev_app_security_group_id, null)
+  backend_iam_role_name     = try(data.terraform_remote_state.test.outputs.dev_app_iam_role_name, null)
+
   backend_user_id = "${local.name_prefix}-backend"
   user_group_id   = "${local.name_prefix}-apps"
 

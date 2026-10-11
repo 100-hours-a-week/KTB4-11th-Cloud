@@ -10,20 +10,16 @@
 
 - 상태 버킷: `stockspoon-terraform-state-v1`
 - 상태 Key: `test-infra/terraform.tfstate`
-- 사용 Output: `vpc_id`, `private_subnet_ids`
-- 목적: Valkey를 배치할 개발 VPC 참조
+- 사용 Output: `vpc_id`, `private_subnet_ids`, `dev_app_security_group_id`, `dev_app_iam_role_name`
+- 목적: Valkey 네트워크와 개발 Backend 접근 권한 구성
 
-### 향후 Backend 개발 서버
+### Backend 개발 서버
 
-Valkey는 App 서버의 Backend에서 사용한다. 현재 Backend 개발 EC2와 전용 Security Group, IAM Role은 아직 생성되지 않았다.
+Valkey는 test-infra의 개발 애플리케이션 EC2에서 실행되는 Backend가 사용한다. 개발 EC2는 기존 loadtest 애플리케이션과 분리된 전용 Security Group과 IAM Role을 사용한다.
 
-Redis Terraform에서는 다음 항목만 미리 생성한다.
+Redis Terraform은 test-infra의 `dev_app_security_group_id` Output으로 식별한 개발 Security Group에서만 Valkey TCP 6379 포트를 허용하고, `dev_app_iam_role_name` Output의 EC2 Role에 Backend용 IAM Policy를 연결한다.
 
-- Backend용 ElastiCache IAM 인증 사용자
-- Backend용 `elasticache:Connect` IAM Policy
-- 향후 연결에 사용할 IAM Policy ARN Output
-
-기존 `stockspoon-loadtest-app`은 Backend 개발 서버로 간주하지 않으며 Valkey 접근 권한을 부여하지 않는다. Backend 서버를 구축할 때 해당 인프라에서 IAM Role과 Instance Profile을 만들고 Redis가 출력한 Policy ARN을 연결한다. Backend Security Group이 생긴 뒤 Valkey `6379` 인바운드 규칙도 추가한다.
+Valkey 접근에 쓰는 IAM 사용자는 IAM 인증을 사용한다. 이 Policy는 해당 Valkey Cache와 Backend ElastiCache User ARN의 `elasticache:Connect`만 허용한다.
 
 ## 네트워크 구성
 
@@ -36,7 +32,7 @@ Valkey는 `test-infra` VPC 안의 공용 개발 Private Subnet 두 개를 사용
 
 두 Subnet은 `test-infra`의 별도 Private Route Table에 연결한다. Route Table에는 AWS가 자동으로 만드는 VPC `local` 경로만 존재하며 Internet Gateway와 NAT Gateway 경로를 추가하지 않는다. 기존 Public Subnet, Route Table, EC2 Network Interface는 수정하지 않는다.
 
-Backend 개발 서버가 아직 없으므로 Valkey Security Group에는 인바운드 규칙을 만들지 않는다. `0.0.0.0/0`, 기존 Load Test App, AI 서버 및 개발자 개인 IP에는 열지 않는다. Backend 개발 서버가 생기면 Backend Security Group을 소스로 하는 TCP `6379` 규칙만 추가한다.
+Valkey Security Group은 test-infra의 개발 전용 앱 Security Group에서 오는 TCP `6379`만 허용한다. `0.0.0.0/0`, loadtest 앱, AI 서버 및 개발자 개인 IP에는 열지 않는다.
 
 ## Terraform 상태
 
@@ -75,11 +71,11 @@ Valkey Serverless에서는 `PSUBSCRIBE`와 `PUNSUBSCRIBE`를 지원하지 않는
 
 ## IAM Policy 연결
 
-Redis Terraform은 다음 Managed Policy를 생성하고 ARN을 출력하지만 EC2 Role에는 직접 연결하지 않는다.
+Redis Terraform은 다음 Managed Policy를 생성하고 test-infra의 개발 EC2 Role에 연결한다.
 
 - `stockspoon-v2-dev-valkey-backend-connect`
 
-Policy는 `elasticache:Connect`를 해당 Cache ARN과 Backend ElastiCache User ARN으로 제한한다. Backend 서버 생성 시 Backend 인프라에서 해당 Policy를 연결한다.
+Policy는 `elasticache:Connect`를 해당 Cache ARN과 Backend ElastiCache User ARN으로 제한한다. Terraform Output에도 Policy ARN을 계속 제공한다.
 
 ## 모니터링 및 Discord 알림
 
@@ -98,4 +94,3 @@ Valkey 전용 Lambda `stockspoon-v2-dev-valkey-discord-notifier`가 경보를 �
 Terraform은 Valkey 전용 빈 Secrets Manager Secret `stockspoon/v2/dev/valkey/discord-webhook`을 생성한다. Webhook URL 값은 Terraform 코드나 State에 저장하지 않는다. Apply 후 사용자가 Secrets Manager에서 같은 Discord 채널의 Webhook URL을 직접 입력하고, Lambda는 실행 시 `secretsmanager:GetSecretValue`로 값을 읽는다.
 
 알림 Lambda의 CloudWatch Log Group 보존 기간은 14일이다.
-

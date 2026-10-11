@@ -34,12 +34,12 @@ output "valkey_endpoint_port" {
 }
 
 output "backend_valkey_user_name" {
-  description = "IAM-enabled ElastiCache user name for the future development Backend"
+  description = "IAM-enabled ElastiCache user name for the development Backend"
   value       = aws_elasticache_user.backend.user_name
 }
 
 output "backend_valkey_connect_policy_arn" {
-  description = "IAM policy ARN to attach to the future development Backend EC2 role"
+  description = "IAM policy ARN attached to the dedicated development application EC2 role"
   value       = aws_iam_policy.backend_connect.arn
 }
 

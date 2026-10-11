@@ -11,7 +11,8 @@ StockSpoon V2 AI 서버의 개발 환경을 구성하는 Terraform 루트 모듈
 | 참조 대상 | state 또는 조회 기준 | 가져오는 값 | 사용 위치 |
 | --- | --- | --- | --- |
 | `test-infra/network.tf`, `test-infra/outputs.tf` | `s3://stockspoon-terraform-state-v1/test-infra/terraform.tfstate` | `vpc_id`, `public_subnet_id` | EC2와 AI 보안 그룹을 기존 테스트 VPC·퍼블릭 서브넷에 배치 |
-| `test-infra/security_group.tf`에서 생성한 앱 보안 그룹 | 이름 `stockspoon-loadtest-app-sg`와 위 VPC ID로 AWS 조회 | 보안 그룹 ID | 테스트 앱 서버에서 AI API의 TCP 8000 포트로 접근 허용 |
+| `test-infra/security_group.tf`에서 생성한 테스트 앱 보안 그룹 | 이름 `stockspoon-loadtest-app-sg`와 위 VPC ID로 AWS 조회 | 보안 그룹 ID | 테스트 앱 서버에서 AI API의 TCP 8000 포트로 접근 허용 |
+| `test-infra/outputs.tf`의 개발 앱 보안 그룹 | `dev_app_security_group_id` | 전용 보안 그룹 ID | 개발 앱 서버에서만 AI API의 TCP 8000 포트로 접근 허용 |
 | `messaging/dev` | `s3://stockspoon-terraform-state-sqs/messaging/dev/terraform.tfstate` | `ai_sqs_policy_arn`, `report_queue_url`, `order_queue_url` | EC2 Role에 AI SQS 정책 연결, 인스턴스 환경 파일에 Queue URL 기록 |
 
 `messaging/dev` 소스는 PR #41에서 추가되는 구성이다. 현재 브랜치에 해당 소스 디렉터리가 보이지 않더라도 이미 배포된 S3 remote state가 있으므로 이 구성에서는 output을 읽을 수 있다. 최종 병합 후에는 `messaging/dev`가 SQS 정책과 Queue URL의 원본 관리 위치가 된다.
@@ -51,7 +52,7 @@ s3://stockspoon-terraform-state-ai-dev/ai-server/dev-infra/terraform.tfstate
 
 ## 네트워크와 접근 제어
 
-- AI API의 TCP 8000 포트는 `stockspoon-loadtest-app-sg`가 연결된 리소스에서만 접근할 수 있다.
+- AI API의 TCP 8000 포트는 기존 `stockspoon-loadtest-app-sg`와 개발 전용 보안 그룹에서만 접근할 수 있다.
 - TCP 22는 기본적으로 `0.0.0.0/0`에 열려 있으며 EC2 Key Pair `stockspoon-v1-deploy`를 사용하는 공개키 인증만 허용한다. 가능하면 `ssh_allowed_cidrs`를 관리자 IP 대역으로 제한한다.
 - AWS Systems Manager Session Manager와 Tailscale도 서버 관리 경로로 사용할 수 있다.
 - EC2의 외부 통신은 SQS, SSM, Tailscale 설치와 패키지 다운로드를 위해 전체 허용되어 있다.
