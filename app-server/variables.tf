@@ -156,7 +156,7 @@ variable "alb_access_log_retention_days" {
 variable "app_dns_target" {
   description = "Entry point for the application DNS record: \"ec2\" (Elastic IP) or \"alb\" (ALB alias). Change only this value for DNS cutover or rollback."
   type        = string
-  default     = "ec2"
+  default     = "alb"
 
   validation {
     condition     = contains(["ec2", "alb"], var.app_dns_target)
