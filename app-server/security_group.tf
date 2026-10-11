@@ -58,3 +58,24 @@ resource "aws_vpc_security_group_egress_rule" "all" {
 
   description = "Allow all outbound traffic"
 }
+
+# ALB에서 오는 트래픽 허용.
+# 기존 0.0.0.0/0 80/443 규칙은 EIP 직접 접속(롤백 경로)을 위해 유지하며,
+# 이 규칙은 향후 직접 접속을 닫을 때도 ALB 경로가 유지되도록 명시해 둔다.
+resource "aws_vpc_security_group_ingress_rule" "http_from_alb" {
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = aws_security_group.alb.id
+  from_port                    = 80
+  to_port                      = 80
+  ip_protocol                  = "tcp"
+  description                  = "Allow ACME challenge from ALB"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "https_from_alb" {
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = aws_security_group.alb.id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+  description                  = "Allow application traffic and health checks from ALB"
+}
