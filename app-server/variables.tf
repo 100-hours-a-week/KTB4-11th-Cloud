@@ -152,3 +152,14 @@ variable "alb_access_log_retention_days" {
     error_message = "alb_access_log_retention_days must be at least 1."
   }
 }
+
+variable "app_dns_target" {
+  description = "Entry point for the application DNS record: \"ec2\" (Elastic IP) or \"alb\" (ALB alias). Change only this value for DNS cutover or rollback."
+  type        = string
+  default     = "ec2"
+
+  validation {
+    condition     = contains(["ec2", "alb"], var.app_dns_target)
+    error_message = "app_dns_target must be either \"ec2\" or \"alb\"."
+  }
+}
