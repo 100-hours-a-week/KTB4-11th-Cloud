@@ -25,3 +25,9 @@ resource "aws_iam_role_policy_attachment" "backend_connect" {
   role       = local.backend_iam_role_name
   policy_arn = aws_iam_policy.backend_connect.arn
 }
+
+resource "aws_iam_role_policy_attachment" "ai_connect" {
+  count      = local.ai_iam_role_name == null ? 0 : 1
+  role       = local.ai_iam_role_name
+  policy_arn = aws_iam_policy.backend_connect.arn
+}

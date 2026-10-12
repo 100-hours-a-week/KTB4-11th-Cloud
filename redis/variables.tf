@@ -38,6 +38,18 @@ variable "test_infra_state_key" {
   default     = "test-infra/terraform.tfstate"
 }
 
+variable "ai_dev_state_bucket" {
+  description = "S3 bucket containing the development AI Terraform state"
+  type        = string
+  default     = "stockspoon-terraform-state-ai-dev"
+}
+
+variable "ai_dev_state_key" {
+  description = "S3 key containing the development AI Terraform state"
+  type        = string
+  default     = "ai-server/dev-infra/terraform.tfstate"
+}
+
 variable "valkey_port" {
   description = "TLS port used by the Valkey serverless cache"
   type        = number
