@@ -77,6 +77,8 @@ def main() -> None:
         "test-infra",
         "messaging",
         "redis",
+        "ecr",
+        "ecs",
         "ai-server/infra",
         "ai-server/dev-infra",
         "ai-server/dashboard",

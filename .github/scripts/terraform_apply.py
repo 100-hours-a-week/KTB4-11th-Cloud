@@ -20,6 +20,8 @@ ROOT_ORDER = [
     "messaging",
     "redis",
     "app-server",
+    "ecr",
+    "ecs",
     "ai-server/infra",
     "ai-server/dev-infra",
     "ai-server/dashboard",
