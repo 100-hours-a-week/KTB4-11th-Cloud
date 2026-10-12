@@ -4,6 +4,10 @@ locals {
   backend_security_group_id = try(data.terraform_remote_state.test.outputs.dev_app_security_group_id, null)
   backend_iam_role_name     = try(data.terraform_remote_state.test.outputs.dev_app_iam_role_name, null)
 
+  ai_security_group_id = try(data.terraform_remote_state.ai_dev.outputs.ai_security_group_id, null)
+  ai_iam_role_name     = try(basename(data.terraform_remote_state.ai_dev.outputs.ai_iam_role_arn), null)
+
+  # 기존 Backend 연결을 끊지 않도록 리소스 이름은 유지하고 AI와 공용으로 사용합니다.
   backend_user_id = "${local.name_prefix}-backend"
   user_group_id   = "${local.name_prefix}-apps"
 
@@ -13,24 +17,15 @@ locals {
   storage_alarm_threshold_bytes = var.valkey_max_data_storage_gb * 1024 * 1024 * 1024 * 0.75
   ecpu_alarm_threshold_per_min  = var.valkey_max_ecpu_per_second * 60 * 0.75
 
-  # Key와 Pub/Sub 채널 범위는 애플리케이션 Naming Convention에 맞춰 제한합니다.
-  # Cluster client가 토폴로지를 조회할 수 있도록 필요한 읽기 전용 subcommand를 허용합니다.
+  # 개발 환경에서는 Backend와 AI가 같은 사용자를 사용합니다.
+  # 모든 Key·채널과 일반 명령을 허용하되 운영에 위험한 명령은 차단합니다.
   backend_access_string = join(" ", [
     "on",
-    "~quote:*",
-    "~session:*",
-    "~token:*",
+    "~*",
     "resetchannels",
-    "&quotes:*",
-    "-@all",
-    "+@read",
-    "+@write",
-    "+@pubsub",
-    "+@connection",
+    "&*",
+    "+@all",
     "-@dangerous",
-    "+cluster|slots",
-    "+cluster|shards",
-    "+cluster|nodes",
   ])
 
   common_tags = {

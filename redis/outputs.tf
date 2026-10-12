@@ -34,12 +34,32 @@ output "valkey_endpoint_port" {
 }
 
 output "backend_valkey_user_name" {
-  description = "IAM-enabled ElastiCache user name for the development Backend"
+  description = "Shared IAM-enabled ElastiCache user name for the development Backend"
   value       = aws_elasticache_user.backend.user_name
 }
 
 output "backend_valkey_connect_policy_arn" {
-  description = "IAM policy ARN attached to the dedicated development application EC2 role"
+  description = "Shared IAM policy ARN attached to the development Backend EC2 role"
+  value       = aws_iam_policy.backend_connect.arn
+}
+
+output "ai_valkey_user_name" {
+  description = "Shared IAM-enabled ElastiCache user name for the development AI server"
+  value       = aws_elasticache_user.backend.user_name
+}
+
+output "ai_valkey_connect_policy_arn" {
+  description = "Shared IAM policy ARN attached to the development AI EC2 role"
+  value       = aws_iam_policy.backend_connect.arn
+}
+
+output "app_valkey_user_name" {
+  description = "Shared IAM-enabled ElastiCache user name for development applications"
+  value       = aws_elasticache_user.backend.user_name
+}
+
+output "app_valkey_connect_policy_arn" {
+  description = "Shared IAM policy ARN for development applications"
   value       = aws_iam_policy.backend_connect.arn
 }
 
