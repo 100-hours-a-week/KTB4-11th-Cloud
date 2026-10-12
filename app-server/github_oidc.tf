@@ -119,6 +119,7 @@ data "aws_iam_policy_document" "github_actions_v2_dev_ecr_push_assume_role" {
       values = [
         "repo:100-hours-a-week@167328634/KTB4-11th-BE@1352977792:ref:refs/heads/dev",
         "repo:100-hours-a-week@167328634/KTB4-11th-FE@1352298546:ref:refs/heads/dev",
+        "repo:100-hours-a-week@167328634/KTB4-11th-FE@1352298546:environment:development",
       ]
     }
   }
