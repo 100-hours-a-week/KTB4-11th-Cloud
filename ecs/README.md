@@ -43,3 +43,25 @@ aws ssm put-parameter --type SecureString \
 ## 컨테이너 이미지
 
 이미지 저장소(Private ECR)는 ECS와 수명이 달라 별도 `ecr` root에서 관리합니다.
+
+## 리소스 구성
+
+| 파일 | 리소스 |
+|---|---|
+| `platform_cluster.tf` | ECS Cluster, Service ASG(Launch Template, 인스턴스 SG), Capacity Provider |
+| `svc_backend.tf` | Backend 로그 그룹, Task Role, Task SG, Green Target Group, Task Definition, ECS Service |
+| `cross_root_rules.tf` | ALB SG → Backend Task egress, HTTPS 리스너 테스트 규칙 |
+
+## 용량 설계
+
+- Service ASG 인스턴스는 기준 Task 조합(Backend 1 + Socket 1 = 3 vCPU / 5 GiB)에 20% Headroom을 적용한 3.75 vCPU / 6.25 GiB를 충족하는 `c6i.xlarge`입니다.
+- Headroom은 인스턴스 크기에서 확보하므로 Capacity Provider `target_capacity`는 100입니다.
+- ASG는 min 2로 2a·2c에 1대씩 배치합니다. Backend Task는 AZ → 인스턴스 순서로 분산합니다.
+
+## ECS로 테스트 요청 보내기
+
+운영 트래픽은 그대로 V1(Blue)으로 가고, 테스트 헤더가 있는 요청만 ECS(Green)로 전달됩니다.
+
+```bash
+curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/
+```

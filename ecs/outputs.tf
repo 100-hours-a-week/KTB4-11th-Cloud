@@ -22,3 +22,38 @@ output "backend_log_group_name" {
   description = "CloudWatch Logs group for backend containers"
   value       = aws_cloudwatch_log_group.backend.name
 }
+
+output "cluster_name" {
+  description = "ECS cluster name"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "service_asg_name" {
+  description = "Auto Scaling group for the service capacity provider"
+  value       = aws_autoscaling_group.service.name
+}
+
+output "service_capacity_provider_name" {
+  description = "Capacity provider for Backend and Socket services"
+  value       = aws_ecs_capacity_provider.service.name
+}
+
+output "backend_service_name" {
+  description = "Backend ECS service name"
+  value       = aws_ecs_service.backend.name
+}
+
+output "backend_green_target_group_arn" {
+  description = "Green target group for the ECS backend (used for canary weights)"
+  value       = aws_lb_target_group.backend_green.arn
+}
+
+output "backend_task_security_group_id" {
+  description = "Security group attached to backend task ENIs"
+  value       = aws_security_group.backend_task.id
+}
+
+output "backend_test_request_example" {
+  description = "Example request that is routed to the ECS backend instead of V1"
+  value       = "curl -s -H '${var.backend_test_header_name}: ${var.backend_test_header_value}' https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}/"
+}
