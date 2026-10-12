@@ -13,6 +13,26 @@ DLQ alarms use a dedicated Discord notifier Lambda in this stack.
 - `stockspoon-v2-dev-order.fifo`
 - `stockspoon-v2-dev-order-dlq.fifo`
 
+## Prod queues
+
+The `prod` environment uses the same Terraform code with
+`environments/prod/backend.hcl` and
+`environments/prod/terraform.tfvars.example`.
+
+- `stockspoon-v2-prod-report-request`
+- `stockspoon-v2-prod-report-dlq`
+- `stockspoon-v2-prod-order.fifo`
+- `stockspoon-v2-prod-order-dlq.fifo`
+
+Prod also creates `stockspoon-v2-prod-{backend-producer,order-consumer,ai}-sqs`
+policies, the `stockspoon-v2-prod-sqs` dashboard, DLQ alarms, the
+`stockspoon-v2-prod-sqs-discord-notifier` Lambda, and the empty
+`stockspoon/v2/prod/sqs/discord-webhook` secret. Store a prod-only Discord
+webhook URL in that secret after the first apply.
+
+Prod is applied only by the Terraform CD workflow as the `messaging@prod`
+root. Do not run `terraform apply` for prod from a local machine.
+
 ## Dev IAM policies
 
 - `stockspoon-v2-dev-backend-producer-sqs`
@@ -62,6 +82,22 @@ terraform -chdir=messaging init \
 
 terraform -chdir=messaging plan \
   -var-file=environments/dev/terraform.tfvars.example
+```
+
+## Switching environments locally
+
+Dev and prod share this directory and its `.terraform` working directory.
+Always pass `-reconfigure` with the matching backend file, and pair it with the
+var file of the same environment. Mixing a prod backend with the dev var file
+plans to rename every prod resource.
+
+```bash
+terraform -chdir=messaging init \
+  -reconfigure \
+  -backend-config=environments/prod/backend.hcl
+
+terraform -chdir=messaging plan \
+  -var-file=environments/prod/terraform.tfvars.example
 ```
 
 AWS credentials must come from an AWS profile or an assumed CI role. Do not
