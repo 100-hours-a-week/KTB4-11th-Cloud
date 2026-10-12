@@ -219,3 +219,26 @@ output "alb_zone_id" {
   description = "Route 53 hosted zone ID of the application ALB, used for alias records"
   value       = aws_lb.app.zone_id
 }
+
+# 아래 output은 ecs root가 리스너 규칙·Target Group·SG 규칙을 연결할 때 참조
+# 참조는 ecs → app-server 단방향으로만 하며, app-server는 ecs를 참조하지 않는다.
+
+output "alb_arn_suffix" {
+  description = "ARN suffix of the application ALB, used for CloudWatch metrics and alarms"
+  value       = aws_lb.app.arn_suffix
+}
+
+output "alb_security_group_id" {
+  description = "ID of the application ALB security group"
+  value       = aws_security_group.alb.id
+}
+
+output "https_listener_arn" {
+  description = "ARN of the ALB HTTPS listener, used to attach ECS listener rules"
+  value       = aws_lb_listener.https.arn
+}
+
+output "blue_target_group_arn" {
+  description = "ARN of the Blue target group (existing EC2 Nginx), used for weighted canary rules"
+  value       = aws_lb_target_group.blue.arn
+}
