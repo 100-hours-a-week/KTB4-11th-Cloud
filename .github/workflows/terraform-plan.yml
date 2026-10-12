@@ -51,18 +51,18 @@ jobs:
 
       - name: Check formatting
         env:
-          ROOT: ${{ matrix.root }}
-        run: terraform -chdir="$ROOT" fmt -check -recursive
+          ROOT_DIR: ${{ matrix.dir }}
+        run: terraform -chdir="$ROOT_DIR" fmt -check -recursive
 
       - name: Initialize without AWS credentials
         env:
-          ROOT: ${{ matrix.root }}
-        run: terraform -chdir="$ROOT" init -backend=false -input=false -lockfile=readonly
+          ROOT_DIR: ${{ matrix.dir }}
+        run: terraform -chdir="$ROOT_DIR" init -backend=false -input=false -lockfile=readonly
 
       - name: Validate configuration
         env:
-          ROOT: ${{ matrix.root }}
-        run: terraform -chdir="$ROOT" validate -no-color
+          ROOT_DIR: ${{ matrix.dir }}
+        run: terraform -chdir="$ROOT_DIR" validate -no-color
 
   validate-workflow-scripts:
     name: Validate workflow helper scripts

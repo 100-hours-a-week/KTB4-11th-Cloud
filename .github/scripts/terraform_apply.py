@@ -12,20 +12,7 @@ from pathlib import Path
 
 from terraform_plan import create_plan, prepare
 from terraform_plan_summary import render_summary
-
-
-ROOT_ORDER = [
-    "shared-infra",
-    "test-infra",
-    "messaging",
-    "redis",
-    "app-server",
-    "ecr",
-    "ecs",
-    "ai-server/infra",
-    "ai-server/dev-infra",
-    "ai-server/dashboard",
-]
+from terraform_roots import ROOT_ORDER, root_dir
 
 
 def main() -> None:
@@ -58,7 +45,7 @@ def main() -> None:
                 summary_file.write("\n")
 
             result = subprocess.run(
-                ["terraform", f"-chdir={root}", "apply", "-input=false", "-no-color", str(plan_path)],
+                ["terraform", f"-chdir={root_dir(root)}", "apply", "-input=false", "-no-color", str(plan_path)],
                 text=True,
                 capture_output=True,
                 check=False,

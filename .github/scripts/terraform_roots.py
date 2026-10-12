@@ -8,10 +8,14 @@ import json
 from pathlib import PurePosixPath
 
 
+# A root ID is a Terraform directory, optionally suffixed with "@<env>" when the
+# same directory is planned and applied with another backend and var file.
+# A bare directory name is that root's default (dev) environment.
 ROOT_ORDER = [
     "shared-infra",
     "test-infra",
     "messaging",
+    "messaging@prod",
     "ai-server/dev-infra",
     "redis",
     "app-server",
@@ -31,6 +35,11 @@ DEPENDENTS = {
 }
 
 
+def root_dir(root: str) -> str:
+    """Return the Terraform directory for a root ID such as ``messaging@prod``."""
+    return root.split("@", 1)[0]
+
+
 def affected_roots(paths: list[str]) -> list[str]:
     selected: set[str] = set()
 
@@ -43,9 +52,10 @@ def affected_roots(paths: list[str]) -> list[str]:
 
         normalized = path.as_posix()
         for root in ROOT_ORDER:
-            if normalized == root or normalized.startswith(f"{root}/"):
+            directory = root_dir(root)
+            # Every environment of a directory shares its code, so select them all.
+            if normalized == directory or normalized.startswith(f"{directory}/"):
                 selected.add(root)
-                break
 
     pending = list(selected)
     while pending:
@@ -75,7 +85,7 @@ def main() -> None:
     if args.all_if_affected and roots:
         roots = ROOT_ORDER.copy()
 
-    matrix = {"include": [{"root": root} for root in roots]}
+    matrix = {"include": [{"root": root, "dir": root_dir(root)} for root in roots]}
     print(f"matrix={json.dumps(matrix, separators=(',', ':'))}")
     print(f"roots={json.dumps(roots, separators=(',', ':'))}")
     print(f"has_roots={'true' if roots else 'false'}")
