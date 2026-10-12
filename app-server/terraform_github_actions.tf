@@ -37,6 +37,10 @@ locals {
       bucket = "stockspoon-terraform-state-redis"
       key    = "redis/dev/terraform.tfstate"
     },
+    {
+      bucket = "stockspoon-terraform-state-v1"
+      key    = "ecs/terraform.tfstate"
+    },
   ]
 
   github_actions_terraform_state_object_arns = [
@@ -66,14 +70,17 @@ locals {
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/stockspoon-v1-ai-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/stockspoon-loadtest-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/stockspoon-v2-dev-*",
+    "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/stockspoon-prod-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v1-app-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v1-ai-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-loadtest-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v2-dev-*",
+    "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-prod-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-v1-app-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-v1-ai-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-loadtest-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-v2-dev-*",
+    "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-prod-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore",
   ]
 
@@ -110,6 +117,11 @@ locals {
       "stockspoon-v2-frontend",
     ] :
     "arn:${data.aws_partition.github_actions_terraform.partition}:ecr-public::${data.aws_caller_identity.github_actions_terraform.account_id}:repository/${name}"
+  ]
+
+  # 운영 ECS가 사용하는 Private ECR Repository
+  github_actions_terraform_ecr_repository_arns = [
+    "arn:${data.aws_partition.github_actions_terraform.partition}:ecr:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:repository/stockspoon-prod-*",
   ]
 
   github_actions_terraform_ses_identity_arns = [
@@ -188,8 +200,13 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
       "cloudwatch:Describe*",
       "cloudwatch:Get*",
       "cloudwatch:List*",
+      "autoscaling:Describe*",
       "ec2:Describe*",
       "ec2:Get*",
+      "ecr:Describe*",
+      "ecr:GetLifecyclePolicy",
+      "ecr:GetRepositoryPolicy",
+      "ecr:List*",
       "ecr-public:Describe*",
       "ecr-public:GetAuthorizationToken",
       "ecr-public:GetRepositoryCatalogData",
@@ -197,6 +214,8 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
       "ecr-public:List*",
       "elasticache:Describe*",
       "elasticache:List*",
+      "ecs:Describe*",
+      "ecs:List*",
       "elasticloadbalancing:Describe*",
       "iam:Get*",
       "iam:List*",
@@ -242,6 +261,13 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
     effect    = "Allow"
     actions   = ["ssm:GetParameter"]
     resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id"]
+  }
+
+  statement {
+    sid       = "ReadEcsOptimizedAmiParameters"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters"]
+    resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/*"]
   }
 
   statement {
@@ -481,6 +507,40 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
+    sid    = "ManageEcsAndAutoScalingInSeoul"
+    effect = "Allow"
+    actions = [
+      "autoscaling:*",
+      "ecs:*",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
+  }
+
+  statement {
+    sid    = "ManageApplicationEcrRepositories"
+    effect = "Allow"
+    actions = [
+      "ecr:CreateRepository",
+      "ecr:DeleteLifecyclePolicy",
+      "ecr:DeleteRepository",
+      "ecr:DeleteRepositoryPolicy",
+      "ecr:PutImageScanningConfiguration",
+      "ecr:PutImageTagMutability",
+      "ecr:PutLifecyclePolicy",
+      "ecr:SetRepositoryPolicy",
+      "ecr:TagResource",
+      "ecr:UntagResource",
+    ]
+    resources = local.github_actions_terraform_ecr_repository_arns
+  }
+
+  statement {
     sid    = "ManageApplicationSesIdentities"
     effect = "Allow"
     actions = [
@@ -542,6 +602,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
       variable = "iam:PassedToService"
       values = [
         "ec2.amazonaws.com",
+        "ecs-tasks.amazonaws.com",
         "lambda.amazonaws.com",
       ]
     }
@@ -570,6 +631,23 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
       test     = "StringEquals"
       variable = "iam:AWSServiceName"
       values   = ["elasticloadbalancing.amazonaws.com"]
+    }
+  }
+
+  # ECS 클러스터·Capacity Provider와 ASG가 처음 생성될 때 필요한 Service-Linked Role
+  statement {
+    sid       = "CreateEcsAndAutoScalingServiceLinkedRoles"
+    effect    = "Allow"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values = [
+        "autoscaling.amazonaws.com",
+        "ecs.amazonaws.com",
+      ]
     }
   }
 }
