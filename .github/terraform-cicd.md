@@ -58,21 +58,40 @@ Apply 역할의 OIDC trust policy는 저장소 ID와 `main` 브랜치에 고정�
 - plan은 root별 PR 댓글에 리소스 추가·변경·삭제·교체 수를 남깁니다. 변경이 없는 root는 기존처럼 `변경할 리소스가 없습니다.`로 표시하고, 변경된 리소스는 펼쳐서 속성별 이전 값과 계획 값을 확인할 수 있습니다. Terraform이 민감값으로 표시한 값은 마스킹하며, 저장소가 공개이므로 민감하게 다룰 속성은 Terraform 코드에서도 `sensitive`로 지정해야 합니다. 전체 plan JSON과 바이너리 plan 파일은 댓글이나 artifact에 게시하지 않습니다.
 - AWS plan 역할을 쓰는 PR plan은 저장소의 `OWNER`, `MEMBER`, `COLLABORATOR` 작성자에 한해 실행됩니다. 외부 fork PR에는 AWS 자격 증명을 주지 않고 포맷과 validate만 실행합니다.
 - PR이 `main`에 병합되면 main commit의 root별 plan이 실행됩니다. 모든 plan이 성공하면 별도 배포 승인 없이 의존 순서대로 apply합니다. PR 리뷰와 CI 통과가 병합 전 승인 단계입니다. `dev` 브랜치는 Terraform 배포 흐름에서 사용하지 않습니다.
-- main에 Terraform root 변경이 하나라도 들어오면 8개 root 모두 plan하고 의존 순서대로 apply합니다. GitHub Actions 동시성 설정은 대기 중인 실행을 최신 실행으로 합칠 수 있으므로, 모든 root를 대상으로 해야 앞선 커밋의 변경이 빠지지 않습니다.
+- main에 Terraform root 변경이 하나라도 들어오면 10개 root 모두 plan하고 의존 순서대로 apply합니다. GitHub Actions 동시성 설정은 대기 중인 실행을 최신 실행으로 합칠 수 있으므로, 모든 root를 대상으로 해야 앞선 커밋의 변경이 빠지지 않습니다.
 - Apply는 각 root를 하나씩 현재 state 기준으로 다시 plan하고, 그 root에서 생성한 임시 plan 파일을 즉시 apply합니다. 따라서 upstream root를 적용한 뒤 downstream root의 remote state에서 최신 output을 읽습니다. PR plan 댓글은 병합 전 검토용 미리보기이며, main 병합 후 모든 root plan이 성공하면 이 재계산과 apply를 수행합니다.
 
-현재 root 간 적용 순서는 `shared-infra`, `test-infra`, `messaging`, `redis`, `app-server`, `ai-server/infra`, `ai-server/dev-infra`, `ai-server/dashboard`입니다. 경로 감지기는 다음 참조 관계도 반영합니다.
+현재 root 간 적용 순서는 `shared-infra`, `test-infra`, `messaging`, `redis`, `app-server`, `ecr`, `ecs`, `ai-server/infra`, `ai-server/dev-infra`, `ai-server/dashboard`입니다. 경로 감지기는 다음 참조 관계도 반영합니다.
 
-- `shared-infra` 변경 → `app-server`, `ai-server/infra`
-- `app-server` 변경 → `ai-server/infra`
+- `shared-infra` 변경 → `app-server`, `ecs`, `ai-server/infra`
+- `app-server` 변경 → `ecs`, `ai-server/infra`
+- `ecr` 변경 → `ecs`
 - `test-infra` 변경 → `redis`, `ai-server/dev-infra`
 - `messaging` 변경 → `ai-server/dev-infra`
 
+## 새 root 추가 체크리스트
+
+root 목록은 아래 네 곳에 따로 정의되어 있습니다. 한 곳이라도 빠지면 plan이 거부되거나, **apply가 오류 없이 해당 root를 건너뜁니다.**
+
+| 파일 | 수정할 곳 | 빠졌을 때 |
+|---|---|---|
+| `.github/scripts/terraform_roots.py` | `ROOT_ORDER`, 참조 관계가 있으면 `DEPENDENTS` | 변경 감지 대상에서 빠짐 |
+| `.github/scripts/terraform_plan.py` | `allowed_roots` (backend config·var file이 있으면 `BACKEND_CONFIGS`, `VAR_FILES`) | PR plan이 `unknown Terraform root`로 실패 |
+| `.github/scripts/terraform_apply.py` | `ROOT_ORDER` (`terraform_roots.py`와 같은 순서) | main apply가 해당 root를 오류 없이 건너뜀 |
+| `.github/workflows/terraform-apply.yml` | `on.push.paths` | 해당 root만 바꾼 커밋이 main에 머지돼도 apply가 실행되지 않음 |
+
+그 밖에 함께 확인할 것:
+
+- `app-server/terraform_github_actions.tf`: state 목록과 IAM·리소스 권한 범위 추가. CI 권한 변경이므로 로컬에서 `-target` apply로 반영해야 합니다.
+- `root/.terraform.lock.hcl`: CI가 `-lockfile=readonly`로 init하므로 반드시 커밋합니다.
+- 이 문서의 적용 순서와 참조 관계
+
 ## S3 state 및 Terraform 버전
 
-IAM 역할은 기존 네 버킷의 state object와 `.tflock` object만 대상으로 합니다.
+IAM 역할은 다음 다섯 버킷의 state object와 `.tflock` object만 대상으로 합니다.
 
 - `stockspoon-terraform-state-v1`
+- `stockspoon-terraform-state-v2` (`ecr`, `ecs`)
 - `stockspoon-terraform-state-ai-dev`
 - `stockspoon-terraform-state-sqs`
 - `stockspoon-terraform-state-redis`
