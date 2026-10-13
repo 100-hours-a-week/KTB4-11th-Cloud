@@ -49,7 +49,7 @@ services:
     networks:
       - app-net
     healthcheck:
-        test:
+      test:
         - CMD
         - bash
         - -c
