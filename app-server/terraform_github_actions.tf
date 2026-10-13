@@ -42,6 +42,10 @@ locals {
       key    = "redis/dev/terraform.tfstate"
     },
     {
+      bucket = "stockspoon-terraform-state-redis"
+      key    = "redis/prod/terraform.tfstate"
+    },
+    {
       bucket = "stockspoon-terraform-state-v2"
       key    = "ecr/terraform.tfstate"
     },
@@ -109,6 +113,7 @@ locals {
       "stockspoon/v2/dev/sqs/discord-webhook",
       "stockspoon/v2/prod/sqs/discord-webhook",
       "stockspoon/v2/dev/valkey/discord-webhook",
+      "stockspoon/v2/prod/valkey/discord-webhook",
     ] :
     "arn:${data.aws_partition.github_actions_terraform.partition}:secretsmanager:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:secret:${name}-*"
   ]
