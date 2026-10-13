@@ -1,7 +1,9 @@
-resource "aws_elasticache_user" "backend" {
-  user_id       = local.backend_user_id
-  user_name     = local.backend_user_id
-  access_string = local.backend_access_string
+resource "aws_elasticache_user" "app" {
+  for_each = local.app_users
+
+  user_id       = each.value.user_id
+  user_name     = each.value.user_id
+  access_string = each.value.access_string
   engine        = "valkey"
 
   authentication_mode {
@@ -9,14 +11,14 @@ resource "aws_elasticache_user" "backend" {
   }
 
   tags = {
-    Name = local.backend_user_id
+    Name = each.value.user_id
   }
 }
 
 resource "aws_elasticache_user_group" "applications" {
   user_group_id = local.user_group_id
   engine        = "valkey"
-  user_ids      = [aws_elasticache_user.backend.user_id]
+  user_ids      = [for user in aws_elasticache_user.app : user.user_id]
 
   tags = {
     Name = local.user_group_id

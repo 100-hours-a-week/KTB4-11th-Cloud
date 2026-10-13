@@ -50,6 +50,18 @@ variable "ai_dev_state_key" {
   default     = "ai-server/dev-infra/terraform.tfstate"
 }
 
+variable "shared_infra_state_bucket" {
+  description = "S3 bucket containing the shared-infra Terraform state used by prod"
+  type        = string
+  default     = "stockspoon-terraform-state-v1"
+}
+
+variable "shared_infra_state_key" {
+  description = "S3 key containing the shared-infra Terraform state used by prod"
+  type        = string
+  default     = "shared-infra/terraform.tfstate"
+}
+
 variable "valkey_port" {
   description = "TLS port used by the Valkey serverless cache"
   type        = number
@@ -92,4 +104,21 @@ variable "valkey_max_ecpu_per_second" {
     condition     = var.valkey_max_ecpu_per_second >= 1000
     error_message = "valkey_max_ecpu_per_second must be at least 1000."
   }
+}
+
+variable "valkey_snapshot_retention_limit" {
+  description = "Number of days to retain automatic snapshots (0 disables snapshots)"
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.valkey_snapshot_retention_limit >= 0 && var.valkey_snapshot_retention_limit <= 35
+    error_message = "valkey_snapshot_retention_limit must be between 0 and 35."
+  }
+}
+
+variable "valkey_daily_snapshot_time" {
+  description = "Daily snapshot start time in UTC (HH:MM). Null lets AWS choose."
+  type        = string
+  default     = null
 }

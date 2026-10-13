@@ -61,9 +61,9 @@ Apply 역할의 OIDC trust policy는 저장소 ID와 `main` 브랜치에 고정�
 - main에 Terraform root 변경이 하나라도 들어오면 모든 root를 plan하고 의존 순서대로 apply합니다. GitHub Actions 동시성 설정은 대기 중인 실행을 최신 실행으로 합칠 수 있으므로, 모든 root를 대상으로 해야 앞선 커밋의 변경이 빠지지 않습니다.
 - Apply는 각 root를 하나씩 현재 state 기준으로 다시 plan하고, 그 root에서 생성한 임시 plan 파일을 즉시 apply합니다. 따라서 upstream root를 적용한 뒤 downstream root의 remote state에서 최신 output을 읽습니다. PR plan 댓글은 병합 전 검토용 미리보기이며, main 병합 후 모든 root plan이 성공하면 이 재계산과 apply를 수행합니다.
 
-현재 root 간 적용 순서는 `shared-infra`, `test-infra`, `messaging`, `messaging@prod`, `ai-server/dev-infra`, `redis`, `app-server`, `ecr`, `ecs`, `ai-server/infra`, `ai-server/dashboard`입니다. 순서는 `.github/scripts/terraform_roots.py`의 `ROOT_ORDER` 한 곳에서 관리하며 plan·apply 스크립트가 이를 가져다 씁니다. `redis`가 `ai-server/dev-infra`의 output을 읽으므로 `ai-server/dev-infra`가 먼저 적용됩니다. 경로 감지기는 다음 참조 관계도 반영합니다.
+현재 root 간 적용 순서는 `shared-infra`, `test-infra`, `messaging`, `messaging@prod`, `ai-server/dev-infra`, `redis`, `redis@prod`, `app-server`, `ecr`, `ecs`, `ai-server/infra`, `ai-server/dashboard`입니다. 순서는 `.github/scripts/terraform_roots.py`의 `ROOT_ORDER` 한 곳에서 관리하며 plan·apply 스크립트가 이를 가져다 씁니다. `redis`가 `ai-server/dev-infra`의 output을 읽으므로 `ai-server/dev-infra`가 먼저 적용됩니다. 경로 감지기는 다음 참조 관계도 반영합니다.
 
-- `shared-infra` 변경 → `app-server`, `ecs`, `ai-server/infra`
+- `shared-infra` 변경 → `app-server`, `ecs`, `ai-server/infra`, `redis@prod`
 - `app-server` 변경 → `ecs`, `ai-server/infra`
 - `ecr` 변경 → `ecs`
 - `test-infra` 변경 → `redis`, `ai-server/dev-infra`
@@ -73,7 +73,7 @@ Apply 역할의 OIDC trust policy는 저장소 ID와 `main` 브랜치에 고정�
 
 같은 Terraform 디렉터리를 다른 backend와 var file로 적용할 때는 root ID를 `<디렉터리>@<환경>`으로 등록합니다. 접미사가 없는 root ID는 해당 디렉터리의 기본(dev) 환경입니다.
 
-- 예: `messaging`(dev), `messaging@prod`
+- 예: `messaging`(dev), `messaging@prod`, `redis`(dev), `redis@prod`
 - 디렉터리 안의 파일이 바뀌면 그 디렉터리의 모든 환경 root가 함께 선택됩니다.
 - matrix에는 `root`(ID)와 `dir`(디렉터리)가 함께 들어갑니다. `fmt`·`validate`는 `dir`, plan 댓글·동시성 그룹은 `root`를 사용합니다.
 - 같은 디렉터리의 환경은 `.terraform`을 공유하므로 스크립트는 항상 `init -reconfigure`로 backend를 다시 지정합니다.

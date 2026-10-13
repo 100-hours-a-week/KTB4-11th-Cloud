@@ -1,6 +1,6 @@
 resource "aws_security_group" "valkey" {
   name        = "${local.name_prefix}-sg"
-  description = "Security group for the StockSpoon V2 development Valkey serverless cache"
+  description = "Security group for the StockSpoon V2 ${local.environment_label} Valkey serverless cache"
   vpc_id      = data.aws_vpc.target.id
 
   tags = {

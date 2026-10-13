@@ -1,6 +1,6 @@
-# StockSpoon V2 개발 환경 Valkey 인프라
+# StockSpoon V2 Valkey 인프라
 
-이 디렉터리는 Amazon ElastiCache Serverless for Valkey 개발 환경을 관리하는 Terraform Root다.
+이 디렉터리는 Amazon ElastiCache Serverless for Valkey의 개발(dev)·운영(prod) 환경을 관리하는 Terraform Root다. 두 환경은 같은 코드를 쓰고 backend·var file만 다르다. 운영 환경은 아래 [운영(prod) 환경](#운영prod-환경)을 참고한다.
 
 현재 5단계까지 Terraform Backend, 기존 인프라 Remote State, Valkey Security Group, IAM 인증, Serverless Cache와 Discord 장애 알림을 구성한다. Private Subnet과 Route Table은 `test-infra`가 소유하며 Redis는 해당 Output을 참조한다. 개발 Backend와 개발 AI 서버는 공용 IAM 사용자로 Valkey에 접근한다.
 
@@ -100,3 +100,53 @@ Valkey 전용 Lambda `stockspoon-v2-dev-valkey-discord-notifier`가 경보를 �
 Terraform은 Valkey 전용 빈 Secrets Manager Secret `stockspoon/v2/dev/valkey/discord-webhook`을 생성한다. Webhook URL 값은 Terraform 코드나 State에 저장하지 않는다. Apply 후 사용자가 Secrets Manager에서 같은 Discord 채널의 Webhook URL을 직접 입력하고, Lambda는 실행 시 `secretsmanager:GetSecretValue`로 값을 읽는다.
 
 알림 Lambda의 CloudWatch Log Group 보존 기간은 14일이다.
+
+## 운영(prod) 환경
+
+CI/CD의 `redis@prod` root로만 적용한다. 로컬에서 prod를 apply하지 않는다.
+
+- Backend: `environments/prod/backend.hcl` (`redis/prod/terraform.tfstate`)
+- 변수: `environments/prod/terraform.tfvars.example`
+
+| 항목 | 값 |
+| --- | --- |
+| Cache 이름 | `stockspoon-v2-prod-valkey` |
+| Network | `shared-infra` VPC Private Subnet 2개 (ECS와 같은 VPC) |
+| 최대 저장 용량 / 처리량 | 1GB / 5,000 ECPU/초 (초기값, 알람·부하테스트로 조정) |
+| Snapshot | 1일 보관, 매일 18:00 UTC (03:00 KST) |
+
+저장 데이터는 시세 캐시, 키움 토큰, collector 리스·구독 수요처럼 재생성할 수 있는 값뿐이며 원본 데이터는 MySQL에 있다.
+
+### 서비스별 사용자
+
+ECS 서비스마다 IAM 인증 사용자와 Connect Policy를 분리한다. Policy는 해당 Cache와 자기 사용자 ARN에만 `elasticache:Connect`를 허용한다.
+
+| 서비스 | 사용자 / Policy |
+| --- | --- |
+| Backend | `stockspoon-v2-prod-valkey-backend` / `-backend-connect` |
+| Socket | `stockspoon-v2-prod-valkey-socket` / `-socket-connect` |
+| Market Data | `stockspoon-v2-prod-valkey-market-data` / `-market-data-connect` |
+| Match Engine | `stockspoon-v2-prod-valkey-match-engine` / `-match-engine-connect` |
+
+초기 ACL은 모든 사용자가 같다: `on ~quote:* ~token:* ~coord:* resetchannels &quotes:* +@all -@dangerous`. 서비스가 실제로 분리되면 서비스별로 좁힌다. **BE가 새 Key·채널 prefix를 사용하면 `locals.tf`의 `prod_access_string`을 먼저 수정해야 한다.** ElastiCache는 ACL을 정규화해 저장하므로, 첫 apply 후 plan에 변경이 없는지 확인한다.
+
+### 접근 허용 (ecs root)
+
+prod Valkey Security Group에는 ingress 규칙을 두지 않는다. 각 ECS Task Security Group → Valkey `6379` ingress와 Task Role ↔ Connect Policy 연결은 `ecs` root가 이 root의 Output(`valkey_security_group_id`, `valkey_connect_policy_arns`, `valkey_user_names`)을 참조해 관리한다.
+
+애플리케이션 환경변수: `REDIS_HOST`(endpoint), `REDIS_PORT=6379`, `REDIS_USERNAME`(서비스별 사용자), `REDIS_SSL=true`, `REDIS_CLUSTER_MODE=true`, `AWS_REGION=ap-northeast-2`
+
+### Discord 알림
+
+prod는 별도 Lambda와 빈 Secret `stockspoon/v2/prod/valkey/discord-webhook`을 생성한다. 첫 apply 후 dev와 같은 Discord 채널의 Webhook URL을 입력한다.
+
+### 로컬에서 환경 전환
+
+dev와 prod는 `.terraform`을 공유하므로 항상 `-reconfigure`로 backend를 지정하고, 같은 환경의 var file을 함께 사용한다.
+
+```bash
+terraform -chdir=redis init -reconfigure -backend-config=environments/prod/backend.hcl
+terraform -chdir=redis plan -var-file=environments/prod/terraform.tfvars.example
+```
+
+dev는 CI와 같이 var file 없이 변수 기본값으로 plan한다.

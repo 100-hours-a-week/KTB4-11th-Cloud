@@ -1,0 +1,19 @@
+aws_region   = "ap-northeast-2"
+environment  = "prod"
+project_name = "stockspoon"
+
+shared_infra_state_bucket = "stockspoon-terraform-state-v1"
+shared_infra_state_key    = "shared-infra/terraform.tfstate"
+
+valkey_port = 6379
+
+valkey_major_engine_version = "8"
+
+# 초기값입니다. Storage·ECPU 75% 알람과 부하테스트 결과로 조정합니다.
+# ECPU 상한은 비용 상한이자 Throttle 기준이므로 시세 Pub/Sub fan-out을 고려해 dev(1,000)보다 높게 둡니다.
+valkey_max_data_storage_gb = 1
+valkey_max_ecpu_per_second = 5000
+
+# 재생성 가능한 데이터만 저장하므로 1일만 보관합니다. 03:00 KST = 18:00 UTC
+valkey_snapshot_retention_limit = 1
+valkey_daily_snapshot_time      = "18:00"
