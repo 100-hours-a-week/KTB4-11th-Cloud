@@ -19,10 +19,11 @@ locals {
 
   # 개발 환경에서는 Backend와 AI가 같은 사용자를 사용합니다.
   # 모든 Key·채널과 일반 명령을 허용하되 운영에 위험한 명령은 차단합니다.
+  # `&*`가 모든 채널을 허용하므로 `resetchannels`는 넣지 않습니다.
+  # ElastiCache가 의미 없는 `resetchannels`를 제거한 형태로 저장해 plan에 영구 diff가 생기기 때문입니다.
   backend_access_string = join(" ", [
     "on",
     "~*",
-    "resetchannels",
     "&*",
     "+@all",
     "-@dangerous",
