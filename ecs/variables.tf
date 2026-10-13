@@ -164,8 +164,9 @@ variable "backend_test_rule_priority" {
 # AI market 서비스 공통 (market-http, market-streamer)
 # ---------------------------------------------------------------------------
 
-# AI CI가 Public ECR(stockspoon-v1-ai)에 push한 통합 이미지의 태그(커밋 SHA)
+# AI CI Dev가 Public ECR(stockspoon-v1-ai)에 push한 통합 이미지의 태그(dev 커밋 SHA)
 # 비어 있으면 Task Definition과 ECS Service를 만들지 않고 SG·Target Group·리스너 규칙 등만 준비한다.
+# 서비스를 처음 만들 때만 쓰이며, 이후 이미지 배포는 AI 레포 cd-ecs-v2.yaml이 담당한다.
 variable "ai_image_tag" {
   description = "Tag (git SHA) of the AI app image in the public ECR repository; empty skips task definitions and services"
   type        = string
@@ -285,4 +286,17 @@ variable "market_streamer_log_level" {
   description = "market-streamer log level"
   type        = string
   default     = "INFO"
+}
+
+# ---------------------------------------------------------------------------
+# GitHub Actions ECS 배포 (AI 레포 cd-ecs-v2.yaml)
+# ---------------------------------------------------------------------------
+
+# GitHub OIDC sub 클레임. 이 조직은 owner·repo 이름 뒤에 불변 ID가 붙는 형식을 쓴다. (app-server/github_oidc.tf와 동일)
+variable "ecs_deploy_github_subjects" {
+  description = "GitHub OIDC subjects allowed to deploy the AI market services to ECS"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/dev",
+  ]
 }

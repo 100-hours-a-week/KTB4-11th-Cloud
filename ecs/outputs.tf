@@ -87,3 +87,8 @@ output "market_http_request_example" {
   description = "Example market-http request through the ALB"
   value       = "curl -s 'https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}${var.market_http_path_prefix}/prices?codes=005930'"
 }
+
+output "github_actions_ecs_deploy_role_arn" {
+  description = "Role ARN for the AI repository AWS_ECS_DEPLOY_ROLE_ARN variable (cd-ecs-v2.yaml)"
+  value       = aws_iam_role.github_actions_ecs_deploy.arn
+}

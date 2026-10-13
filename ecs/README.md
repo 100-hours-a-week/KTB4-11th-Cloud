@@ -55,6 +55,7 @@ aws ssm put-parameter --type SecureString \
 | `svc_market_common.tf` | AI market 서비스 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
 | `svc_market_http.tf` | market-http(Socket) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
 | `svc_market_streamer.tf` | market-streamer(Market Data) 로그 그룹, Task Role(Valkey `market-data`), Task SG, Task Definition, ECS Service |
+| `ci_deploy_role.tf` | AI 레포 `cd-ecs-v2.yaml`이 assume하는 ECS 배포 Role (Task Definition 등록, market 서비스 갱신, Task Role PassRole) |
 | `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB·PostgreSQL) |
 
 ## 용량 설계
@@ -85,7 +86,10 @@ curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 
 AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 운영 Compose와 같이 `command`로 진입점을 골라 실행합니다.
 
-- `ai_image_tag`(AI `main` 커밋 SHA)가 비어 있으면 Task Definition과 Service는 만들지 않고 SG·Target Group·리스너 규칙·Role만 준비합니다.
+- `ai_image_tag`(AI `dev` 커밋 SHA)가 비어 있으면 Task Definition과 Service는 만들지 않고 SG·Target Group·리스너 규칙·Role만 준비합니다. 이 값은 **서비스를 처음 만들 때만** 쓰입니다.
+- 이후 배포는 AI 레포 `cd-ecs-v2.yaml`이 담당합니다. `dev`의 CI Dev가 성공하면 그 커밋 이미지로 최신 Task Definition의 이미지만 바꿔 새 리비전을 등록하고 서비스를 갱신합니다. 두 서비스는 `ignore_changes = [task_definition]`이므로 apply가 CD 배포를 되돌리지 않습니다.
+- Terraform에서 환경 변수·리소스를 바꾸면 새 리비전만 등록되고, 다음 CD 실행(또는 `workflow_dispatch`) 때 반영됩니다.
+- 개발 EC2(`cd-dev.yaml`)도 같은 `dev` 코드로 market-http·market-streamer를 실행합니다. 같은 키움 키를 쓰는 동안 장중 로그에서 세션 충돌(`kiwoom_stream_closed` 반복)을 확인하고, 충돌하면 SSM의 키를 분리합니다.
 - 데이터 저장소는 당분간 **V1 AI 운영 서버**의 QuestDB(`9000`, market-http)와 PostgreSQL(`5432`, market-streamer)을 사용합니다. AI Compose가 두 포트를 `AI_PRIVATE_IP`에만 게시하고, AI SG는 각 Task SG만 허용합니다. V1 AI 서버가 단일 장애 지점이므로 V2 저장소로 이전할 때 `cross_root_rules.tf`의 AI SG 규칙과 함께 정리합니다.
 - QuestDB `9000`은 인증 없이 SQL을 실행할 수 있는 포트입니다. 현재는 SG와 private IP 바인딩으로만 막으며, Basic Auth 도입은 후속 작업입니다.
 
@@ -105,8 +109,8 @@ market-streamer는 `STOP_AT`(KST)에 exit 0 하고, 그 이후에 시작하면 �
 | `/stockspoon/v2/prod/market-streamer/POSTGRES_DSN` | SSM SecureString | market-streamer Task |
 | `/stockspoon/v2/prod/market-streamer/KIWOOM_APP_KEY` | SSM SecureString | market-streamer Task |
 | `/stockspoon/v2/prod/market-streamer/KIWOOM_SECRET_KEY` | SSM SecureString | market-streamer Task |
-| `AWS_ECS_DEPLOY_ROLE_ARN` | GitHub Variable (KTB4-11th-AI) | `cd-ecs-v2.yaml` (ECS 배포 Role, 이 root에서 생성 예정) |
-| `AWS_ECR_PUSH_ROLE_ARN`, `PUBLIC_ECR_AI_REPOSITORY_URI` | GitHub Variable (KTB4-11th-AI) | `cd-ecs-v2.yaml` 이미지 빌드·push |
+| `AWS_ECS_DEPLOY_ROLE_ARN` | GitHub Variable (KTB4-11th-AI) | `cd-ecs-v2.yaml` (ECS 배포 Role, output `github_actions_ecs_deploy_role_arn`) |
+| `PUBLIC_ECR_AI_REPOSITORY_URI` | GitHub Variable (KTB4-11th-AI) | `cd-ecs-v2.yaml` 배포 이미지 주소 (CI Dev가 push한 `:<커밋 SHA>`) |
 
 ### market-streamer Secret 등록
 
@@ -120,11 +124,15 @@ done
 
 ### 전환 순서
 
-1. AI 운영 서버 `~/ai/.env`에 `AI_PRIVATE_IP` 추가 → AI CD로 Compose 포트 게시 (postgres·questdb 컨테이너가 재생성되므로 장 마감 후)
-2. 키움 앱키 허용 IP에 NAT Gateway EIP(`shared-infra` output `nat_gateway_public_ip`) 등록 여부 확인
-3. 위 SSM Secret 등록
-4. `ai_image_tag`를 market 서비스가 포함된 AI `main` SHA로 설정해 apply
-5. market-http 확인 후, portfolio-builder의 `PORTFOLIO_BUILDER_MARKET_HTTP_BASE_URI`를 ECS 경로로 변경하고 EC2 market-http 제거
-6. **장 마감 후** EC2 `ktb-market-streamer.timer` 비활성화(AI CD의 timer 목록에서도 제거)와 동시에 ECS market-streamer 확인. 두 곳이 동시에 키움 세션을 열지 않도록 한다.
+1. 이 root apply (`ai_image_tag` 비움): SG·Target Group·`/market/*` 규칙·Task Role·ECS 배포 Role 생성
+2. AI 레포 Variable `AWS_ECS_DEPLOY_ROLE_ARN`에 output `github_actions_ecs_deploy_role_arn` 등록
+3. 위 SSM Secret 등록, 키움 앱키 허용 IP에 NAT Gateway EIP(`shared-infra` output `nat_gateway_public_ip`) 등록 여부 확인
+4. AI 레포 Secret `PROD_AI_ENV`(운영 `.env` 전체, `AI_PRIVATE_IP` 포함) 등록
+5. AI 변경을 `dev`에 머지 → CI Dev가 이미지 push (`cd-ecs-v2`는 서비스가 아직 없어 실패해도 정상)
+6. `ai_image_tag`를 5의 커밋 SHA로 설정해 apply → ECS 서비스 생성
+7. **장 마감 후** AI `dev` → `main` 반영: 운영 EC2에서 market 서비스 제외, PostgreSQL·QuestDB 포트 게시
+8. 확인: `/market/health`, `/market/bars/...`, market-streamer 로그 `kiwoom_registered`
 
-롤백: market-streamer는 ECS Service `desired_count`를 0으로 내리고 EC2 timer를 다시 활성화합니다.
+6과 7 사이에는 운영 DB 포트가 열려 있지 않아 market-http `/bars`와 market-streamer 시작이 실패합니다. 같은 장 마감 시간대에 이어서 진행합니다.
+
+롤백: 이미지 문제는 이전 Task Definition 리비전으로 `aws ecs update-service --task-definition <이전 ARN>`. market-streamer를 멈추려면 `desired_count`를 0으로 내립니다.
