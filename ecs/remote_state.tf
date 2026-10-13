@@ -22,3 +22,26 @@ data "terraform_remote_state" "app" {
     region = "ap-northeast-2"
   }
 }
+
+# 운영 Valkey 엔드포인트, 서비스별 사용자·Connect Policy, Valkey SG
+data "terraform_remote_state" "redis" {
+  backend = "s3"
+
+  config = {
+    bucket = "stockspoon-terraform-state-redis"
+    key    = "redis/prod/terraform.tfstate"
+    region = "ap-northeast-2"
+  }
+}
+
+# V1 AI 운영 서버 (market 서비스가 읽는 QuestDB·PostgreSQL 호스트)
+# TODO: V2 데이터 저장소로 이전하면 이 참조와 cross_root_rules.tf의 AI SG 규칙을 함께 제거
+data "terraform_remote_state" "ai" {
+  backend = "s3"
+
+  config = {
+    bucket = "stockspoon-terraform-state-v1"
+    key    = "ai-server/infra/terraform.tfstate"
+    region = "ap-northeast-2"
+  }
+}

@@ -147,8 +147,156 @@ variable "backend_test_header_value" {
   default     = "ecs"
 }
 
+# 경로 기반 라우팅: Backend는 /api/*, Socket(market-http)은 /market/*
+variable "backend_path_patterns" {
+  description = "ALB path patterns routed to the ECS backend"
+  type        = list(string)
+  default     = ["/api/*"]
+}
+
 variable "backend_test_rule_priority" {
   description = "Priority of the test listener rule on the HTTPS listener"
   type        = number
   default     = 100
+}
+
+# ---------------------------------------------------------------------------
+# AI market 서비스 공통 (market-http, market-streamer)
+# ---------------------------------------------------------------------------
+
+# AI CI Dev가 Public ECR(stockspoon-v1-ai)에 push한 통합 이미지의 태그(dev 커밋 SHA)
+# 비어 있으면 Task Definition과 ECS Service를 만들지 않고 SG·Target Group·리스너 규칙 등만 준비한다.
+# 서비스를 처음 만들 때만 쓰이며, 이후 이미지 배포는 AI 레포 cd-ecs-v2.yaml이 담당한다.
+variable "ai_image_tag" {
+  description = "Tag (git SHA) of the AI app image in the public ECR repository; empty skips task definitions and services"
+  type        = string
+  default     = ""
+}
+
+variable "ai_questdb_http_port" {
+  description = "QuestDB HTTP port published on the V1 AI host private IP"
+  type        = number
+  default     = 9000
+}
+
+variable "ai_postgres_port" {
+  description = "PostgreSQL port published on the V1 AI host private IP"
+  type        = number
+  default     = 5432
+}
+
+# ---------------------------------------------------------------------------
+# market-http (Socket: 현재가 REST·SSE, 과거 시세)
+# ---------------------------------------------------------------------------
+
+variable "market_http_container_port" {
+  description = "Container port exposed by market-http"
+  type        = number
+  default     = 8000
+}
+
+# uvicorn 단일 프로세스(이벤트 루프 1개)라 1 vCPU를 넘게 줘도 쓰지 못한다. Task 수로 확장한다.
+variable "market_http_task_cpu" {
+  description = "market-http task CPU units (1024 = 1 vCPU)"
+  type        = number
+  default     = 1024
+}
+
+variable "market_http_task_memory" {
+  description = "market-http task memory (MiB)"
+  type        = number
+  default     = 1024
+}
+
+variable "market_http_desired_count" {
+  description = "Number of market-http tasks"
+  type        = number
+  default     = 2
+}
+
+# ALB 경로 접두사. 앱은 루트 경로(/prices, /bars, ...)를 제공하므로 ALB가 접두사를 제거해 전달한다.
+variable "market_http_path_prefix" {
+  description = "ALB path prefix for market-http; stripped before forwarding"
+  type        = string
+  default     = "/market"
+}
+
+variable "market_http_rule_priority" {
+  description = "Priority of the market-http rule on the HTTPS listener"
+  type        = number
+  default     = 200
+}
+
+# SSE 연결은 delay가 끝나면 끊기고 EventSource가 재연결한다. 재연결 시 snapshot을 다시 받으므로 짧게 둔다.
+variable "market_http_deregistration_delay_seconds" {
+  description = "Time the ALB keeps existing (SSE) connections to a deregistering target"
+  type        = number
+  default     = 30
+}
+
+variable "market_http_stop_timeout_seconds" {
+  description = "Time to wait after SIGTERM before SIGKILL"
+  type        = number
+  default     = 30
+}
+
+variable "market_http_health_check_grace_period_seconds" {
+  description = "Time ECS ignores failing ALB health checks after a task starts"
+  type        = number
+  default     = 30
+}
+
+variable "market_http_log_level" {
+  description = "market-http log level"
+  type        = string
+  default     = "INFO"
+}
+
+# ---------------------------------------------------------------------------
+# market-streamer (Market Data: 키움 0B WebSocket → Valkey)
+# ---------------------------------------------------------------------------
+
+# 단일 asyncio 프로세스, 운영 Compose mem_limit 384m 기준
+variable "market_streamer_task_cpu" {
+  description = "market-streamer task CPU units"
+  type        = number
+  default     = 256
+}
+
+variable "market_streamer_task_memory" {
+  description = "market-streamer task memory (MiB)"
+  type        = number
+  default     = 512
+}
+
+# 앱 기본값(15:40)이면 장 마감 후 ECS가 재시작을 반복하므로 하루의 끝으로 둔다. (svc_market_streamer.tf 참고)
+variable "market_streamer_stop_at" {
+  description = "KST HH:MM the streamer exits; ECS restarts it, so 23:59 means one restart a day"
+  type        = string
+  default     = "23:59"
+}
+
+variable "market_streamer_stop_timeout_seconds" {
+  description = "Time to wait after SIGTERM before SIGKILL"
+  type        = number
+  default     = 30
+}
+
+variable "market_streamer_log_level" {
+  description = "market-streamer log level"
+  type        = string
+  default     = "INFO"
+}
+
+# ---------------------------------------------------------------------------
+# GitHub Actions ECS 배포 (AI 레포 cd-ecs-v2.yaml)
+# ---------------------------------------------------------------------------
+
+# GitHub OIDC sub 클레임. 이 조직은 owner·repo 이름 뒤에 불변 ID가 붙는 형식을 쓴다. (app-server/github_oidc.tf와 동일)
+variable "ecs_deploy_github_subjects" {
+  description = "GitHub OIDC subjects allowed to deploy the AI market services to ECS"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/dev",
+  ]
 }

@@ -128,7 +128,7 @@ ECS 서비스마다 IAM 인증 사용자와 Connect Policy를 분리한다. Poli
 | Market Data | `stockspoon-v2-prod-valkey-market-data` / `-market-data-connect` |
 | Match Engine | `stockspoon-v2-prod-valkey-match-engine` / `-match-engine-connect` |
 
-초기 ACL은 모든 사용자가 같다: `on ~quote:* ~token:* ~coord:* resetchannels &quotes:* +@all -@dangerous`. 서비스가 실제로 분리되면 서비스별로 좁힌다. **BE가 새 Key·채널 prefix를 사용하면 `locals.tf`의 `prod_access_string`을 먼저 수정해야 한다.** ElastiCache는 ACL을 정규화해 저장하므로, 첫 apply 후 plan에 변경이 없는지 확인한다.
+초기 ACL은 dev와 같이 모든 사용자에게 `on ~* &* +@all -@dangerous`이다. V2 시세는 AI market-streamer가 `price:{code}` Key·채널에 쓰고 market-http·Backend가 읽으며, 이 계약이 확정되는 동안은 Key 범위를 열어 두고 접속 주체(서비스별 사용자·Connect Policy)만 분리한다. 서비스별 Key·채널이 확정되면 `locals.tf`의 `prod_access_string`을 서비스별로 좁힌다. `&*`를 쓰므로 `resetchannels`는 넣지 않는다(ElastiCache가 제거해 저장하므로 plan에 영구 diff가 생긴다). 첫 apply 후 plan에 변경이 없는지 확인한다.
 
 ### 접근 허용
 
