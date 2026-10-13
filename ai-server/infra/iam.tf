@@ -59,6 +59,13 @@ resource "aws_iam_role_policy_attachment" "ai_ssm_managed_instance" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# 운영 AI 서비스가 운영 SQS를 사용합니다.
+# portfolio-rebalancer: 주문 FIFO 큐 발행, report-builder: 리포트 요청 큐 소비
+resource "aws_iam_role_policy_attachment" "ai_sqs_prod" {
+  role       = aws_iam_role.ai_ec2.name
+  policy_arn = data.terraform_remote_state.messaging_prod.outputs.ai_sqs_policy_arn
+}
+
 resource "aws_iam_instance_profile" "ai_ec2" {
   name = "stockspoon-v1-ai-instance-profile"
   role = aws_iam_role.ai_ec2.name
