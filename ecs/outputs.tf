@@ -55,5 +55,35 @@ output "backend_task_security_group_id" {
 
 output "backend_test_request_example" {
   description = "Example request that is routed to the ECS backend instead of V1"
-  value       = "curl -s -H '${var.backend_test_header_name}: ${var.backend_test_header_value}' https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}/"
+  value       = "curl -s -H '${var.backend_test_header_name}: ${var.backend_test_header_value}' https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}/api/"
+}
+
+output "market_http_service_name" {
+  description = "market-http ECS service name (null until ai_image_tag is set)"
+  value       = try(aws_ecs_service.market_http[0].name, null)
+}
+
+output "market_http_target_group_arn" {
+  description = "Target group for market-http"
+  value       = aws_lb_target_group.market_http.arn
+}
+
+output "market_http_task_security_group_id" {
+  description = "Security group attached to market-http task ENIs"
+  value       = aws_security_group.market_http_task.id
+}
+
+output "market_streamer_service_name" {
+  description = "market-streamer ECS service name (null until ai_image_tag is set)"
+  value       = try(aws_ecs_service.market_streamer[0].name, null)
+}
+
+output "market_streamer_task_security_group_id" {
+  description = "Security group attached to the market-streamer task ENI"
+  value       = aws_security_group.market_streamer_task.id
+}
+
+output "market_http_request_example" {
+  description = "Example market-http request through the ALB"
+  value       = "curl -s 'https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}${var.market_http_path_prefix}/prices?codes=005930'"
 }
