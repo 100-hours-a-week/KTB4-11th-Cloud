@@ -100,6 +100,14 @@ AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 운영 Compose�
 
 market-streamer는 `STOP_AT`(KST)에 exit 0 하고, 그 이후에 시작하면 바로 종료하는 배치 구조입니다. 앱 기본값(15:40)으로 ECS Service에서 돌리면 장 마감 후 재시작을 반복하므로, 코드 변경 없이 `MARKET_STREAMER_STOP_AT=23:59`로 두어 하루 1번 재시작하는 상주 서비스처럼 운영합니다. 장외 시간에는 키움 세션만 유지되고 수신 데이터는 없습니다. 장 시간에만 실행하려면 Application Auto Scaling 예약 액션이 필요하며, Terraform CI 권한(`application-autoscaling:*`)을 먼저 추가해야 합니다. Worker ASG 도입 전까지 Service ASG에서 실행합니다.
 
+### ECS 배포 Role 신뢰 조건
+
+`ci_deploy_role.tf`의 배포 Role은 GitHub OIDC 토큰의 `sub`가 `ecs_deploy_github_subjects`(기본: AI 레포 `dev`)와 정확히 일치할 때만 assume됩니다. 기능 브랜치·PR·`main`·다른 레포에서는 운영 ECS에 배포할 수 없습니다.
+
+`cd-ecs-v2.yaml`은 `workflow_run`으로 실행되며, `workflow_run` 워크플로는 **레포의 기본 브랜치**에서 실행된 것으로 처리되어 `sub`가 `ref:refs/heads/<기본 브랜치>`가 됩니다. 현재 AI 레포 기본 브랜치가 `dev`이므로 `refs/heads/dev`로 일치합니다.
+
+> **TODO:** AI 레포의 GitHub 기본 브랜치를 `dev`에서 다른 브랜치(예: `main`)로 바꾸면 `sub`가 `refs/heads/main`으로 바뀌어 `cd-ecs-v2` 배포가 `AssumeRoleWithWebIdentity` 단계에서 실패합니다. 기본 브랜치를 바꿀 때 `variables.tf`의 `ecs_deploy_github_subjects`를 함께 수정하고 apply합니다.
+
 ### Secret · Variable 이름 목록
 
 값은 Terraform·문서에 두지 않고 CLI로 직접 등록합니다. (값이 state에 남지 않게)
