@@ -20,11 +20,13 @@ BACKEND_CONFIGS = {
     "messaging": "environments/dev/backend.hcl",
     "messaging@prod": "environments/prod/backend.hcl",
     "redis": "environments/dev/backend.hcl",
+    "redis@prod": "environments/prod/backend.hcl",
 }
 
 VAR_FILES = {
     "messaging": "environments/dev/terraform.tfvars.example",
     "messaging@prod": "environments/prod/terraform.tfvars.example",
+    "redis@prod": "environments/prod/terraform.tfvars.example",
 }
 
 
