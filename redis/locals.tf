@@ -35,8 +35,11 @@ locals {
   storage_alarm_threshold_bytes = var.valkey_max_data_storage_gb * 1024 * 1024 * 1024 * 0.75
   ecpu_alarm_threshold_per_min  = var.valkey_max_ecpu_per_second * 60 * 0.75
 
-  # 개발 환경에서는 Backend와 AI가 같은 사용자를 사용합니다.
-  # 모든 Key·채널과 일반 명령을 허용하되 운영에 위험한 명령은 차단합니다.
+  # 모든 Key·채널과 일반 명령을 허용하되 운영에 위험한 명령(-@dangerous: FLUSHALL, KEYS, CONFIG 등)은 차단합니다.
+  # dev는 Backend와 AI가 같은 사용자를 사용합니다.
+  # prod도 V2 시세 계약(AI market-streamer·market-http의 price:{code} Key·채널)이 확정되는 동안
+  # dev와 같은 범위를 사용하고, 서비스별 사용자·Connect Policy로 접속 주체만 분리합니다.
+  # TODO: 서비스별 Key·채널 사용이 확정되면 서비스별 access_string으로 범위를 좁힙니다.
   # `&*`가 모든 채널을 허용하므로 `resetchannels`는 넣지 않습니다.
   # ElastiCache가 의미 없는 `resetchannels`를 제거한 형태로 저장해 plan에 영구 diff가 생기기 때문입니다.
   dev_access_string = join(" ", [
@@ -47,21 +50,7 @@ locals {
     "-@dangerous",
   ])
 
-  # 운영에서는 BE 코드에서 확인된 Key·채널 prefix만 허용합니다.
-  #   quote:*  시세 캐시          token:*  키움 토큰
-  #   coord:*  collector 리스·구독 수요 (Lua 스크립트 포함)
-  #   quotes:* 종목별 시세 Pub/Sub 채널
-  # 서비스가 분리되면 서비스별로 범위를 좁힙니다. 새 prefix를 쓰려면 이 목록을 먼저 수정해야 합니다.
-  prod_access_string = join(" ", [
-    "on",
-    "~quote:*",
-    "~token:*",
-    "~coord:*",
-    "resetchannels",
-    "&quotes:*",
-    "+@all",
-    "-@dangerous",
-  ])
+  prod_access_string = local.dev_access_string
 
   common_tags = {
     Project     = var.project_name
