@@ -130,9 +130,11 @@ ECS 서비스마다 IAM 인증 사용자와 Connect Policy를 분리한다. Poli
 
 초기 ACL은 모든 사용자가 같다: `on ~quote:* ~token:* ~coord:* resetchannels &quotes:* +@all -@dangerous`. 서비스가 실제로 분리되면 서비스별로 좁힌다. **BE가 새 Key·채널 prefix를 사용하면 `locals.tf`의 `prod_access_string`을 먼저 수정해야 한다.** ElastiCache는 ACL을 정규화해 저장하므로, 첫 apply 후 plan에 변경이 없는지 확인한다.
 
-### 접근 허용 (ecs root)
+### 접근 허용
 
-prod Valkey Security Group에는 ingress 규칙을 두지 않는다. 각 ECS Task Security Group → Valkey `6379` ingress와 Task Role ↔ Connect Policy 연결은 `ecs` root가 이 root의 Output(`valkey_security_group_id`, `valkey_connect_policy_arns`, `valkey_user_names`)을 참조해 관리한다.
+- **네트워크 (이 root):** ECS Task가 실행되는 shared-infra Private Subnet(2a, 2c) CIDR에서 `6379`를 허용한다. Public Subnet(V1 EC2, ALB)은 제외한다. 서비스가 늘어도 규칙을 추가할 필요가 없도록 한 개발 단계의 설정이다.
+- **인증 (ecs root):** 실제 접속 통제는 IAM이 담당한다. Task Role ↔ 서비스별 Connect Policy 연결은 `ecs` root가 이 root의 Output(`valkey_connect_policy_arns`, `valkey_user_names`)을 참조해 관리한다.
+- **추후 축소:** ECS 서비스가 모두 배포되면 `ecs` root에서 Task Security Group별 ingress를 먼저 추가하고(`valkey_security_group_id` 참조), 이후 이 root의 CIDR 규칙을 제거한다. 순서를 지키면 접속 중단이 없다.
 
 애플리케이션 환경변수: `REDIS_HOST`(endpoint), `REDIS_PORT=6379`, `REDIS_USERNAME`(서비스별 사용자), `REDIS_SSL=true`, `REDIS_CLUSTER_MODE=true`, `AWS_REGION=ap-northeast-2`
 
