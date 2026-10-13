@@ -34,6 +34,10 @@ locals {
       key    = "messaging/dev/terraform.tfstate"
     },
     {
+      bucket = "stockspoon-terraform-state-sqs"
+      key    = "messaging/prod/terraform.tfstate"
+    },
+    {
       bucket = "stockspoon-terraform-state-redis"
       key    = "redis/dev/terraform.tfstate"
     },
@@ -94,7 +98,7 @@ locals {
   ]
 
   github_actions_terraform_lambda_arns = [
-    for prefix in ["stockspoon-v1-app-", "stockspoon-v1-ai-", "stockspoon-v2-dev-"] :
+    for prefix in ["stockspoon-v1-app-", "stockspoon-v1-ai-", "stockspoon-v2-dev-", "stockspoon-v2-prod-"] :
     "arn:${data.aws_partition.github_actions_terraform.partition}:lambda:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:function:${prefix}*"
   ]
 
@@ -103,6 +107,7 @@ locals {
       "stockspoon/v1/app/discord-webhook",
       "stockspoon/v1/ai/discord-webhook",
       "stockspoon/v2/dev/sqs/discord-webhook",
+      "stockspoon/v2/prod/sqs/discord-webhook",
       "stockspoon/v2/dev/valkey/discord-webhook",
     ] :
     "arn:${data.aws_partition.github_actions_terraform.partition}:secretsmanager:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:secret:${name}-*"
@@ -110,6 +115,7 @@ locals {
 
   github_actions_terraform_sqs_queue_arns = [
     "arn:${data.aws_partition.github_actions_terraform.partition}:sqs:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:stockspoon-v2-dev-*",
+    "arn:${data.aws_partition.github_actions_terraform.partition}:sqs:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:stockspoon-v2-prod-*",
   ]
 
   github_actions_terraform_ecr_public_repository_arns = [

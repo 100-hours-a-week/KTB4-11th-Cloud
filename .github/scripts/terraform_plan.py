@@ -12,20 +12,24 @@ import tempfile
 from pathlib import Path
 
 from terraform_plan_summary import render_summary
+from terraform_roots import ROOT_ORDER, root_dir
 
 
+# Keyed by root ID. Paths are relative to the root's Terraform directory.
 BACKEND_CONFIGS = {
     "messaging": "environments/dev/backend.hcl",
+    "messaging@prod": "environments/prod/backend.hcl",
     "redis": "environments/dev/backend.hcl",
 }
 
 VAR_FILES = {
     "messaging": "environments/dev/terraform.tfvars.example",
+    "messaging@prod": "environments/prod/terraform.tfvars.example",
 }
 
 
 def run(root: str, *args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    command = ["terraform", f"-chdir={root}", *args]
+    command = ["terraform", f"-chdir={root_dir(root)}", *args]
     result = subprocess.run(command, text=True, capture_output=capture, check=False)
     if result.returncode != 0:
         output = "\n".join(filter(None, [result.stdout, result.stderr]))
@@ -71,19 +75,7 @@ def main() -> None:
     parser.add_argument("--summary", default="terraform-plan-summary.md")
     args = parser.parse_args()
 
-    allowed_roots = {
-        "app-server",
-        "shared-infra",
-        "test-infra",
-        "messaging",
-        "redis",
-        "ecr",
-        "ecs",
-        "ai-server/infra",
-        "ai-server/dev-infra",
-        "ai-server/dashboard",
-    }
-    if args.root not in allowed_roots:
+    if args.root not in ROOT_ORDER:
         raise SystemExit(f"unknown Terraform root: {args.root}")
 
     prepare(args.root)

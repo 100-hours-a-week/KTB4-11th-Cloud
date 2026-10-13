@@ -28,3 +28,6 @@ override.tf.json
 !.env.example
 
 .codex/
+
+# Python bytecode from CI helper scripts
+__pycache__/
