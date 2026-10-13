@@ -197,6 +197,12 @@ resource "aws_ecs_service" "market_http" {
   propagate_tags          = "SERVICE"
   enable_ecs_managed_tags = true
 
+  # 이미지 배포는 AI 레포 cd-ecs-v2.yaml이 새 리비전을 등록해 수행한다.
+  # apply가 CD로 배포된 리비전을 ai_image_tag 리비전으로 되돌리지 않도록 무시한다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   depends_on = [
     aws_lb_listener_rule.market_http,
     aws_ecs_cluster_capacity_providers.main,
