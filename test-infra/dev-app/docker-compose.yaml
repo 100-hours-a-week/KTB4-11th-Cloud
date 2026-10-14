@@ -29,7 +29,7 @@ services:
       driver: awslogs
       options:
         <<: *default-logging-options
-        awslogs-group: /stockspoon/app/containers/nginx
+        awslogs-group: /stockspoon/v2-dev/containers/nginx
 
   frontend:
     image: ${ECR_REGISTRY:-public.ecr.aws/g8x9p1p0}/stockspoon-v2-frontend:${FE_TAG:?FE_TAG is required}
@@ -55,7 +55,7 @@ services:
       driver: awslogs
       options:
         <<: *default-logging-options
-        awslogs-group: /stockspoon/app/containers/frontend
+        awslogs-group: /stockspoon/v2-dev/containers/frontend
 
   backend:
     image: ${ECR_REGISTRY:-public.ecr.aws/g8x9p1p0}/stockspoon-v2-backend:${BE_TAG:?BE_TAG is required}
@@ -98,7 +98,7 @@ services:
       driver: awslogs
       options:
         <<: *default-logging-options
-        awslogs-group: /stockspoon/app/containers/backend
+        awslogs-group: /stockspoon/v2-dev/containers/backend
 
   db:
     image: ${MYSQL_IMAGE:-mysql:8.4.11}
@@ -129,7 +129,7 @@ services:
       driver: awslogs
       options:
         <<: *default-logging-options
-        awslogs-group: /stockspoon/app/containers/db
+        awslogs-group: /stockspoon/v2-dev/containers/db
 
 volumes:
   db-data:
