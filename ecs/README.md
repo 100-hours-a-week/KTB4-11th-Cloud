@@ -7,7 +7,7 @@ V1 EC2에서 실행 중인 Backend를 ECS로 이전하고, 이후 역할별 서�
 
 ```
 ecs ──참조──> shared-infra      (VPC, Private Subnet)
-    ──참조──> app-server        (ALB 리스너, Blue TG, ALB·V1 앱 SG, AI Public ECR)
+    ──참조──> app-server        (ALB 리스너, Blue TG, ALB·V1 앱 SG·private IP, Public ECR)
     ──참조──> redis (prod)      (Valkey 엔드포인트, 서비스별 사용자·Connect Policy)
     ──참조──> ai-server/infra   (V1 AI 운영 서버 private IP·SG)
 ```
@@ -51,11 +51,11 @@ aws ssm put-parameter --type SecureString \
 | 파일 | 리소스 |
 |---|---|
 | `platform_cluster.tf` | ECS Cluster, Service ASG(Launch Template, 인스턴스 SG), Capacity Provider |
-| `svc_backend.tf` | Backend 로그 그룹, Task Role, Task SG, Green Target Group, Task Definition, ECS Service |
+| `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, Task Definition(V1 MySQL 사용), ECS Service |
 | `svc_market_common.tf` | market-http 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
 | `svc_market_http.tf` | market-http(Socket) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
 | `ci_deploy_role.tf` | AI 레포 `cd-ecs-v2.yaml`이 assume하는 ECS 배포 Role (Task Definition 등록, market 서비스 갱신, Task Role PassRole) |
-| `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB) |
+| `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB), V1 앱 SG ingress(MySQL) |
 
 ## 용량 설계
 
@@ -73,13 +73,55 @@ aws ssm put-parameter --type SecureString \
 
 ```bash
 # ECS Backend 테스트 (운영 트래픽은 그대로 V1)
-curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/
+curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf
 
 # market-http
 curl -s 'https://stock-spoon.com/market/prices?codes=005930'
 curl -sN 'https://stock-spoon.com/market/prices/stream?codes=005930'   # SSE
 curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 ```
+
+## Backend (V1 DB 사용)
+
+BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지를 `backend_image_tag`(dev 커밋 SHA)로 실행합니다. 이미지를 바꿀 때는 이 값을 바꿔 apply합니다.
+
+- **DB는 V1 EC2의 MySQL을 그대로 사용합니다.** V1 Compose가 `3306`을 호스트에 게시하고, 외부 접근은 V1 앱 SG로만 통제합니다. 3306은 Backend Task SG만 허용합니다. (`cross_root_rules.tf`) 접속 주소는 `app-server` output `app_private_ip`를 참조합니다.
+  - EIP로 들어온 트래픽도 private IP로 전달되므로 바인딩 주소로는 외부 노출을 막을 수 없습니다. V1 앱 SG에 넓은 인바운드 규칙을 추가하면 3306도 함께 열립니다.
+- V1 Backend(main 코드)와 같은 DB를 쓰므로 설정으로 운영 영향을 막습니다.
+  - `JPA_DDL_AUTO`·`SPRING_JPA_HIBERNATE_DDL_AUTO=none`: dev 코드가 운영 스키마를 변경하지 않습니다. DB 이관 기간에는 V1 스키마를 고정하므로 검증(`validate`)도 하지 않아, dev에 테이블이 추가돼도 기동은 되고 해당 API만 SQL 오류가 납니다.
+  - `KIWOOM_STREAM_ENABLED`·`KIWOOM_COLLECTOR_ENABLED=false`: V1 Backend와 같은 키움 키 세션 충돌과 체결 경로 중복 실행을 막습니다. 이 상태에서 주문 접수는 `MARKET_STREAM_UNAVAILABLE`로 거절될 수 있습니다.
+  - `backend_desired_count=1`: dev 코드의 주기 작업(만료 주문 정리)이 V1과 함께 운영 DB에 씁니다. 동시 실행 안전성을 BE와 확인한 뒤 늘립니다.
+- 운영 트래픽은 받지 않습니다. 테스트 헤더(`X-StockSpoon-Target: ecs`)가 있는 `/api/*` 요청만 들어옵니다.
+- 헬스체크는 actuator가 없어 인증 없이 200을 주는 `/api/v1/auth/csrf`를 임시로 사용합니다. DB·Valkey 상태는 반영하지 않으므로 Canary 전에 `/actuator/health`로 교체합니다.
+- Valkey는 운영 Valkey의 `backend` 사용자로 IAM 인증합니다. (Task Role에 Connect Policy 연결)
+
+### Secret 등록
+
+`/stockspoon/v2/prod/backend/<이름>`에 V1 운영 `.env`(`/opt/cloud/.env`)와 **같은 값**을 등록합니다. `JWT_SECRET`이 같아야 V1에서 발급한 로그인 쿠키가 ECS에서도 유효합니다.
+
+| 이름 | 비고 |
+|---|---|
+| `MYSQL_USER`, `MYSQL_PASSWORD` | V1 MySQL 계정 |
+| `JWT_SECRET` | V1과 동일 |
+| `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI` | V1 `.env`의 `KAKAO_CLIENT_SECRET`이 비어 있으면 등록하지 않고 `backend_kakao_client_secret_enabled = false` |
+| `FRONTEND_ORIGIN` | V1과 동일 |
+
+```bash
+# 레포 밖 임시 파일에 V1 .env의 해당 줄만 복사한 뒤
+scripts/put-ssm-env.sh backend /path/to/.env.backend
+```
+
+### 전환 순서
+
+1. `app-server`에 `app_private_ip` output 추가 PR 머지·apply (리소스 변경 없음). 이 output이 state에 있어야 이 root의 plan이 성공합니다.
+2. 위 Secret 등록
+3. **장 마감 후** compose 3306 게시 PR 머지 → V1 서버에서 db만 재생성 (`git pull` 후 `docker compose --env-file .env up -d db`)
+   - 머지 후 다음 V1 CD(`git pull` + 전체 `compose up`)도 db를 재생성하므로, 장중에 머지하지 않습니다.
+   - 확인: `sudo ss -ltnp | grep 3306` → `0.0.0.0:3306` 표시, V1 backend 정상
+4. 이 root PR 머지·apply: V1 앱 SG 규칙, Task Definition(dev 이미지), Valkey 정책
+5. 확인: `curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf`, Target Group healthy, 로그에 Hikari·Valkey 연결 오류 없음
+
+롤백: `backend_desired_count = 0`으로 apply하거나 이전 Task Definition 리비전으로 `update-service`. DB 경로까지 닫으려면 SG 규칙 제거 후 compose `ports`를 되돌리고 db를 재생성합니다.
 
 ## AI market-http
 
