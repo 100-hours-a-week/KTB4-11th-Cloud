@@ -47,7 +47,8 @@ Apply 전에 VPC 및 Subnet CIDR이 기존 VPC나 연결된 네트워크와 겹�
 - 개발 전용 Security Group과 Instance Profile
 - IMDSv2 필수, Docker 컨테이너의 Instance Profile 자격 증명 사용을 위해 hop limit 2 설정
 - Docker와 Docker Compose 설치 후 앱 파일을 둘 `/opt/stockspoon-v2` 디렉터리 생성
-- `docker-compose.yaml`의 awslogs는 기존 `/stockspoon/app/containers/*` 로그 그룹을 사용
+- `docker-compose.yaml`의 awslogs는 V2 전용 `/stockspoon/v2-dev/containers/*` 로그 그룹으로 각 컨테이너 stdout/stderr를 전송
+- Terraform이 서비스별 CloudWatch Log Group을 만들고 7일 뒤 로그를 만료하며, 개발 EC2 역할에는 해당 그룹에 로그를 기록할 권한만 부여
 - 개발 Security Group은 HTTP 80만 공개하며 HTTPS 443은 열지 않음
 - Cloud 저장소를 clone하거나 pull하지 않음. Compose 파일과 `.env`는 사용자가 EC2에 직접 배치
 - FE·BE CD는 EC2의 `/opt/stockspoon-v2/.env`에서 자기 태그만 바꾸고 해당 Compose 서비스만 갱신
@@ -63,7 +64,9 @@ MySQL `db-data` 볼륨은 EC2의 암호화된 루트 디스크에 저장된다. 
 
 ### 로그 및 모니터링
 
-- 애플리케이션 EC2에서 기존 StockSpoon 애플리케이션 CloudWatch Log Group에 로그 기록
+- V2 개발 EC2의 Nginx, frontend, backend, MySQL 컨테이너 로그는 `awslogs` 드라이버로 CloudWatch Logs에 자동 전송
+- 로그 그룹: `/stockspoon/v2-dev/containers/nginx`, `/stockspoon/v2-dev/containers/frontend`, `/stockspoon/v2-dev/containers/backend`, `/stockspoon/v2-dev/containers/db` (각 7일 보존)
+- 로그 그룹을 Terraform으로 먼저 생성해야 하며, EC2의 Compose 파일도 `test-infra/dev-app/docker-compose.yaml`의 V2 전용 로그 그룹 설정을 사용해야 함
 - 애플리케이션 및 k6 서버용 CloudWatch Agent IAM 권한
 - 보존 기간이 14일인 테스트 시스템 Log Group
 

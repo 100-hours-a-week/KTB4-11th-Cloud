@@ -14,3 +14,17 @@ resource "aws_cloudwatch_log_group" "test_system" {
     ManagedBy   = "Terraform"
   }
 }
+
+resource "aws_cloudwatch_log_group" "dev_app_container_services" {
+  for_each = local.dev_container_log_group_names
+
+  name              = each.value
+  retention_in_days = 7
+
+  tags = {
+    Name        = "${var.dev_app_name_prefix}-${each.key}-logs"
+    Project     = "stockspoon-v2"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}

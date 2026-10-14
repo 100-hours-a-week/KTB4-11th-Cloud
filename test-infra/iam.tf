@@ -32,6 +32,18 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
+  dev_container_log_group_names = {
+    nginx    = "/stockspoon/v2-dev/containers/nginx"
+    frontend = "/stockspoon/v2-dev/containers/frontend"
+    backend  = "/stockspoon/v2-dev/containers/backend"
+    db       = "/stockspoon/v2-dev/containers/db"
+  }
+
+  dev_container_log_group_arns = [
+    for name in values(local.dev_container_log_group_names) :
+    "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${name}"
+  ]
+
   app_log_group_names = [
     "/stockspoon/app/system",
     local.test_system_log_group_name,
@@ -126,7 +138,33 @@ resource "aws_iam_role_policy_attachment" "dev_app_ssm" {
 resource "aws_iam_role_policy" "dev_app_cloudwatch" {
   name   = "${var.dev_app_name_prefix}-cloudwatch-policy"
   role   = aws_iam_role.dev_app.id
-  policy = data.aws_iam_policy_document.app_cloudwatch.json
+  policy = data.aws_iam_policy_document.dev_app_cloudwatch.json
+}
+
+data "aws_iam_policy_document" "dev_app_cloudwatch" {
+  statement {
+    sid       = "DescribeLogGroups"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "DescribeDevContainerLogStreams"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogStreams"]
+    resources = local.dev_container_log_group_arns
+  }
+
+  statement {
+    sid    = "PublishDevContainerLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+    ]
+    resources = [for arn in local.dev_container_log_group_arns : "${arn}:log-stream:*"]
+  }
 }
 
 resource "aws_iam_instance_profile" "dev_app" {
