@@ -1,5 +1,51 @@
 # Backend 서비스 전용 리소스
-# Target Group, Task Definition, ECS Service는 다음 이슈에서 이 파일에 추가한다.
+# DB는 V1 EC2의 MySQL을 사용한다. (접근 통제: cross_root_rules.tf의 V1 앱 SG 규칙)
+# TODO: V2 DB로 이전하면 V1 MySQL 참조와 SG 규칙 제거
+
+locals {
+  backend_image       = "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_image_tag}"
+  backend_valkey_role = "backend"
+
+  # V1 앱 EC2의 MySQL
+  v1_app_private_ip      = data.terraform_remote_state.app.outputs.app_private_ip
+  backend_datasource_url = "jdbc:mysql://${local.v1_app_private_ip}:${var.v1_mysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+
+  backend_environment = concat(
+    [
+      { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
+      { name = "JAVA_TOOL_OPTIONS", value = "-XX:MaxRAMPercentage=75" },
+
+      { name = "SPRING_DATASOURCE_URL", value = local.backend_datasource_url },
+      { name = "SPRING_DATASOURCE_DRIVER_CLASS_NAME", value = "com.mysql.cj.jdbc.Driver" },
+      # 스키마 변경·검증 안 함 (DB 이관 중 V1 스키마 고정)
+      { name = "JPA_DDL_AUTO", value = "none" },
+      { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = "none" },
+
+      # 운영 Valkey (IAM 인증: cluster mode + TLS 필수)
+      { name = "REDIS_HOST", value = local.valkey_endpoint },
+      { name = "REDIS_PORT", value = tostring(local.valkey_port) },
+      { name = "REDIS_USERNAME", value = local.valkey_users[local.backend_valkey_role] },
+      { name = "REDIS_SSL", value = "true" },
+      { name = "REDIS_CLUSTER_MODE", value = "true" },
+      { name = "ELASTICACHE_CACHE_NAME", value = local.valkey_cache_name },
+      { name = "AWS_REGION", value = var.aws_region },
+
+      { name = "AUTH_COOKIE_SECURE", value = "true" },
+
+      # V1과 키움 세션 충돌·주문 이중 체결 방지
+      { name = "KIWOOM_STREAM_ENABLED", value = "false" },
+      { name = "KIWOOM_COLLECTOR_ENABLED", value = "false" },
+    ],
+    # SSM에는 빈 값을 저장할 수 없음
+    var.backend_kakao_client_secret_enabled ? [] : [{ name = "KAKAO_CLIENT_SECRET", value = "" }],
+  )
+
+  # SSM /stockspoon/v2/prod/backend/<이름> (CLI로 등록)
+  backend_secret_names = concat(
+    ["MYSQL_USER", "MYSQL_PASSWORD", "JWT_SECRET", "KAKAO_CLIENT_ID", "KAKAO_REDIRECT_URI", "FRONTEND_ORIGIN"],
+    var.backend_kakao_client_secret_enabled ? ["KAKAO_CLIENT_SECRET"] : [],
+  )
+}
 
 # ---------------------------------------------------------------------------
 # Logs
@@ -20,6 +66,12 @@ resource "aws_iam_role" "backend_task" {
   name               = "${var.name_prefix}-backend-task-role"
   description        = "Role assumed by the backend application containers"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
+}
+
+# 운영 Valkey IAM 인증 (backend 사용자)
+resource "aws_iam_role_policy_attachment" "backend_valkey" {
+  role       = aws_iam_role.backend_task.name
+  policy_arn = local.valkey_policies[local.backend_valkey_role]
 }
 
 # ---------------------------------------------------------------------------
@@ -58,9 +110,11 @@ resource "aws_vpc_security_group_egress_rule" "backend_task_all" {
 # Target Group (Green)
 # ---------------------------------------------------------------------------
 
+# port는 ip 타입에서 기본값일 뿐이다. (실제 트래픽·헬스체크는 ECS 등록 포트 8080)
+# ForceNew + 고정 이름이라 교체 시 실패하므로 80을 유지한다.
 resource "aws_lb_target_group" "backend_green" {
   name                 = "${var.name_prefix}-backend-green"
-  port                 = var.backend_container_port
+  port                 = 80
   protocol             = "HTTP"
   target_type          = "ip"
   vpc_id               = data.terraform_remote_state.shared.outputs.vpc_id
@@ -103,7 +157,7 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name        = "backend"
-      image       = var.backend_container_image
+      image       = local.backend_image
       essential   = true
       stopTimeout = var.backend_stop_timeout_seconds
 
@@ -111,6 +165,15 @@ resource "aws_ecs_task_definition" "backend" {
         {
           containerPort = var.backend_container_port
           protocol      = "tcp"
+        }
+      ]
+
+      environment = local.backend_environment
+
+      secrets = [
+        for name in local.backend_secret_names : {
+          name      = name
+          valueFrom = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/${name}"
         }
       ]
 
@@ -184,5 +247,7 @@ resource "aws_ecs_service" "backend" {
   depends_on = [
     aws_lb_listener_rule.backend_test,
     aws_ecs_cluster_capacity_providers.main,
+    aws_iam_role_policy_attachment.backend_valkey,
+    aws_vpc_security_group_ingress_rule.v1_mysql_from_backend,
   ]
 }
