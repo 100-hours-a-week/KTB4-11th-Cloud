@@ -12,6 +12,9 @@ output "app_instance_id" {
   value       = aws_instance.app.id
 }
 
+# V2 ECS Backend가 V1 MySQL에 접속하는 주소 (ecs 루트가 remote state로 참조)
+# EC2를 교체하지 않는 한 stop/start에도 유지된다.
+# TODO: V2 DB로 이전하면 ecs의 참조와 함께 제거
 output "app_private_ip" {
   description = "Private IP of the V1 application EC2 (V1 MySQL host for V2 ECS backend tasks)"
   value       = aws_instance.app.private_ip
