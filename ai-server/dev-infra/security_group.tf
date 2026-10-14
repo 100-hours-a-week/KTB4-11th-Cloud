@@ -24,6 +24,24 @@ resource "aws_vpc_security_group_ingress_rule" "ai_ssh" {
   description       = "Allow optional key-only SSH access to the development AI host"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "ai_http" {
+  security_group_id = aws_security_group.ai.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+  description       = "Allow public HTTP traffic to the development AI host"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ai_https" {
+  security_group_id = aws_security_group.ai.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "Allow public HTTPS traffic to the development AI host"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "ai_api_from_test_app" {
   security_group_id            = aws_security_group.ai.id
   referenced_security_group_id = data.aws_security_group.test_app.id
