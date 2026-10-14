@@ -103,3 +103,18 @@ resource "aws_vpc_security_group_ingress_rule" "ai_questdb_from_market_http" {
   ip_protocol                  = "tcp"
   description                  = "Allow V2 market-http tasks to query QuestDB"
 }
+
+# ---------------------------------------------------------------------------
+# V1 앱 서버 MySQL (app-server 소유 SG)
+# V1 Compose가 MySQL을 호스트에 게시하고, 외부 접근은 이 SG 규칙(ECS Backend Task SG만 허용)으로만 통제한다.
+# TODO: V2 DB로 이전하면 제거
+# ---------------------------------------------------------------------------
+
+resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_backend" {
+  security_group_id            = data.terraform_remote_state.app.outputs.app_security_group_id
+  referenced_security_group_id = aws_security_group.backend_task.id
+  from_port                    = var.v1_mysql_port
+  to_port                      = var.v1_mysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow V2 backend tasks to use V1 MySQL"
+}
