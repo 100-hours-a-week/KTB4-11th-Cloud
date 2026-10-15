@@ -1,9 +1,9 @@
-# AI 레포 cd-ecs-v2.yaml이 market-http·market-streamer를 배포할 때 assume하는 Role
+# AI 레포 cd-ecs-v2.yaml이 market-http를 배포할 때 assume하는 Role
 # Task Definition 새 리비전 등록과 서비스 갱신만 허용한다. (인프라 변경은 Terraform CI가 담당)
 
 locals {
   ecs_deploy_service_arns = [
-    for name in ["market-http", "market-streamer"] :
+    for name in ["market-http"] :
     "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service/${aws_ecs_cluster.main.name}/${var.name_prefix}-${name}"
   ]
 }
@@ -68,7 +68,6 @@ data "aws_iam_policy_document" "github_actions_ecs_deploy" {
     resources = [
       aws_iam_role.ecs_task_execution.arn,
       aws_iam_role.market_http_task.arn,
-      aws_iam_role.market_streamer_task.arn,
     ]
 
     condition {

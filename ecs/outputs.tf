@@ -73,16 +73,6 @@ output "market_http_task_security_group_id" {
   value       = aws_security_group.market_http_task.id
 }
 
-output "market_streamer_service_name" {
-  description = "market-streamer ECS service name (null until ai_image_tag is set)"
-  value       = try(aws_ecs_service.market_streamer[0].name, null)
-}
-
-output "market_streamer_task_security_group_id" {
-  description = "Security group attached to the market-streamer task ENI"
-  value       = aws_security_group.market_streamer_task.id
-}
-
 output "market_http_request_example" {
   description = "Example market-http request through the ALB"
   value       = "curl -s 'https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}${var.market_http_path_prefix}/prices?codes=005930'"
