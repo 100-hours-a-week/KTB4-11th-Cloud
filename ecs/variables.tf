@@ -71,17 +71,17 @@ variable "ecs_container_stop_timeout_seconds" {
 # Backend Service
 # ---------------------------------------------------------------------------
 
-# 실제 Backend 이미지 전달 전에는 테스트용 nginx 이미지로 인프라 동작을 검증한다.
-variable "backend_container_image" {
-  description = "Container image for the backend service"
+# BE 레포 dev CI가 Public ECR(stockspoon-v2-backend)에 push한 이미지 태그(dev 커밋 SHA)
+variable "backend_image_tag" {
+  description = "Tag (git SHA) of the backend image in the public ECR repository stockspoon-v2-backend"
   type        = string
-  default     = "public.ecr.aws/nginx/nginx:stable"
+  default     = "1625d25411026f0828ff545393e9de8970c58711"
 }
 
 variable "backend_container_port" {
   description = "Container port exposed by the backend"
   type        = number
-  default     = 80
+  default     = 8080
 }
 
 variable "backend_task_cpu" {
@@ -96,10 +96,12 @@ variable "backend_task_memory" {
   default     = 1024
 }
 
+# V1 Backend와 같은 DB를 쓰는 동안은 1개로 둔다.
+# dev 코드의 주기 작업(만료 주문 정리 등)이 V1과 함께 운영 DB에 쓰므로, 동시 실행 안전성을 BE와 확인한 뒤 늘린다.
 variable "backend_desired_count" {
   description = "Number of backend tasks"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "backend_stop_timeout_seconds" {
@@ -108,16 +110,18 @@ variable "backend_stop_timeout_seconds" {
   default     = 30
 }
 
+# Backend에 actuator가 없어 인증 없이 200을 주는 경로를 임시로 사용한다. (Spring Security로 /는 401/403)
+# 이 경로는 DB·Valkey 상태를 반영하지 않는다. TODO: BE에 /actuator/health 추가 후 교체
 variable "backend_health_check_path" {
   description = "ALB health check path for the backend target group"
   type        = string
-  default     = "/"
+  default     = "/api/v1/auth/csrf"
 }
 
 variable "backend_health_check_grace_period_seconds" {
   description = "Time ECS ignores failing ALB health checks after a task starts"
   type        = number
-  default     = 60
+  default     = 120 # Spring Boot 1 vCPU 기동(V1 Compose start_period 40s) + DB·Valkey 연결 여유
 }
 
 variable "backend_deregistration_delay_seconds" {
@@ -152,6 +156,34 @@ variable "backend_path_patterns" {
   description = "ALB path patterns routed to the ECS backend"
   type        = list(string)
   default     = ["/api/*"]
+}
+
+variable "v1_mysql_port" {
+  description = "MySQL port published on the V1 application host"
+  type        = number
+  default     = 3306
+}
+
+variable "backend_mysql_database" {
+  description = "V1 MySQL database name (MYSQL_DATABASE in the V1 .env)"
+  type        = string
+  default     = "stockspoon"
+}
+
+# V1 .env의 KAKAO_CLIENT_SECRET이 비어 있으면 false로 둔다. (SSM에는 빈 값을 저장할 수 없음)
+variable "backend_kakao_client_secret_enabled" {
+  description = "Inject KAKAO_CLIENT_SECRET from SSM; false injects an empty value"
+  type        = bool
+  default     = true
+}
+
+# true면 SSM의 키움 키(V1과 별도 발급)를 주입하고 시세 스트림을 켠다.
+# V1 Backend와 같은 DB의 PENDING 지정가 주문을 두 서버가 함께 체결하려 해도,
+# V1(main)·dev 모두 executeLimit에서 계좌 행 비관적 락 후 주문 상태를 재확인하므로 한쪽만 체결된다.
+variable "backend_kiwoom_stream_enabled" {
+  description = "Inject Kiwoom API keys from SSM and enable the Kiwoom market stream in the backend"
+  type        = bool
+  default     = true
 }
 
 variable "backend_test_rule_priority" {
@@ -256,5 +288,15 @@ variable "ecs_deploy_github_subjects" {
   type        = list(string)
   default = [
     "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/dev",
+  ]
+}
+
+# BE 레포 ci-dev.yaml이 dev push에서 cd-ecs-dev.yaml을 호출한다. (workflow_call은 호출한 워크플로의 ref를 sub로 쓴다)
+# 배포 job에 GitHub environment를 지정하면 sub가 environment:<이름>으로 바뀌므로 함께 수정한다.
+variable "backend_ecs_deploy_github_subjects" {
+  description = "GitHub OIDC subjects allowed to deploy the backend service to ECS"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-11th-BE@1352977792:ref:refs/heads/dev",
   ]
 }

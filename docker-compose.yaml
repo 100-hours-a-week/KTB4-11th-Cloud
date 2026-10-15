@@ -123,6 +123,8 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       TZ: ${TZ:-Asia/Seoul}
+    ports:
+      - "3306:3306"
     volumes:
       - db-data:/var/lib/mysql
     networks:
