@@ -11,6 +11,10 @@ locals {
     },
     {
       bucket = "stockspoon-terraform-state-v1"
+      key    = "iam/terraform.tfstate"
+    },
+    {
+      bucket = "stockspoon-terraform-state-v1"
       key    = "shared-infra/terraform.tfstate"
     },
     {
@@ -146,6 +150,28 @@ locals {
     "arn:${data.aws_partition.github_actions_terraform.partition}:ses:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:identity/notify.stock-spoon.com",
     "arn:${data.aws_partition.github_actions_terraform.partition}:ses:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:identity/ruby0656@naver.com",
   ]
+
+  github_actions_terraform_account_iam_arns = concat(
+    [
+      for user in [
+        "eric",
+        "ezra",
+        "lily",
+        "pattie",
+        "pattie_for_terraform",
+        "river",
+        "stella",
+        "stella_for_terraform",
+      ] : "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:user/${user}"
+    ],
+    [
+      for group in [
+        "cloud_developer",
+        "stockspoon_developer",
+        "terraform",
+      ] : "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:group/${group}"
+    ],
+  )
 }
 
 data "aws_caller_identity" "github_actions_terraform" {}
@@ -607,6 +633,30 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
       "iam:UpdateRoleDescription",
     ]
     resources = local.github_actions_terraform_iam_resource_arns
+  }
+
+  statement {
+    sid    = "ManageExistingAccountUsersAndGroups"
+    effect = "Allow"
+    actions = [
+      "iam:AddUserToGroup",
+      "iam:AttachGroupPolicy",
+      "iam:AttachUserPolicy",
+      "iam:CreateGroup",
+      "iam:CreateUser",
+      "iam:DeleteGroup",
+      "iam:DeleteGroupPolicy",
+      "iam:DeleteUser",
+      "iam:DetachGroupPolicy",
+      "iam:DetachUserPolicy",
+      "iam:PutGroupPolicy",
+      "iam:RemoveUserFromGroup",
+      "iam:TagUser",
+      "iam:UntagUser",
+      "iam:UpdateGroup",
+      "iam:UpdateUser",
+    ]
+    resources = local.github_actions_terraform_account_iam_arns
   }
 
   statement {

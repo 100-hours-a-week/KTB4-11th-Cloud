@@ -61,7 +61,7 @@ Apply 역할의 OIDC trust policy는 저장소 ID와 `main` 브랜치에 고정�
 - main에 Terraform root 변경이 하나라도 들어오면 모든 root를 plan하고 의존 순서대로 apply합니다. GitHub Actions 동시성 설정은 대기 중인 실행을 최신 실행으로 합칠 수 있으므로, 모든 root를 대상으로 해야 앞선 커밋의 변경이 빠지지 않습니다.
 - Apply는 각 root를 하나씩 현재 state 기준으로 다시 plan하고, 그 root에서 생성한 임시 plan 파일을 즉시 apply합니다. 따라서 upstream root를 적용한 뒤 downstream root의 remote state에서 최신 output을 읽습니다. PR plan 댓글은 병합 전 검토용 미리보기이며, main 병합 후 모든 root plan이 성공하면 이 재계산과 apply를 수행합니다.
 
-현재 root 간 적용 순서는 `shared-infra`, `test-infra`, `messaging`, `messaging@prod`, `ai-server/dev-infra`, `redis`, `redis@prod`, `app-server`, `ecr`, `ecs`, `ai-server/infra`, `ai-server/dashboard`입니다. 순서는 `.github/scripts/terraform_roots.py`의 `ROOT_ORDER` 한 곳에서 관리하며 plan·apply 스크립트가 이를 가져다 씁니다. `redis`가 `ai-server/dev-infra`의 output을 읽으므로 `ai-server/dev-infra`가 먼저 적용됩니다. 경로 감지기는 다음 참조 관계도 반영합니다.
+현재 root 간 적용 순서는 `shared-infra`, `test-infra`, `messaging`, `messaging@prod`, `ai-server/dev-infra`, `redis`, `redis@prod`, `app-server`, `iam`, `ecr`, `ecs`, `ai-server/infra`, `ai-server/dashboard`입니다. 순서는 `.github/scripts/terraform_roots.py`의 `ROOT_ORDER` 한 곳에서 관리하며 plan·apply 스크립트가 이를 가져다 씁니다. `redis`가 `ai-server/dev-infra`의 output을 읽으므로 `ai-server/dev-infra`가 먼저 적용됩니다. 경로 감지기는 다음 참조 관계도 반영합니다.
 
 - `shared-infra` 변경 → `app-server`, `ecs`, `ai-server/infra`, `redis@prod`
 - `app-server` 변경 → `ecs`, `ai-server/infra`
@@ -104,8 +104,8 @@ IAM 역할은 다음 다섯 버킷의 state object와 `.tflock` object만 대상
 - `stockspoon-terraform-state-sqs`
 - `stockspoon-terraform-state-redis`
 
-새 root나 backend key를 추가하면 `app-server/terraform_github_actions.tf`의 state 경로와 IAM 권한 목록도 함께 갱신해야 합니다. 모든 root는 S3 native lockfile을 사용하므로 GitHub Actions와 local Terraform은 `1.10.0` 이상이어야 하며, workflow는 local에서 사용 중인 `1.16.2`를 고정합니다.
+새 root나 backend key를 추가하면 `app-server/terraform_github_actions.tf`의 state 경로와 IAM 권한 목록도 함께 갱신해야 합니다. `iam` root의 최초 import 전에는 새 state 경로와 사용자·그룹 쓰기 권한을 GitHub Actions 역할에 관리자 로컬 자격 증명으로 먼저 적용해야 합니다. 모든 root는 S3 native lockfile을 사용하므로 GitHub Actions와 local Terraform은 `1.10.0` 이상이어야 하며, workflow는 local에서 사용 중인 `1.16.2`를 고정합니다.
 
-Apply 역할은 EC2와 ElastiCache의 쓰기 작업을 서울 리전으로 제한하고, IAM 변경은 이 Terraform root들이 사용하는 `stockspoon-v1-app-*`, `stockspoon-v1-ai-*`, `stockspoon-loadtest-*`, `stockspoon-v2-dev-*`, `stockspoon-v2-prod-*` 이름 범위로 제한합니다. GitHub Actions 역할 자체와 기존 ECR 배포 역할은 이 IAM 쓰기 범위에 포함하지 않습니다. Route 53 변경은 기존 애플리케이션 hosted zone으로 제한합니다. Lambda 함수, SQS queue, SES identity, Secrets Manager secret, ECR Public repository 변경은 저장소에서 사용하는 이름으로 제한합니다. CloudWatch와 Logs의 쓰기 작업은 서울 리전으로 제한하지만 IAM 리소스 범위는 `*`입니다.
+Apply 역할은 EC2와 ElastiCache의 쓰기 작업을 서울 리전으로 제한하고, IAM 변경은 이 Terraform root들이 사용하는 `stockspoon-v1-app-*`, `stockspoon-v1-ai-*`, `stockspoon-loadtest-*`, `stockspoon-v2-dev-*`, `stockspoon-v2-prod-*` 이름 범위와 `iam` root에 명시된 기존 사용자·그룹으로 제한합니다. GitHub Actions 역할 자체와 기존 ECR 배포 역할은 이 IAM 쓰기 범위에 포함하지 않습니다. Route 53 변경은 기존 애플리케이션 hosted zone으로 제한합니다. Lambda 함수, SQS queue, SES identity, Secrets Manager secret, ECR Public repository 변경은 저장소에서 사용하는 이름으로 제한합니다. CloudWatch와 Logs의 쓰기 작업은 서울 리전으로 제한하지만 IAM 리소스 범위는 `*`입니다.
 
 이 apply 역할은 인프라를 수정하는 권한이므로, OIDC trust는 저장소의 `main` 브랜치로 제한합니다. 이 역할 자체의 trust policy를 변경하려면 역할이 자기 자신을 수정할 수 없으므로, 로컬 AWS 자격 증명으로 `app-server` root를 plan/apply해야 합니다. Plan 역할은 지정된 S3 state object 전체를 읽을 수 있으며 Secrets Manager 값 조회 API 권한은 받지 않습니다.
