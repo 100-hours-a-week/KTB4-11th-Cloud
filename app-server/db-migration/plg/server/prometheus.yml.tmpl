@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: node
+    static_configs:
+      - targets: ["__V1_PRIVATE_IP__:9100"]
+        labels:
+          node_role: v1-app
+      - targets: ["__MIGRATION_DB_PRIVATE_IP__:9100"]
+        labels:
+          node_role: migration-db
+
+  - job_name: mysql-migration
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+        labels:
+          db_role: migration-replica

@@ -1,0 +1,50 @@
+name: stockspoon-db-migration-plg-agent
+
+services:
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: plg-alloy
+    restart: unless-stopped
+    user: "0:0"
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      HOST_ROLE: ${HOST_ROLE:?run install.sh first}
+      LOKI_PUSH_URL: ${LOKI_PUSH_URL:?run install.sh first}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - mysql-data:/var/lib/mysql:ro
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+    mem_limit: 192m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: plg-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+)(/|$)
+    pid: host
+    network_mode: host
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  mysql-data:
+    external: true
+    name: ${MYSQL_DATA_VOLUME:?run install.sh first}
+  alloy-data:

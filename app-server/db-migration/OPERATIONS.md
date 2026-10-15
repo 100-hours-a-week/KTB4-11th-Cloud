@@ -1,0 +1,468 @@
+# apply 이후 접속·로그·MySQL 복제 준비
+
+## 2026-10-15 확인한 상태
+
+| 역할 | 인스턴스 ID | private IP | public IP | 확인 결과 |
+| --- | --- | --- | --- | --- |
+| V1 운영 | i-0b4b096567c84b58b | 10.0.1.246 | 15.164.87.85 | EC2 running; DB 내부 설정은 이번 점검에서 조회하지 않음 |
+| 이관 DB | i-081a5f4798f592f49 | 10.0.1.217 | 3.36.92.128 | cloud-init 완료, MySQL 컨테이너 미실행 |
+| 부하기 | i-0b766e6efa26389c9 | 10.0.1.116 | 13.209.83.189 | cloud-init 완료, k6 설치 |
+| PMM | i-00dce75378431daf7 | 10.0.1.85 | 3.35.13.60 | cloud-init 완료, PMM healthy, 로그인 화면 HTTP 200 |
+
+점검은 읽기 전용으로 수행했다. PMM에 등록된 서비스는 자체 PostgreSQL이며,
+V1 MySQL과 이관 MySQL은 등록되지 않았다. 아래 설정·적재·복제 명령은 아직 실행하지 않았다.
+
+## 1. PMM 화면과 접속
+
+브라우저에서 <https://3.35.13.60:8443>에 접속한다.
+자체 서명 인증서를 사용한다. 접근 허용 IP는 Terraform의 `db_migration_admin_cidrs`에 지정한 `/32`다.
+
+PMM EC2에 AWS 콘솔의 EC2 → 인스턴스 → 연결 → Session Manager로 접속한다.
+사용자명은 `admin`, 비밀번호는 이 호스트에서 다음 명령으로 확인한다.
+비밀번호를 채팅이나 Git에 복사하지 않는다.
+
+```bash
+sudo cat /opt/stockspoon-pmm/admin-password
+```
+
+MySQL을 시작하고 등록한 뒤 다음 화면을 사용한다.
+
+| 화면 | 확인할 항목 |
+| --- | --- |
+| Inventory | MySQL 서비스 및 수집 agent의 등록·실행 상태 |
+| MySQL Instance Summary | QPS, 접속 수, 쿼리·InnoDB 관련 지표 |
+| Query Analytics | 쿼리 유형별 실행 횟수와 소요 시간 |
+| MySQL Replication Summary | replication 연결 이후 복제 스레드 및 지연 관련 지표 |
+
+Query Analytics는 모든 원본 SQL·파라미터·성공 여부를 기록하는 감사 로그가 아니다.
+ROW 복제로 들어온 변경은 원본 SQL의 재실행과 다르므로, 이관 DB의 QAN만으로
+V1이 받은 원본 쿼리를 모두 확인할 수 없다. V1의 쿼리를 분석하려면 V1도 별도 등록해야 한다.
+원격 DB 수집은 DB 호스트의 CPU·메모리·디스크 지표 수집까지 포함하지 않는다.
+
+## 2. 로그 위치
+
+### V1 운영 로그: CloudWatch
+
+CloudWatch → Logs → Log groups에서 확인한다. 기존 Compose의 stdout/stderr 전송 경로다.
+
+| 로그 | Log group | 코드에 설정한 보관 기간 |
+| --- | --- | --- |
+| MySQL 서버·오류 로그 | /stockspoon/app/containers/db | 7일 |
+| 백엔드 | /stockspoon/app/containers/backend | 7일 |
+| Nginx | /stockspoon/app/containers/nginx | 7일 |
+| 시스템 | /stockspoon/app/system | 14일 |
+
+현재 셸에 AWS CLI가 설치되어 있다면 다음과 같이 조회한다.
+
+```bash
+aws logs tail /stockspoon/app/containers/db --since 10m --follow --profile stockspoon --region ap-northeast-2
+```
+
+이 경로로 slow/general 로그 파일이 자동 전송되는 것은 아니다. MySQL 파일 로그는
+별도로 파일 수집을 설정해야 CloudWatch에서도 확인할 수 있다.
+
+### 새 실습 EC2: 호스트에서 확인
+
+실습 EC2에는 CloudWatch Logs 전송을 설정하지 않았다. 해당 호스트의 SSM/SSH 세션에서 조회한다.
+다음 `-f` 명령은 계속 실행되므로 종료할 때 Ctrl+C를 누른다.
+
+```bash
+# 각 실습 호스트: 설치·초기화 결과
+sudo cloud-init status --long
+sudo tail -n 100 /var/log/cloud-init-output.log
+sudo journalctl -u cloud-final --no-pager -n 100
+
+# PMM 호스트: PMM 컨테이너 출력
+sudo docker logs --timestamps --tail 100 -f migration-pmm-server
+
+# 이관 DB 호스트: MySQL을 시작한 이후 서버·오류 출력
+sudo docker logs --timestamps --tail 100 -f migration-mysql
+```
+
+PMM/MySQL의 Docker 출력 로그는 파일당 20 MiB, 최대 3개로 순환한다.
+Docker 출력 로그 설정이 MySQL slow/general 로그 파일의 용량까지 제한하지는 않는다.
+부하기는 테스트 스크립트를 아직 배치하지 않았으므로 부하 테스트 결과 로그도 없다.
+
+## 3. 이관 MySQL 시작과 PMM 등록
+
+README의 파일 복사 및 실행 순서를 따른다. 스크립트에 전달할 실제 인자는 다음과 같다.
+
+이관 DB 호스트에서 MySQL Compose 및 스크립트를 배치한 후:
+
+```bash
+sudo ç
+```
+
+PMM 호스트에서 최신 등록 스크립트를 배치한 후:
+
+```bash
+sudo bash /opt/stockspoon-pmm/configure_mysql.sh 10.0.1.217
+```
+
+등록 스크립트는 호스트에 저장한 PMM 관리자 비밀번호로 CLI를 인증한다.
+내장 agent의 exporter는 `--metrics-mode=pull`을 사용한다. PMM Server 안에서 실행하는
+exporter에 `push`를 지정하면 등록이 거절된다. 수집기와 PMM이 같은 컨테이너에 있으므로
+이 변경을 위해 외부 exporter 포트를 추가로 열 필요는 없다.
+비밀번호 변경 후 인증 옵션 없는 `pmm-admin list`는 Unauthorized를 반환할 수 있다.
+2026-10-15 점검에서 관리자 인증을 명시한 목록 조회와 내장 agent 연결은 정상인 것을 확인했다.
+
+### MySQL 첫 시작 직후 ERROR 1045가 발생한 경우
+
+초기 버전 healthcheck는 `mysqladmin ping`을 사용했다. 이 명령은 인증 거절에도 성공을 반환하고,
+초기화 중 임시 MySQL 서버에도 응답할 수 있어 root 비밀번호 설정 전에 다음 단계로 넘어갈 수 있다.
+현재 코드는 실제 3306 TCP 연결에서 인증된 `SELECT 1`이 성공하도록 healthcheck와 대기를 수정했다.
+
+이번 사례에서는 초기화 완료 후 기존 secret의 root 비밀번호로 접속되는 것을 확인했다.
+이 경우에는 볼륨·비밀번호를 변경하지 않고 기존 설정 스크립트를 다시 실행해 남은 단계를 완료한다.
+아래 명령은 Mac 터미널에서 실행한다.
+
+```bash
+ssh -i /Users/kimjihyeon/.ssh/stockspoon-v1-deploy ubuntu@3.36.92.128 \
+  'sudo bash /opt/stockspoon-db-migration/scripts/configure_mysql.sh 10.0.1.217 10.0.1.85'
+```
+
+초기화가 완료된 뒤에도 인증 오류가 계속된다면 동일한 일시적 오류로 가정하지 말고,
+비밀번호 파일과 기존 DB 볼륨의 초기화 이력을 확인한다. 이 절차에서 볼륨을 삭제하거나 비밀번호를 재생성하지 않는다.
+
+## 4. MySQL 로그 설정
+
+각 DB의 관리자 SQL 세션에서 먼저 현재 설정을 확인한다.
+V1에서는 `sudo docker exec -it db mysql -uroot -p`로, 이관 DB 실행 이후에는
+`sudo docker exec -it migration-mysql mysql -uroot -p`로 접속할 수 있다.
+이관 DB root 비밀번호는 해당 호스트의
+`/opt/stockspoon-db-migration/mysql/secrets/mysql-root-password`에 있다.
+
+```sql
+SHOW GLOBAL VARIABLES WHERE Variable_name IN (
+  'log_error', 'log_output', 'slow_query_log', 'slow_query_log_file',
+  'long_query_time', 'min_examined_row_limit', 'general_log', 'general_log_file',
+  'log_bin', 'binlog_format', 'binlog_expire_logs_seconds', 'log_timestamps'
+);
+```
+
+| 목적 | 사용 도구·로그 | 범위 |
+| --- | --- | --- |
+| 오류·시작·종료 확인 | Error log / Docker·CloudWatch 출력 | DB 서버 상태 |
+| SQL 부하 분석 | PMM Performance Schema | 쿼리 유형별 집계 |
+| 느린 SQL 원문 확인 | Slow query log | 지정한 기준을 넘긴 쿼리 |
+| 접수 SQL을 짧은 실험 구간에서 추적 | General query log | 접수 기록; 커밋 성공·실행 순서의 증거와 다름 |
+| 데이터 변경 복제 | Binary log | ROW 변경 이벤트; SELECT 기록용이 아님 |
+
+다음은 관리자 SQL 세션에서 적용하는 예시다. 이번 점검에서는 실행하지 않았다.
+원래 설정을 먼저 기록하고, 측정 목적과 디스크 여유에 맞춰 사용한다.
+
+```sql
+-- 200 ms는 실험 시작용 예시이며 서비스 SLO에서 결정한 값은 아니다.
+SET GLOBAL log_output = 'FILE';
+SET GLOBAL slow_query_log_file = '/var/lib/mysql/slow.log';
+SET GLOBAL long_query_time = 0.2;
+SET GLOBAL slow_query_log = ON;
+```
+
+`long_query_time` 변경은 새 세션의 기본값에 적용된다. 기존 백엔드 커넥션 풀의 세션 값은
+계속 남을 수 있으므로 적용 시점을 구분한다. 시험이 끝나면 원래 값으로 복원한다.
+GLOBAL 변경은 재시작 시 유지되지 않으므로, 상시 사용을 결정한 설정은 별도로 영속화한다.
+
+새 이관 DB에서 slow 로그를 확인하는 예시:
+
+```bash
+sudo docker exec migration-mysql tail -n 100 -f /var/lib/mysql/slow.log
+```
+
+General log가 필요하면 짧은 관측 구간에만 다음처럼 사용한다.
+
+```sql
+-- 앞에서 log_output에 FILE이 포함된 것을 확인한 상태에서 사용한다.
+SET GLOBAL general_log_file = '/var/lib/mysql/general.log';
+SET GLOBAL general_log = ON;
+-- 관측 종료 후 실행:
+SET GLOBAL general_log = OFF;
+```
+
+General log는 쓰기 I/O와 디스크 사용량을 늘리며 SQL의 업무 데이터가 포함될 수 있다.
+성능 기준 측정과 상세 SQL 추적의 실행 구간을 기록한다. General log를 영구 기본값으로 켜지 않는다.
+ROW 복제 적용은 replica의 general/slow 로그에 원본 SQL로 그대로 남지 않는다.
+
+## 5. MySQL Shell 초기 적재 전 확인
+
+MySQL Shell의 dump/load는 특정 시점의 초기 데이터를 옮기는 작업이다.
+그 이후 계속 발생하는 변경분은 MySQL의 binlog/GTID replication으로 전달한다.
+
+V1 관리자 SQL 세션에서 다음 읽기 전용 결과를 먼저 확인한다.
+
+```sql
+SELECT VERSION(), @@server_id, @@server_uuid, @@log_bin,
+       @@gtid_mode, @@enforce_gtid_consistency, @@binlog_format;
+SELECT @@GLOBAL.gtid_executed, @@GLOBAL.gtid_purged;
+SHOW BINARY LOGS;
+SELECT TABLE_SCHEMA, ENGINE, COUNT(*) AS tables_count
+FROM information_schema.tables
+WHERE TABLE_TYPE = 'BASE TABLE'
+  AND TABLE_SCHEMA NOT IN ('mysql','information_schema','performance_schema','sys')
+GROUP BY TABLE_SCHEMA, ENGINE;
+SELECT TABLE_SCHEMA,
+       ROUND(SUM(DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 1) AS estimated_mib
+FROM information_schema.tables
+WHERE TABLE_SCHEMA NOT IN ('mysql','information_schema','performance_schema','sys')
+GROUP BY TABLE_SCHEMA;
+```
+
+다음 단계로 진행할 조건:
+
+- Source binlog가 켜져 있고 필요한 기간의 변경분을 보관할 수 있어야 한다.
+- Source GTID가 ON인지 확인한다. OFF이면 온라인 전환의 단계별 절차가 필요하며,
+  OFF에서 ON으로 바로 바꾸는 명령을 실행하지 않는다.
+- Source와 target의 server-id 및 UUID는 서로 달라야 한다.
+- Dump 대상 전체 서비스 스키마와 InnoDB 사용 여부를 확인한다.
+- 이관 호스트의 데이터·dump·binlog를 함께 보관할 디스크 여유를 확인한다.
+- Source에 dump용 계정과 복제용 계정을 준비한다. PMM 계정을 재사용하지 않는다.
+- Source의 binlog 보관 기간이 dump·load·복제 따라잡기 시간보다 충분히 길어야 한다.
+- 이관 MySQL은 외부 업무 쓰기 없이 초기 적재 대상으로 유지한다.
+
+V1 Compose에는 호스트 3306 publish가 없다. 따라서 `10.0.1.246:3306` 접근 경로부터 준비해야 한다.
+기존 MySQL 서비스에 Compose `ports`를 추가해 적용하면 컨테이너 재생성이 발생할 수 있으므로,
+운영 DB 재시작을 허용하지 않는 경우 별도 중계 또는 터널 방식으로 연결 경로를 설계한다.
+이번 안내에서는 운영 컨테이너 재생성이나 중계 설치를 실행하지 않는다.
+
+## 6. MySQL Shell 초기 적재 예시
+
+전제: 위 확인과 연결 경로·권한 준비를 완료한 상태다. MySQL Shell은 이관 EC2에서 실행하는
+구성을 기준으로 한다. 설치되지 않았으므로 공식 8.4 LTS 배포물과 OS 지원 여부를 확인한 뒤 설치하고
+`mysqlsh --version`으로 확인한다. 일반 `mysql` CLI와 다른 프로그램이다.
+
+Source dump 계정에는 dump 대상의 SELECT·SHOW VIEW·TRIGGER·EVENT 권한,
+일관된 snapshot을 위한 RELOAD/BACKUP_ADMIN 및 좌표 확인용 REPLICATION CLIENT 등을 준비하고
+`dryRun`으로 부족한 권한을 확인한다.
+
+```bash
+mysqlsh --js --uri dump_user@10.0.1.246:3306 --password
+```
+
+MySQL Shell의 JS 모드에서 실행하는 예시:
+
+```javascript
+util.dumpInstance('/opt/stockspoon-db-migration/seed/v1-initial', {
+  threads: 2,
+  maxRate: '10M',
+  consistent: true,
+  users: false,
+  dryRun: true
+});
+```
+
+결과를 검토한 후 `dryRun: false`로 실제 dump를 실행한다. 2 threads와 thread당 10M 제한은
+초기 실험용 예시이며 허용 부하를 실측해 조정한다. 성공한 dump의 `@.json`과 `@.done.json`을 보관한다.
+계정 복사를 제외했으므로 앱 계정과 복제 계정은 별도 관리해야 한다.
+
+`consistent:true`도 완전히 무락인 방식은 아니다. Snapshot을 맞추기 위한 초기 read lock이 있고,
+백업 락은 DDL을 제한한다. 장기 실행 트랜잭션·쿼리와 락 대기 상태에 따라 영향이 달라질 수 있다.
+정합성을 위해 `consistent:false`로 바꾸어 락을 피하지 않는다.
+
+Target에는 MySQL Shell에서 접속 가능한 import 전용 관리자 계정을 별도 준비한다.
+현재 Compose는 원격 root 접속을 열지 않았으며, CLI 호스트에서 실행하는 Shell이
+`root@10.0.1.217`로 바로 접속할 수 있다고 가정하지 않는다.
+계정 생성·권한 작업은 target 관리자 세션에서 binlog 기록을 끈 세션으로 수행하고,
+import 전용 계정은 적재가 끝나면 폐기한다.
+
+Target의 기존 GLOBAL 값을 기록한 뒤 import 동안만 변경한다.
+
+```sql
+SET GLOBAL super_read_only = OFF;
+SET GLOBAL read_only = OFF;
+SET GLOBAL local_infile = ON;
+```
+
+Target import 계정으로 연결한 Shell JS 세션에서 실행하는 예시:
+
+```javascript
+util.loadDump('/opt/stockspoon-db-migration/seed/v1-initial', {
+  threads: 2,
+  skipBinlog: true,
+  updateGtidSet: 'append',
+  showMetadata: true
+});
+```
+
+`skipBinlog:true`는 적재 과정에서 target의 새로운 GTID가 생성되지 않게 한다.
+`updateGtidSet:'append'`는 dump 시점의 source GTID를 target에 기록한다.
+이미 source GTID가 겹치는 적재 완료 target에 이 명령을 처음부터 다시 적용하지 않는다.
+적재 실패 시에는 오류와 진행 파일을 확인하고 복구한다. GTID 초기화 명령으로 우회하지 않는다.
+
+적재 결과를 검증한 뒤 target의 `local_infile`은 원래 값으로 복원하고
+`read_only=ON`, `super_read_only=ON`을 적용한다. 이후 replica SQL 스레드의 복제 적용은 허용된다.
+
+## 7. GTID replication 연결과 확인
+
+전제: source GTID ON, 원격 연결 가능, dump/load 성공, source의 필요한 binlog 유지,
+복제 전용 계정 생성과 TLS 설정이 완료된 상태다. 아래는 target에서 실행하는 형태다.
+비밀번호는 예시 문자열이며 실제 값을 Git이나 기록에 남기지 않는다.
+
+```sql
+CHANGE REPLICATION SOURCE TO
+  SOURCE_HOST = '10.0.1.246',
+  SOURCE_PORT = 3306,
+  SOURCE_USER = 'repl_user',
+  SOURCE_PASSWORD = '<replication-password>',
+  SOURCE_AUTO_POSITION = 1,
+  SOURCE_SSL = 1;
+START REPLICA;
+SHOW REPLICA STATUS\G
+```
+
+실습 예시는 암호화를 켜며, 운영 수준에서는 CA와 source 신원 검증 옵션까지 설정한다.
+Source 복제 계정은 target에서 보이는 접속 IP로 제한하고 `REPLICATION SLAVE` 권한을 사용한다.
+
+확인할 항목:
+
+- `Replica_IO_Running=Yes`, `Replica_SQL_Running=Yes`
+- `Last_IO_Error`, `Last_SQL_Error` 및 병렬 worker 오류
+- `Seconds_Behind_Source` 값과 증가 추이; NULL을 지연 0으로 간주하지 않음
+- Source에서 읽은 GTID와 target에서 실행한 GTID 진행
+
+확정 시점의 source `@@GLOBAL.gtid_executed` 값을 별도로 기록하고, target에서 다음을 확인한다.
+
+```sql
+SELECT WAIT_FOR_EXECUTED_GTID_SET('<captured-source-gtid-set>', 30);
+```
+
+0이면 기록한 GTID 집합을 적용한 상태이고, 1이면 timeout이다.
+이는 계속 갱신되는 source의 미래 트랜잭션까지 동기화됐다는 뜻은 아니다.
+마지막 cutover 동기화는 쓰기 차단 후 확정한 GTID로 검사한다.
+
+## 8. PLG로 쓰기 실패 관측
+
+PMM의 Query Analytics는 쿼리 통계와 DB 상태를 보는 용도다. PLG는 백엔드 요청 로그와
+MySQL 접수 SQL을 시간대별로 함께 검색하는 용도다. 현재 백엔드 로그는 요청 경로·상태·
+requestId와 실패 이벤트를 남기지만, SQL 예외의 vendor error code나 SQL 원문을
+백엔드 로그에 남기지는 않는다. 그래서 우선 API 실패 건수와 MySQL 접수 SQL을 비교할 수 있고,
+요청 하나와 SQL 하나를 requestId로 직접 연결하지는 못한다.
+
+PLG는 새 EC2를 만들지 않고 현재 PMM 호스트를 사용한다. 4 GiB 메모리에서 PMM과 PLG를
+동시에 운영하지 않도록 설치 스크립트가 실행 중인 PMM 컨테이너를 중지한다. PMM 데이터
+볼륨은 삭제하지 않는다. PLG가 준비되지 않으면 스크립트가 PLG 컨테이너를 내리고
+설치 전 실행 중이던 PMM을 다시 시작한다.
+
+### 8-1. Security Group 규칙 적용
+
+Terraform 변경은 모니터링 호스트의 Loki `3100/tcp`를 V1·이관 DB에서만 받을 수 있게 하고,
+Prometheus가 두 호스트의 node exporter `9100/tcp`를 조회하도록 한다. Grafana `3000/tcp`와
+Prometheus `9090/tcp`는 외부에 공개하지 않는다. 변경 계획에서 EC2 변경·교체·삭제가 없는지
+확인한 뒤 사용자가 apply한다.
+
+```bash
+AWS_PROFILE=stockspoon terraform -chdir=app-server plan -out=db-migration-plg.tfplan
+terraform -chdir=app-server show -no-color db-migration-plg.tfplan
+AWS_PROFILE=stockspoon terraform -chdir=app-server apply db-migration-plg.tfplan
+```
+
+### 8-2. 모니터링 호스트에 PLG 설치
+
+로컬 저장소 루트에서 모니터링 호스트로 서버 구성을 복사한다.
+
+```bash
+scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/server ubuntu@<모니터링-공인-IP>:/tmp/
+```
+
+모니터링 호스트에서 아래를 실행한다. 기본 private IP는 현재 확인된 V1 `10.0.1.246`,
+이관 DB `10.0.1.217`이다. 설치 과정은 SSM에서 기존 `pmm` 계정 비밀번호를 읽어
+mysqld exporter에 전달하며 비밀번호를 출력하지 않는다.
+
+```bash
+sudo bash /tmp/server/install.sh 10.0.1.246 10.0.1.217
+sudo docker compose --env-file /opt/stockspoon-plg/.env \
+  -f /opt/stockspoon-plg/compose.yaml ps
+```
+
+Grafana 관리자 비밀번호는 `/opt/stockspoon-plg/grafana-admin-password`에 root 전용으로
+저장된다. 로컬 Mac에서 SSH 터널을 연 뒤 `http://localhost:3000`으로 접속한다.
+
+```bash
+ssh -i "$REHEARSAL_KEY" -N \
+  -L 3000:127.0.0.1:3000 \
+  -L 9090:127.0.0.1:9090 \
+  ubuntu@<모니터링-공인-IP>
+```
+
+Grafana 계정은 `admin`이다. 기존 PMM을 다시 쓸 때는 PLG를 먼저 중지한 뒤 PMM을 시작한다.
+`docker compose down`에는 `-v`를 붙이지 않아 PLG 보관 볼륨을 유지한다.
+
+```bash
+sudo docker compose --env-file /opt/stockspoon-plg/.env \
+  -f /opt/stockspoon-plg/compose.yaml down
+sudo docker start migration-pmm-server
+```
+
+### 8-3. V1·이관 DB 로그와 호스트 지표 연결
+
+각 DB 호스트에 Alloy와 node exporter를 추가한다. 구성은 MySQL 데이터 볼륨을 자동 탐지해
+읽기 전용으로 마운트하고, Docker 컨테이너 stdout/stderr와 `general.log`, `slow.log`를 수집한다.
+Alloy의 Docker API 소켓 마운트는 호스트 Docker daemon에 대한 강한 권한을 준다.
+실행 전에 `agent/compose.yaml`과 `agent/config.alloy`를 검토한다.
+
+모니터링 호스트의 private IP는 Terraform output `db_migration_support_hosts`에서 확인한다.
+로컬에서 두 DB 호스트에 각각 agent 구성을 복사한다.
+
+```bash
+scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/agent ubuntu@<V1-공인-IP>:/tmp/
+scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/agent ubuntu@<이관DB-공인-IP>:/tmp/
+```
+
+각 호스트에서 실행한다. `<모니터링-private-IP>`는 위 output 값이다.
+
+```bash
+# V1 EC2
+sudo bash /tmp/agent/install.sh v1 <모니터링-private-IP> db
+
+# 이관 DB EC2
+sudo bash /tmp/agent/install.sh migration-db <모니터링-private-IP> migration-mysql
+```
+
+### 8-4. 관측 시작과 Grafana 검색
+
+MySQL `general.log`는 SQL 접수 내용을 남긴다. 부하 실험의 짧은 구간에만 V1 관리자 세션에서
+`SET GLOBAL log_output='FILE'`, `SET GLOBAL general_log_file='/var/lib/mysql/general.log'`,
+`SET GLOBAL general_log=ON`을 적용하고, 실험이 끝나면 `general_log=OFF`로 되돌린다.
+원래 설정을 먼저 기록한다. 상세 단계와 로그 보안 주의사항은 이 문서의 `4. MySQL 로그 설정`을 따른다.
+
+Grafana Explore에 자동 등록된 Loki 또는 Prometheus 데이터 소스를 선택하고 다음 쿼리를 쓴다.
+
+```logql
+{host="v1", job="docker", container="backend"} |= "event=http_request"
+{host="v1", job="docker", container="backend"} |~ "event=http_request.*status=5[0-9]{2}"
+{host="v1", job="mysql-general"} |~ "(INSERT|UPDATE|DELETE)"
+sum(count_over_time({host="v1", job="mysql-general"} |~ "(?i)(INSERT|UPDATE|DELETE)" [1m]))
+```
+
+```promql
+mysql_slave_status_seconds_behind_master
+node_memory_MemAvailable_bytes
+```
+
+백엔드 로그는 API 경로별 상태와 `requestId`를 보여주고, MySQL general log는 DB에 도착한
+SQL을 보여준다. Prometheus MySQL exporter는 현재 이관 DB의 global status 및 replica 지표를
+5초 간격으로 수집한다. V1 MySQL은 현재 Docker 호스트 포트가 공개되지 않아 mysqld exporter를
+붙이지 않으며, V1의 접수 SQL은 general log 파일을 사용한다.
+
+General log에 SQL 값이 포함될 수 있고 DB I/O와 로그 저장량도 늘어난다. Loki와 Prometheus는
+72시간 보관으로 설정했다. 이 구성은 요청이 실패한 이유를 자동 판정하거나 실패한 쓰기를
+재처리하지 않는 관측용 구성이다. 앱 로그와 SQL 로그는 시간대별 비교는 가능하지만,
+현재 로그 형식만으로 API `requestId`와 MySQL 세션을 직접 연결하지는 못한다.
+애플리케이션 밖에서 DB에 도착하지 않은 요청의 SQL 원문은 MySQL 로그에도 없다.
+
+## 공식 문서
+
+- [PMM MySQL 수집 지표](https://docs.percona.com/percona-monitoring-and-management/3/use/qan/mysql.html)
+- [PMM CLI 인증과 설정](https://docs.percona.com/percona-monitoring-and-management/3/use/commands/pmm-admin/config.html)
+- [MySQL Slow query log](https://dev.mysql.com/doc/refman/8.4/en/slow-query-log.html)
+- [MySQL General query log](https://dev.mysql.com/doc/refman/8.4/en/query-log.html)
+- [MySQL Shell Linux 설치](https://dev.mysql.com/doc/mysql-shell/8.4/en/mysql-shell-install-linux-quick.html)
+- [MySQL Shell 8.4 LTS 다운로드](https://dev.mysql.com/downloads/shell/8.4.html)
+- [MySQL Shell dump](https://dev.mysql.com/doc/mysql-shell/8.4/en/mysql-shell-utilities-dump-instance-schema.html)
+- [MySQL Shell load와 GTID](https://dev.mysql.com/doc/mysql-shell/8.4/en/mysql-shell-utilities-load-dump.html)
+- [온라인 GTID 활성화](https://dev.mysql.com/doc/refman/8.4/en/replication-mode-change-online-enable-gtids.html)
+- [GTID 기반 복제 연결](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-howto.html)
+- [GTID 대기 함수](https://dev.mysql.com/doc/refman/8.4/en/gtid-functions.html)
+- [Grafana Alloy로 로그 수집](https://grafana.com/docs/alloy/latest/tutorials/logs-and-relabeling-basics/)
+- [Alloy Docker 로그 수집기](https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.docker/)
+- [Promtail에서 Alloy로 이전](https://grafana.com/docs/alloy/latest/set-up/migrate/from-promtail/)
+- [Prometheus MySQL exporter](https://github.com/prometheus/mysqld_exporter)
