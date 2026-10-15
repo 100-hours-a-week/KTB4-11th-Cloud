@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +66,63 @@ def task_definition_status(region: str, task_definition: str) -> str:
         "text",
     )
     return output.strip()
+
+
+def wait_for_deployments(
+    region: str,
+    cluster: str,
+    names: list[str],
+    timeout_seconds: int,
+) -> list[dict[str, Any]]:
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        services = describe_services(region, cluster, names)
+        ready = {service.get("serviceName") for service in services} == set(names)
+        failed = False
+        for service in services:
+            deployments = service.get("deployments", [])
+            primary = next(
+                (item for item in deployments if item.get("status") == "PRIMARY"),
+                {},
+            )
+            state = primary.get("rolloutState", "MISSING")
+            failed = failed or any(
+                item.get("rolloutState") == "FAILED" for item in deployments
+            )
+            ready = ready and (
+                state == "COMPLETED"
+                and len(deployments) == 1
+                and service.get("runningCount") == service.get("desiredCount")
+                and service.get("pendingCount", 0) == 0
+            )
+            print(
+                f"Waiting for {service.get('serviceName')}: rollout={state}, "
+                f"desired={service.get('desiredCount')}, "
+                f"running={service.get('runningCount')}, "
+                f"pending={service.get('pendingCount')}",
+                flush=True,
+            )
+        if failed or time.monotonic() >= deadline:
+            reason = "deployment failed" if failed else "deployment wait timed out"
+            print(f"ECS {reason} (limit: {timeout_seconds}s)", file=sys.stderr)
+            for service in services:
+                print(f"Service: {service.get('serviceName')}", file=sys.stderr)
+                for deployment in service.get("deployments", []):
+                    print(
+                        f"  {deployment.get('taskDefinition')}: "
+                        f"{deployment.get('rolloutState')} — "
+                        f"{deployment.get('rolloutStateReason', '')}",
+                        file=sys.stderr,
+                    )
+                for event in service.get("events", [])[:5]:
+                    print(
+                        f"  {event.get('createdAt')}: {event.get('message')}",
+                        file=sys.stderr,
+                    )
+            raise SystemExit(1)
+        if ready:
+            return services
+        time.sleep(min(10, max(0, deadline - time.monotonic())))
 
 
 def validate_service(
@@ -145,6 +203,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--region", required=True)
     parser.add_argument("--cluster", required=True)
+    parser.add_argument("--timeout-seconds", type=int, default=600)
     parser.add_argument(
         "--expected-task-definition",
         action="append",
@@ -153,6 +212,8 @@ def main() -> None:
     )
     parser.add_argument("services", nargs="+")
     args = parser.parse_args()
+    if args.timeout_seconds <= 0:
+        parser.error("--timeout-seconds must be greater than zero")
 
     expected_task_definitions: dict[str, str] = {}
     for value in args.expected_task_definition:
@@ -168,19 +229,12 @@ def main() -> None:
             )
         expected_task_definitions[service_name] = task_definition
 
-    run_aws(
-        "ecs",
-        "wait",
-        "services-stable",
-        "--region",
+    services = wait_for_deployments(
         args.region,
-        "--cluster",
         args.cluster,
-        "--services",
-        *args.services,
+        args.services,
+        args.timeout_seconds,
     )
-
-    services = describe_services(args.region, args.cluster, args.services)
     found_names = {service.get("serviceName") for service in services}
     missing = sorted(set(args.services) - found_names)
     errors = [f"{name}: service was not returned by ECS" for name in missing]
