@@ -15,6 +15,10 @@ locals {
     },
     {
       bucket = "stockspoon-terraform-state-v1"
+      key    = "storage/terraform.tfstate"
+    },
+    {
+      bucket = "stockspoon-terraform-state-v1"
       key    = "shared-infra/terraform.tfstate"
     },
     {
@@ -90,6 +94,7 @@ locals {
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v1-app-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v1-ai-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-loadtest-*",
+    "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-stock-logo-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v2-dev-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v2-prod-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-v1-app-*",
@@ -150,6 +155,10 @@ locals {
     "arn:${data.aws_partition.github_actions_terraform.partition}:ses:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:identity/notify.stock-spoon.com",
     "arn:${data.aws_partition.github_actions_terraform.partition}:ses:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:identity/ruby0656@naver.com",
   ]
+
+  # storage root와 IAM 정책에서 동일한 결정적 이름을 사용한다.
+  stock_logo_bucket_name = "stockspoon-stock-logos-${data.aws_caller_identity.github_actions_terraform.account_id}"
+  stock_logo_bucket_arn  = "arn:${data.aws_partition.github_actions_terraform.partition}:s3:::${local.stock_logo_bucket_name}"
 
   github_actions_terraform_account_iam_arns = concat(
     [
@@ -235,7 +244,6 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_assume_role" {
 
 data "aws_iam_policy_document" "github_actions_terraform_read" {
   statement {
-    sid    = "ReadResourcesManagedByTerraform"
     effect = "Allow"
     actions = [
       "acm:Describe*",
@@ -284,45 +292,42 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
   }
 
   statement {
-    sid    = "ReadAlbAccessLogBucketConfiguration"
     effect = "Allow"
     actions = [
       "s3:Get*",
       "s3:ListBucket",
     ]
-    resources = [local.alb_access_log_bucket_arn]
+    resources = [
+      local.alb_access_log_bucket_arn,
+      local.stock_logo_bucket_arn,
+    ]
   }
 
   statement {
-    sid       = "ReadRepositorySecretPolicies"
     effect    = "Allow"
     actions   = ["secretsmanager:GetResourcePolicy"]
     resources = local.github_actions_terraform_secret_arns
   }
 
   statement {
-    sid       = "ReadCanonicalUbuntuAmiParameter"
     effect    = "Allow"
     actions   = ["ssm:GetParameter"]
     resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id"]
   }
 
   statement {
-    sid       = "ReadEcsOptimizedAmiParameters"
     effect    = "Allow"
     actions   = ["ssm:GetParameter", "ssm:GetParameters"]
     resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/*"]
   }
 
   statement {
-    sid       = "ReadTerraformStates"
     effect    = "Allow"
     actions   = ["s3:GetObject"]
     resources = local.github_actions_terraform_state_object_arns
   }
 
   statement {
-    sid    = "LockTerraformStates"
     effect = "Allow"
     actions = [
       "s3:DeleteObject",
@@ -333,14 +338,12 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
   }
 
   statement {
-    sid       = "LocateTerraformStateBuckets"
     effect    = "Allow"
     actions   = ["s3:GetBucketLocation"]
     resources = local.github_actions_terraform_bucket_arns
   }
 
   statement {
-    sid       = "ListTerraformStatePrefixes"
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
     resources = local.github_actions_terraform_bucket_arns
@@ -489,6 +492,23 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
       "s3:PutLifecycleConfiguration",
     ]
     resources = [local.alb_access_log_bucket_arn]
+  }
+
+  statement {
+    sid    = "ManageStockLogoBucket"
+    effect = "Allow"
+    actions = [
+      "s3:CreateBucket",
+      "s3:DeleteBucket",
+      "s3:DeleteBucketPolicy",
+      "s3:PutBucketPolicy",
+      "s3:PutBucketOwnershipControls",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketTagging",
+      "s3:PutBucketVersioning",
+      "s3:PutEncryptionConfiguration",
+    ]
+    resources = [local.stock_logo_bucket_arn]
   }
 
   statement {

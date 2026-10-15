@@ -20,6 +20,7 @@ ROOT_ORDER = [
     "redis",
     "redis@prod",
     "app-server",
+    "storage",
     "iam",
     "ecr",
     "ecs",
@@ -30,6 +31,7 @@ ROOT_ORDER = [
 DEPENDENTS = {
     "shared-infra": {"app-server", "ai-server/infra", "ecs", "redis@prod"},
     "app-server": {"ai-server/infra", "ecs"},
+    "storage": {"iam"},
     "test-infra": {"redis", "ai-server/dev-infra"},
     "messaging": {"ai-server/dev-infra"},
     "messaging@prod": {"ai-server/infra"},
