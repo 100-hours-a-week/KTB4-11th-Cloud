@@ -131,7 +131,10 @@ resource "aws_ecs_task_definition" "market_http" {
         { name = "MARKET_HTTP_VALKEY_TLS", value = "true" },
         { name = "MARKET_HTTP_VALKEY_AUTH_MODE", value = "iam" },
         { name = "MARKET_HTTP_AWS_REGION", value = var.aws_region },
-        { name = "MARKET_HTTP_DOCS_ENABLED", value = "false" },
+        { name = "MARKET_HTTP_CORS_ORIGINS", value = jsonencode(["*"]) },
+        { name = "MARKET_HTTP_CORS_HEADERS", value = jsonencode(["*"]) },
+        { name = "MARKET_HTTP_DOCS_ENABLED", value = "true" },
+        { name = "MARKET_HTTP_DOCS_PATH_PREFIX", value = "/market" },
         { name = "MARKET_HTTP_LOG_LEVEL", value = var.market_http_log_level },
       ]
 
