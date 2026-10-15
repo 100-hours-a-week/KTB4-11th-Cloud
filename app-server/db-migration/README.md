@@ -1,18 +1,24 @@
 # V1 MySQL 이관 실습 인프라
 
 V1 운영 EC2와 같은 VPC 및 Public Subnet에 다음 세 호스트를 구성한다.
-이관 DB EC2는 이미 생성되어 있으며, 이번 계획은 이를 유지하고 부하기와 PMM을 추가한다.
+이관 DB EC2는 이미 생성되어 있으며, 이번 계획은 이를 유지하고 부하기와 모니터링 호스트를 사용한다.
 
 | 역할 | EC2 유형 | 메모리 | 암호화 gp3 | 준비하는 프로그램 |
 | --- | --- | --- | --- | --- |
 | 이관 DB | t3a.medium | 4 GiB | 40 GiB | Docker, Compose; MySQL은 아래 별도 설정 단계에서 실행 |
 | API 부하기 | t3a.small | 2 GiB | 20 GiB | Docker, Compose, k6 |
-| PMM Server | t3a.medium | 4 GiB | 60 GiB | Docker, Compose, PMM Server 3.9.1 |
+| 모니터링 호스트 | t3a.medium | 4 GiB | 60 GiB | Docker, Compose; PMM 또는 PLG 실습 |
 
 2026-10-15 기준 이관 DB는 `i-081a5f4798f592f49`, private IP `10.0.1.217`이다.
-부하기와 PMM의 apply는 사용자가 직접 실행한다. 계획 검증은 완료했으며,
-신규 두 호스트의 생성과 서비스 동작 검증은 아직 수행하지 않았다.
+사용자의 apply 후 실습 EC2 세 대의 cloud-init 완료, k6 설치, PMM 컨테이너 healthy 및
+웹 응답 200을 읽기 전용으로 확인했다. 이관 DB의 MySQL 실행과 PMM MySQL 등록은 별도 단계다.
 초기 데이터 적재, GTID replication 연결, 실제 부하 발생, Primary 교체는 별도 단계다.
+접속 주소와 로그 확인, 초기 적재 및 복제 준비 순서는 [실행 안내](OPERATIONS.md)를 참고한다.
+
+PLG는 기존 모니터링 호스트에 설치한다. t3a.medium에서 메모리를 나눠 쓰지 않도록
+설치 스크립트가 실행 중인 PMM 컨테이너를 중지하며, PMM 데이터 볼륨과 설정은 보존한다.
+PLG 구성은 V1 및 이관 DB의 Docker 로그, MySQL general/slow 로그 파일, 호스트 지표와
+이관 DB의 MySQL/복제 지표를 수집한다. 정확한 설치 순서는 [PLG 실행 안내](OPERATIONS.md#8-plg로-쓰기-실패-관측)를 따른다.
 
 ## PMM Server와 Client
 
@@ -58,7 +64,7 @@ AWS_PROFILE=stockspoon terraform -chdir=app-server validate
 AWS_PROFILE=stockspoon terraform -chdir=app-server plan -out=db-migration-three-hosts.tfplan
 ```
 
-이 파일들은 아직 커밋되지 않았다. apply 후 같은 state를 사용하는 이전 코드에서
+apply 후 같은 state를 사용하는 이전 코드에서
 plan/apply하면 해당 코드에 없는 실습 리소스가 삭제 대상으로 잡힐 수 있다.
 실습 중에는 다른 브랜치 및 자동화의 `app-server` apply와 조율한다.
 

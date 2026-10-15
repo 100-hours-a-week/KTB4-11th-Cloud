@@ -32,6 +32,23 @@ chmod 0600 "$MYSQL_DIRECTORY/.env"
 cd "$MYSQL_DIRECTORY"
 docker compose up -d --wait --wait-timeout 300
 
+# An older deployed healthcheck may accept the temporary initialization server.
+# Wait for an authenticated TCP query before running account configuration.
+MYSQL_READY=false
+for attempt in $(seq 1 60); do
+  if docker exec migration-mysql sh -c \
+    'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=2 --user=root --batch --skip-column-names --execute="SELECT 1"' \
+    >/dev/null 2>&1; then
+    MYSQL_READY=true
+    break
+  fi
+  sleep 2
+done
+if [ "$MYSQL_READY" != "true" ]; then
+  printf '%s\n' 'MySQL TCP authentication did not become ready; inspect the container logs and existing password file.' >&2
+  exit 1
+fi
+
 PMM_PASSWORD="$(cat secrets/pmm-password)"
 docker exec -i migration-mysql sh -c \
   'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql -uroot' <<SQL

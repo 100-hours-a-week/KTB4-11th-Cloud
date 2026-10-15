@@ -1,0 +1,53 @@
+discovery.docker "local" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "container_logs" {
+  targets = discovery.docker.local.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.container_logs.output
+  labels     = { "host" = sys.env("HOST_ROLE"), "job" = "docker" }
+  forward_to = [loki.write.default.receiver]
+}
+
+local.file_match "mysql_general" {
+  path_targets = [{
+    "__path__" = "/var/lib/mysql/general.log",
+    "host"     = sys.env("HOST_ROLE"),
+    "job"      = "mysql-general",
+  }]
+}
+
+loki.source.file "mysql_general" {
+  targets    = local.file_match.mysql_general.targets
+  forward_to = [loki.write.default.receiver]
+}
+
+local.file_match "mysql_slow" {
+  path_targets = [{
+    "__path__" = "/var/lib/mysql/slow.log",
+    "host"     = sys.env("HOST_ROLE"),
+    "job"      = "mysql-slow",
+  }]
+}
+
+loki.source.file "mysql_slow" {
+  targets    = local.file_match.mysql_slow.targets
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = sys.env("LOKI_PUSH_URL")
+  }
+}
