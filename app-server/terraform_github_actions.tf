@@ -244,7 +244,6 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_assume_role" {
 
 data "aws_iam_policy_document" "github_actions_terraform_read" {
   statement {
-    sid    = "ReadResourcesManagedByTerraform"
     effect = "Allow"
     actions = [
       "acm:Describe*",
@@ -293,58 +292,42 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
   }
 
   statement {
-    sid    = "ReadAlbAccessLogBucketConfiguration"
-    effect = "Allow"
-    actions = [
-      "s3:Get*",
-      "s3:ListBucket",
-    ]
-    resources = [local.alb_access_log_bucket_arn]
-  }
-
-  statement {
-    sid    = "ReadStockLogoBucketConfiguration"
     effect = "Allow"
     actions = [
       "s3:Get*",
       "s3:ListBucket",
     ]
     resources = [
+      local.alb_access_log_bucket_arn,
       local.stock_logo_bucket_arn,
-      "${local.stock_logo_bucket_arn}/*",
     ]
   }
 
   statement {
-    sid       = "ReadRepositorySecretPolicies"
     effect    = "Allow"
     actions   = ["secretsmanager:GetResourcePolicy"]
     resources = local.github_actions_terraform_secret_arns
   }
 
   statement {
-    sid       = "ReadCanonicalUbuntuAmiParameter"
     effect    = "Allow"
     actions   = ["ssm:GetParameter"]
     resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id"]
   }
 
   statement {
-    sid       = "ReadEcsOptimizedAmiParameters"
     effect    = "Allow"
     actions   = ["ssm:GetParameter", "ssm:GetParameters"]
     resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/ecs/optimized-ami/amazon-linux-2023/*"]
   }
 
   statement {
-    sid       = "ReadTerraformStates"
     effect    = "Allow"
     actions   = ["s3:GetObject"]
     resources = local.github_actions_terraform_state_object_arns
   }
 
   statement {
-    sid    = "LockTerraformStates"
     effect = "Allow"
     actions = [
       "s3:DeleteObject",
@@ -355,14 +338,12 @@ data "aws_iam_policy_document" "github_actions_terraform_read" {
   }
 
   statement {
-    sid       = "LocateTerraformStateBuckets"
     effect    = "Allow"
     actions   = ["s3:GetBucketLocation"]
     resources = local.github_actions_terraform_bucket_arns
   }
 
   statement {
-    sid       = "ListTerraformStatePrefixes"
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
     resources = local.github_actions_terraform_bucket_arns
