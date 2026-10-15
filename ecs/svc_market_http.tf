@@ -112,6 +112,17 @@ resource "aws_ecs_task_definition" "market_http" {
       essential   = true
       stopTimeout = var.market_http_stop_timeout_seconds
 
+      healthCheck = {
+        command = [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${var.market_http_container_port}/health', timeout=3)\" || exit 1",
+        ]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 30
+      }
+
       portMappings = [
         {
           containerPort = var.market_http_container_port
@@ -131,7 +142,10 @@ resource "aws_ecs_task_definition" "market_http" {
         { name = "MARKET_HTTP_VALKEY_TLS", value = "true" },
         { name = "MARKET_HTTP_VALKEY_AUTH_MODE", value = "iam" },
         { name = "MARKET_HTTP_AWS_REGION", value = var.aws_region },
-        { name = "MARKET_HTTP_DOCS_ENABLED", value = "false" },
+        { name = "MARKET_HTTP_CORS_ORIGINS", value = jsonencode(["*"]) },
+        { name = "MARKET_HTTP_CORS_HEADERS", value = jsonencode(["*"]) },
+        { name = "MARKET_HTTP_DOCS_ENABLED", value = "true" },
+        { name = "MARKET_HTTP_DOCS_PATH_PREFIX", value = "/market" },
         { name = "MARKET_HTTP_LOG_LEVEL", value = var.market_http_log_level },
       ]
 
@@ -197,12 +211,6 @@ resource "aws_ecs_service" "market_http" {
 
   propagate_tags          = "SERVICE"
   enable_ecs_managed_tags = true
-
-  # 이미지 배포는 AI 레포 cd-ecs-v2.yaml이 새 리비전을 등록해 수행한다.
-  # apply가 CD로 배포된 리비전을 ai_image_tag 리비전으로 되돌리지 않도록 무시한다.
-  lifecycle {
-    ignore_changes = [task_definition]
-  }
 
   depends_on = [
     aws_lb_listener_rule.market_http,
