@@ -12,6 +12,11 @@ output "app_instance_id" {
   value       = aws_instance.app.id
 }
 
+output "app_private_ip" {
+  description = "Private IP of the V1 application EC2 (V1 MySQL host for V2 ECS backend tasks)"
+  value       = aws_instance.app.private_ip
+}
+
 output "app_public_ip" {
   description = "Elastic IP used as the EC2_HOST GitHub Environment secret"
   value       = aws_eip.app.public_ip
