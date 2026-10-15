@@ -82,3 +82,8 @@ output "github_actions_ecs_deploy_role_arn" {
   description = "Role ARN for the AI repository AWS_ECS_DEPLOY_ROLE_ARN variable (cd-ecs-v2.yaml)"
   value       = aws_iam_role.github_actions_ecs_deploy.arn
 }
+
+output "github_actions_backend_deploy_role_arn" {
+  description = "Role ARN for the BE repository AWS_V2_ECS_DEPLOY_ROLE_ARN secret (cd-ecs-dev.yaml)"
+  value       = aws_iam_role.github_actions_backend_deploy.arn
+}

@@ -290,3 +290,13 @@ variable "ecs_deploy_github_subjects" {
     "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/dev",
   ]
 }
+
+# BE 레포 ci-dev.yaml이 dev push에서 cd-ecs-dev.yaml을 호출한다. (workflow_call은 호출한 워크플로의 ref를 sub로 쓴다)
+# 배포 job에 GitHub environment를 지정하면 sub가 environment:<이름>으로 바뀌므로 함께 수정한다.
+variable "backend_ecs_deploy_github_subjects" {
+  description = "GitHub OIDC subjects allowed to deploy the backend service to ECS"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-11th-BE@1352977792:ref:refs/heads/dev",
+  ]
+}
