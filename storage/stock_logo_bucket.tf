@@ -4,7 +4,7 @@ locals {
   stock_logo_bucket_name = "stockspoon-stock-logos-${data.aws_caller_identity.current.account_id}"
 }
 
-# 주식 로고 원본 저장소. 외부 공개는 차단하고 향후 CloudFront OAC를 통해 제공한다.
+# 주식 로고 원본 저장소. 객체 조회만 공개하고 변경은 IAM 권한으로 제한한다.
 resource "aws_s3_bucket" "stock_logos" {
   bucket        = local.stock_logo_bucket_name
   force_destroy = false
@@ -33,9 +33,9 @@ resource "aws_s3_bucket_public_access_block" "stock_logos" {
   bucket = aws_s3_bucket.stock_logos.id
 
   block_public_acls       = true
-  block_public_policy     = true
+  block_public_policy     = false
   ignore_public_acls      = true
-  restrict_public_buckets = true
+  restrict_public_buckets = false
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "stock_logos" {
@@ -57,6 +57,19 @@ resource "aws_s3_bucket_versioning" "stock_logos" {
 }
 
 data "aws_iam_policy_document" "stock_logos" {
+  statement {
+    sid     = "AllowPublicRead"
+    effect  = "Allow"
+    actions = ["s3:GetObject"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = ["${aws_s3_bucket.stock_logos.arn}/*"]
+  }
+
   statement {
     sid     = "DenyInsecureTransport"
     effect  = "Deny"

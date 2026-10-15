@@ -5,11 +5,12 @@
 ## 주식 로고 버킷
 
 - 버킷 이름: `stockspoon-stock-logos-<AWS_ACCOUNT_ID>`
-- 퍼블릭 접근 차단
+- 객체 조회(`s3:GetObject`) 공개
+- 퍼블릭 ACL 차단 및 bucket policy로만 공개 범위 관리
 - ACL 비활성화(`BucketOwnerEnforced`)
 - SSE-S3 암호화
 - 객체 버전 관리
 - 비보안 HTTP 요청 거부
 - Terraform 삭제 방지
 
-CloudFront와 Route 53 연결은 이 root의 현재 범위에 포함하지 않는다. 객체 접근 권한은 `iam` root에서 관리한다.
+CloudFront와 Route 53 연결은 이 root의 현재 범위에 포함하지 않는다. 객체 업로드와 수정 권한은 `iam` root에서 관리한다.
