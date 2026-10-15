@@ -86,3 +86,36 @@ output "app_alert_email_from" {
   description = "Verified SES sender address for application alarm notifications"
   value       = local.app_alert_email_from
 }
+
+output "db_migration_host" {
+  description = "Connection and disk identifiers for the migration target EC2"
+  value = var.db_migration_enabled ? {
+    instance_id       = aws_instance.db_migration[0].id
+    instance_type     = aws_instance.db_migration[0].instance_type
+    private_ip        = aws_instance.db_migration[0].private_ip
+    public_ip         = aws_instance.db_migration[0].public_ip
+    security_group_id = aws_security_group.db_migration[0].id
+    root_volume_id    = aws_instance.db_migration[0].root_block_device[0].volume_id
+    vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
+    subnet_id         = data.terraform_remote_state.shared.outputs.public_subnet_id
+  } : null
+}
+
+output "db_migration_support_hosts" {
+  description = "Connection details for the API load generator and PMM EC2 hosts"
+  value = {
+    for role, instance in aws_instance.db_migration_support : role => {
+      instance_id       = instance.id
+      instance_type     = instance.instance_type
+      private_ip        = instance.private_ip
+      public_ip         = instance.public_ip
+      security_group_id = aws_security_group.db_migration_support[role].id
+      root_volume_id    = instance.root_block_device[0].volume_id
+    }
+  }
+}
+
+output "db_migration_pmm_url" {
+  description = "PMM HTTPS UI; allowed only from db_migration_admin_cidrs"
+  value       = var.db_migration_enabled ? "https://${aws_instance.db_migration_support["pmm"].public_ip}:8443" : null
+}

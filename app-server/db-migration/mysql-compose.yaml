@@ -1,0 +1,53 @@
+name: stockspoon-migration-mysql
+
+services:
+  mysql:
+    image: mysql:8.4.11
+    container_name: migration-mysql
+    restart: unless-stopped
+    ports:
+      - "${MYSQL_BIND_ADDRESS:?MYSQL_BIND_ADDRESS is required}:3306:3306"
+    command:
+      - --server-id=102
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-bin=migration-bin
+      - --log-replica-updates=ON
+      - --binlog-format=ROW
+      - --binlog-expire-logs-seconds=604800
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+      - --innodb-buffer-pool-size=1G
+      - --read-only=ON
+      - --performance-schema=ON
+      - --performance-schema-consumer-statements-digest=ON
+      - --innodb-monitor-enable=all
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      TZ: Asia/Seoul
+    secrets:
+      - mysql_root_password
+    volumes:
+      - mysql-data:/var/lib/mysql
+    cpus: 1.5
+    mem_limit: 2560m
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$(cat /run/secrets/mysql_root_password) mysqladmin ping -uroot --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+secrets:
+  mysql_root_password:
+    file: ./secrets/mysql-root-password
+
+volumes:
+  mysql-data:
