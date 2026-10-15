@@ -170,7 +170,7 @@ variable "backend_test_rule_priority" {
 variable "ai_image_tag" {
   description = "Tag (git SHA) of the AI app image in the public ECR repository; empty skips task definitions and services"
   type        = string
-  default     = ""
+  default     = "339f334d22a8c17aff3bc3a8c4ec24e361b730fc"
 }
 
 variable "ai_questdb_http_port" {
