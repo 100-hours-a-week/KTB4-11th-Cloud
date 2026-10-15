@@ -52,11 +52,10 @@ aws ssm put-parameter --type SecureString \
 |---|---|
 | `platform_cluster.tf` | ECS Cluster, Service ASG(Launch Template, 인스턴스 SG), Capacity Provider |
 | `svc_backend.tf` | Backend 로그 그룹, Task Role, Task SG, Green Target Group, Task Definition, ECS Service |
-| `svc_market_common.tf` | AI market 서비스 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
+| `svc_market_common.tf` | market-http 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
 | `svc_market_http.tf` | market-http(Socket) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
-| `svc_market_streamer.tf` | market-streamer(Market Data) 로그 그룹, Task Role(Valkey `market-data`), Task SG, Task Definition, ECS Service |
 | `ci_deploy_role.tf` | AI 레포 `cd-ecs-v2.yaml`이 assume하는 ECS 배포 Role (Task Definition 등록, market 서비스 갱신, Task Role PassRole) |
-| `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB·PostgreSQL) |
+| `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB) |
 
 ## 용량 설계
 
@@ -82,23 +81,19 @@ curl -sN 'https://stock-spoon.com/market/prices/stream?codes=005930'   # SSE
 curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 ```
 
-## AI market 서비스 (market-http, market-streamer)
+## AI market-http
 
-AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 운영 Compose와 같이 `command`로 진입점을 골라 실행합니다.
+AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 `command = ["market-http"]`로 실행합니다. Service ASG(capacity provider `service`)에 배치합니다.
 
 - `ai_image_tag`(AI `dev` 커밋 SHA)가 비어 있으면 Task Definition과 Service는 만들지 않고 SG·Target Group·리스너 규칙·Role만 준비합니다. 이 값은 **서비스를 처음 만들 때만** 쓰입니다.
-- 이후 배포는 AI 레포 `cd-ecs-v2.yaml`이 담당합니다. `dev`의 CI Dev가 성공하면 그 커밋 이미지로 최신 Task Definition의 이미지만 바꿔 새 리비전을 등록하고 서비스를 갱신합니다. 두 서비스는 `ignore_changes = [task_definition]`이므로 apply가 CD 배포를 되돌리지 않습니다.
-- Terraform에서 환경 변수·리소스를 바꾸면 새 리비전만 등록되고, 다음 CD 실행(또는 `workflow_dispatch`) 때 반영됩니다.
-- 개발 EC2(`cd-dev.yaml`)도 같은 `dev` 코드로 market-http·market-streamer를 실행합니다. 같은 키움 키를 쓰는 동안 장중 로그에서 세션 충돌(`kiwoom_stream_closed` 반복)을 확인하고, 충돌하면 SSM의 키를 분리합니다.
-- 데이터 저장소는 당분간 **V1 AI 운영 서버**의 QuestDB(`9000`, market-http)와 PostgreSQL(`5432`, market-streamer)을 사용합니다. AI Compose가 두 포트를 `AI_PRIVATE_IP`에만 게시하고, AI SG는 각 Task SG만 허용합니다. V1 AI 서버가 단일 장애 지점이므로 V2 저장소로 이전할 때 `cross_root_rules.tf`의 AI SG 규칙과 함께 정리합니다.
-- QuestDB `9000`은 인증 없이 SQL을 실행할 수 있는 포트입니다. 현재는 SG와 private IP 바인딩으로만 막으며, Basic Auth 도입은 후속 작업입니다.
+- 이후 배포는 AI 레포 `cd-ecs-v2.yaml`이 담당합니다. `dev`의 CI Dev가 성공하면 그 커밋 이미지로 최신 Task Definition의 이미지만 바꿔 새 리비전을 등록하고 서비스를 갱신합니다. `ignore_changes = [task_definition]`이므로 apply가 CD 배포를 되돌리지 않습니다.
+- 과거 시세(`/market/bars`)는 **V1 AI 운영 서버** QuestDB(`9000`)를 조회합니다. AI Compose가 `AI_PRIVATE_IP`에만 게시하고, AI SG는 market-http Task SG만 허용합니다. QuestDB `9000`은 인증 없이 SQL을 실행할 수 있으므로 SG와 private IP 바인딩으로만 막고 있습니다.
+- 현재가(`/market/prices`)는 Valkey를 먼저 읽고, 없으면 QuestDB 최근 1분봉으로 채워 Valkey에 저장합니다. 이 저장에는 TTL이 없고 V2에는 현재가를 갱신하는 서비스(market-streamer)가 없으므로, **처음 조회된 값이 고정됩니다.** 현재는 `/market/bars`만 검증 대상으로 보고, `/market/prices`는 AI 코드 수정(TTL) 전까지 사용하지 않습니다.
+- market-streamer(키움 실시간 → Valkey)는 V2 ECS에서 운영하지 않습니다.
 
 | 서비스 | Task | 개수 | 배포 |
 |---|---|---|---|
 | market-http | 1 vCPU / 1 GiB (uvicorn 단일 프로세스) | 2, AZ·인스턴스 분산 | Rolling 100/200, Circuit Breaker |
-| market-streamer | 0.25 vCPU / 512 MiB | 1 고정 | 0/100 (기존 Task를 먼저 내려 키움 세션 중복 방지), 장 마감 후 배포 |
-
-market-streamer는 `STOP_AT`(KST)에 exit 0 하고, 그 이후에 시작하면 바로 종료하는 배치 구조입니다. 앱 기본값(15:40)으로 ECS Service에서 돌리면 장 마감 후 재시작을 반복하므로, 코드 변경 없이 `MARKET_STREAMER_STOP_AT=23:59`로 두어 하루 1번 재시작하는 상주 서비스처럼 운영합니다. 장외 시간에는 키움 세션만 유지되고 수신 데이터는 없습니다. 장 시간에만 실행하려면 Application Auto Scaling 예약 액션이 필요하며, Terraform CI 권한(`application-autoscaling:*`)을 먼저 추가해야 합니다. Worker ASG 도입 전까지 Service ASG에서 실행합니다.
 
 ### ECS 배포 Role 신뢰 조건
 
@@ -108,39 +103,19 @@ market-streamer는 `STOP_AT`(KST)에 exit 0 하고, 그 이후에 시작하면 �
 
 > **TODO:** AI 레포의 GitHub 기본 브랜치를 `dev`에서 다른 브랜치(예: `main`)로 바꾸면 `sub`가 `refs/heads/main`으로 바뀌어 `cd-ecs-v2` 배포가 `AssumeRoleWithWebIdentity` 단계에서 실패합니다. 기본 브랜치를 바꿀 때 `variables.tf`의 `ecs_deploy_github_subjects`를 함께 수정하고 apply합니다.
 
-### Secret · Variable 이름 목록
-
-값은 Terraform·문서에 두지 않고 CLI로 직접 등록합니다. (값이 state에 남지 않게)
+### GitHub Variable
 
 | 이름 | 위치 | 사용처 |
 |---|---|---|
-| `/stockspoon/v2/prod/market-streamer/POSTGRES_DSN` | SSM SecureString | market-streamer Task |
-| `/stockspoon/v2/prod/market-streamer/KIWOOM_APP_KEY` | SSM SecureString | market-streamer Task |
-| `/stockspoon/v2/prod/market-streamer/KIWOOM_SECRET_KEY` | SSM SecureString | market-streamer Task |
 | `AWS_ECS_DEPLOY_ROLE_ARN` | GitHub Variable (KTB4-11th-AI) | `cd-ecs-v2.yaml` (ECS 배포 Role, output `github_actions_ecs_deploy_role_arn`) |
 | `PUBLIC_ECR_AI_REPOSITORY_URI` | GitHub Variable (KTB4-11th-AI) | `cd-ecs-v2.yaml` 배포 이미지 주소 (CI Dev가 push한 `:<커밋 SHA>`) |
-
-### market-streamer Secret 등록
-
-```bash
-for name in POSTGRES_DSN KIWOOM_APP_KEY KIWOOM_SECRET_KEY; do
-  aws ssm put-parameter --type SecureString \
-    --name "/stockspoon/v2/prod/market-streamer/$name" --value '<값>'
-done
-# POSTGRES_DSN 예: postgresql+psycopg://<user>:<password>@<V1 AI private IP>:5432/<db>
-```
 
 ### 전환 순서
 
 1. 이 root apply (`ai_image_tag` 비움): SG·Target Group·`/market/*` 규칙·Task Role·ECS 배포 Role 생성
 2. AI 레포 Variable `AWS_ECS_DEPLOY_ROLE_ARN`에 output `github_actions_ecs_deploy_role_arn` 등록
-3. 위 SSM Secret 등록, 키움 앱키 허용 IP에 NAT Gateway EIP(`shared-infra` output `nat_gateway_public_ip`) 등록 여부 확인
-4. AI 레포 Secret `PROD_AI_ENV`(운영 `.env` 전체, `AI_PRIVATE_IP` 포함) 등록
-5. AI 변경을 `dev`에 머지 → CI Dev가 이미지 push (`cd-ecs-v2`는 서비스가 아직 없어 실패해도 정상)
-6. `ai_image_tag`를 5의 커밋 SHA로 설정해 apply → ECS 서비스 생성
-7. **장 마감 후** AI `dev` → `main` 반영: 운영 EC2에서 market 서비스 제외, PostgreSQL·QuestDB 포트 게시
-8. 확인: `/market/health`, `/market/bars/...`, market-streamer 로그 `kiwoom_registered`
+3. 운영 AI 서버 QuestDB `9000`이 `AI_PRIVATE_IP`에 게시됐는지 확인: `sudo ss -ltnp | grep :9000`
+4. `ai_image_tag`를 AI `dev` 커밋 SHA(CI Dev가 push한 이미지)로 설정해 apply → market-http 서비스 생성
+5. 확인: Target Group healthy, `/market/health`, `/market/bars/005930?timeframe=1d&limit=5`
 
-6과 7 사이에는 운영 DB 포트가 열려 있지 않아 market-http `/bars`와 market-streamer 시작이 실패합니다. 같은 장 마감 시간대에 이어서 진행합니다.
-
-롤백: 이미지 문제는 이전 Task Definition 리비전으로 `aws ecs update-service --task-definition <이전 ARN>`. market-streamer를 멈추려면 `desired_count`를 0으로 내립니다.
+롤백: 이미지 문제는 이전 Task Definition 리비전으로 `aws ecs update-service --task-definition <이전 ARN>`. 서비스를 제거하려면 `ai_image_tag`를 비우고 apply합니다.
