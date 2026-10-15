@@ -89,7 +89,10 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
   - EIP로 들어온 트래픽도 private IP로 전달되므로 바인딩 주소로는 외부 노출을 막을 수 없습니다. V1 앱 SG에 넓은 인바운드 규칙을 추가하면 3306도 함께 열립니다.
 - V1 Backend(main 코드)와 같은 DB를 쓰므로 설정으로 운영 영향을 막습니다.
   - `JPA_DDL_AUTO`·`SPRING_JPA_HIBERNATE_DDL_AUTO=none`: dev 코드가 운영 스키마를 변경하지 않습니다. DB 이관 기간에는 V1 스키마를 고정하므로 검증(`validate`)도 하지 않아, dev에 테이블이 추가돼도 기동은 되고 해당 API만 SQL 오류가 납니다.
-  - `KIWOOM_STREAM_ENABLED`·`KIWOOM_COLLECTOR_ENABLED=false`: V1 Backend와 같은 키움 키 세션 충돌과 체결 경로 중복 실행을 막습니다. 이 상태에서 주문 접수는 `MARKET_STREAM_UNAVAILABLE`로 거절될 수 있습니다.
+  - 키움 시세 스트림은 `backend_kiwoom_stream_enabled`(기본 `true`)로 켭니다. V1과 **별도로 발급한 키**(SSM `KIWOOM_APP_KEY`·`KIWOOM_APP_SECRET`)를 쓰므로 세션 충돌은 없습니다. 키움 허용 IP에 NAT Gateway EIP가 등록돼 있어야 합니다.
+    - V1과 ECS가 같은 PENDING 지정가 주문을 동시에 체결하려 해도, 양쪽 코드(V1 main·dev) 모두 `executeLimit`에서 계좌 행을 `FOR UPDATE`로 잠근 뒤 주문이 아직 PENDING인지 다시 읽으므로 먼저 커밋한 쪽만 체결됩니다. 호출부(`OrderExecutionListener`)에 바깥 트랜잭션이 없어 주문 재조회가 락 이후 최신 커밋을 봅니다.
+    - 끄면(`false`) ECS에서 주문 접수가 `MARKET_STREAM_UNAVAILABLE`로 거절될 수 있습니다. CD 적용 후에는 apply만으로 실행 중 Task가 바뀌지 않으므로 ECS 배포 job 재실행이 필요합니다.
+  - `KIWOOM_COLLECTOR_ENABLED=false`: collector는 V1 운영 서버가 담당합니다.
   - `backend_desired_count=1`: dev 코드의 주기 작업(만료 주문 정리)이 V1과 함께 운영 DB에 씁니다. 동시 실행 안전성을 BE와 확인한 뒤 늘립니다.
 - 운영 트래픽은 받지 않습니다. 테스트 헤더(`X-StockSpoon-Target: ecs`)가 있는 `/api/*` 요청만 들어옵니다.
 - 헬스체크는 actuator가 없어 인증 없이 200을 주는 `/api/v1/auth/csrf`를 임시로 사용합니다. DB·Valkey 상태는 반영하지 않으므로 Canary 전에 `/actuator/health`로 교체합니다.

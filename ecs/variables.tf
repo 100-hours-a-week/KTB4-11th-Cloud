@@ -177,6 +177,15 @@ variable "backend_kakao_client_secret_enabled" {
   default     = true
 }
 
+# true면 SSM의 키움 키(V1과 별도 발급)를 주입하고 시세 스트림을 켠다.
+# V1 Backend와 같은 DB의 PENDING 지정가 주문을 두 서버가 함께 체결하려 해도,
+# V1(main)·dev 모두 executeLimit에서 계좌 행 비관적 락 후 주문 상태를 재확인하므로 한쪽만 체결된다.
+variable "backend_kiwoom_stream_enabled" {
+  description = "Inject Kiwoom API keys from SSM and enable the Kiwoom market stream in the backend"
+  type        = bool
+  default     = true
+}
+
 variable "backend_test_rule_priority" {
   description = "Priority of the test listener rule on the HTTPS listener"
   type        = number
