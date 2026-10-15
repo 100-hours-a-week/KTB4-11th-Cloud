@@ -1,0 +1,30 @@
+name: stockspoon-migration-pmm
+
+services:
+  pmm-server:
+    image: percona/pmm-server:3.9.1
+    container_name: migration-pmm-server
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    environment:
+      PMM_CLICKHOUSE_CONFIG: low-memory
+      PMM_DATA_RETENTION: 72h
+      PMM_METRICS_RESOLUTION: 5s
+      PMM_METRICS_RESOLUTION_HR: 10s
+      PMM_METRICS_RESOLUTION_MR: 30s
+      PMM_METRICS_RESOLUTION_LR: 60s
+      PMM_ENABLE_UPDATES: "false"
+      PMM_ENABLE_TELEMETRY: "false"
+      PMM_ENABLE_BACKUP_MANAGEMENT: "false"
+    mem_limit: 3200m
+    volumes:
+      - pmm-data:/srv
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+volumes:
+  pmm-data:
