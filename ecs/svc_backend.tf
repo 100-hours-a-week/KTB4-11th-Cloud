@@ -247,6 +247,12 @@ resource "aws_ecs_service" "backend" {
   enable_ecs_managed_tags = true
 
   # Target Group이 리스너에 연결된 뒤에 Service를 만들어야 한다.
+  # 이미지 배포는 BE 레포 dev CI(cd-ecs-dev.yaml)가 새 리비전을 등록해 수행한다.
+  # apply가 CD로 배포된 리비전을 backend_image_tag 리비전으로 되돌리지 않도록 무시한다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   depends_on = [
     aws_lb_listener_rule.backend_test,
     aws_ecs_cluster_capacity_providers.main,

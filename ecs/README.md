@@ -54,7 +54,7 @@ aws ssm put-parameter --type SecureString \
 | `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, Task Definition(V1 MySQL 사용), ECS Service |
 | `svc_market_common.tf` | market-http 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
 | `svc_market_http.tf` | market-http(Socket) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
-| `ci_deploy_role.tf` | AI 레포 `cd-ecs-v2.yaml`이 assume하는 ECS 배포 Role (Task Definition 등록, market 서비스 갱신, Task Role PassRole) |
+| `ci_deploy_role.tf` | ECS 배포 Role: AI 레포 `cd-ecs-v2.yaml`(market-http), BE 레포 `cd-ecs-dev.yaml`(backend). Task Definition 등록, 자기 서비스 갱신, Task Role PassRole |
 | `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB), V1 앱 SG ingress(MySQL) |
 
 ## 용량 설계
@@ -83,7 +83,9 @@ curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 
 ## Backend (V1 DB 사용)
 
-BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지를 `backend_image_tag`(dev 커밋 SHA)로 실행합니다. 이미지를 바꿀 때는 이 값을 바꿔 apply합니다.
+BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지를 Service ASG(capacity provider `service`)에서 market-http와 함께 실행합니다.
+
+- `backend_image_tag`는 Task Definition 기준 리비전에만 쓰입니다. 이후 배포는 BE 레포 `cd-ecs-dev.yaml`이 담당합니다. (아래 [CD](#cd-be-레포-dev--ecs))
 
 - **DB는 V1 EC2의 MySQL을 그대로 사용합니다.** V1 Compose가 `3306`을 호스트에 게시하고, 외부 접근은 V1 앱 SG로만 통제합니다. 3306은 Backend Task SG만 허용합니다. (`cross_root_rules.tf`) 접속 주소는 `app-server` output `app_private_ip`를 참조합니다.
   - EIP로 들어온 트래픽도 private IP로 전달되므로 바인딩 주소로는 외부 노출을 막을 수 없습니다. V1 앱 SG에 넓은 인바운드 규칙을 추가하면 3306도 함께 열립니다.
@@ -125,6 +127,29 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 5. 확인: `curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf`, Target Group healthy, 로그에 Hikari·Valkey 연결 오류 없음
 
 롤백: `backend_desired_count = 0`으로 apply하거나 이전 Task Definition 리비전으로 `update-service`. DB 경로까지 닫으려면 SG 규칙 제거 후 compose `ports`를 되돌리고 db를 재생성합니다.
+
+### CD (BE 레포 dev → ECS)
+
+`dev` push → `ci-dev.yaml`(빌드·이미지 push) → `cd-dev.yaml`(V2 개발 EC2) 성공 → `cd-ecs-dev.yaml`(이 서비스) 순서로 배포합니다.
+
+1. 패밀리 `stockspoon-v2-prod-backend`의 **최신 리비전**을 읽어 `backend` 컨테이너 이미지만 `:<dev 커밋 SHA>`로 바꿔 새 리비전을 등록합니다. 환경변수·Secret 등은 Terraform이 관리하는 값을 그대로 씁니다.
+2. 서비스를 새 리비전으로 갱신하고, 그 배포의 `rolloutState`가 `COMPLETED`가 될 때까지 기다립니다. Circuit Breaker가 롤백하면(`FAILED`) 워크플로도 실패합니다.
+
+- 서비스에 `ignore_changes = [task_definition]`이 있으므로 apply가 CD 배포를 되돌리지 않습니다.
+- Terraform으로 Task Definition(환경변수·Secret 등)을 바꾸면 새 리비전만 등록되고 서비스는 그대로입니다. **다음 CD부터 반영**되며, 바로 반영하려면 BE 레포에서 최근 `Backend Dev CI` 실행의 ECS 배포 job을 재실행합니다.
+- 배포 Role(`stockspoon-v2-prod-github-actions-backend-deploy`)은 BE 레포 `dev` ref의 OIDC 토큰만 신뢰하며, backend 서비스 갱신과 backend Task Role PassRole만 허용합니다. AI 배포 Role과 분리되어 있습니다.
+- `dev` 커밋마다 **운영 DB(V1 MySQL)에 붙는** 이 서비스가 교체됩니다. V1 DB 사용 기간의 주의 사항(스키마 고정, 데이터 변경 테스트 금지)은 위와 같습니다.
+
+| 이름 | 위치 | 값 |
+|---|---|---|
+| `AWS_V2_ECS_DEPLOY_ROLE_ARN` | GitHub Secret (KTB4-11th-BE) | output `github_actions_backend_deploy_role_arn` |
+
+적용 순서 (feat/94 apply로 서비스가 dev 이미지·8080으로 바뀐 **뒤에** 진행):
+
+1. 이 변경 apply: 배포 Role 생성, 서비스 `ignore_changes` 추가 (서비스·Task Definition 변경 없음)
+2. BE 레포 Secret `AWS_V2_ECS_DEPLOY_ROLE_ARN` 등록
+3. BE 레포 CD PR을 `dev`에 머지 → 그 머지 커밋으로 첫 ECS 배포
+4. 확인: Actions 요약의 Task Definition 리비전, `curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf`
 
 ## AI market-http
 
