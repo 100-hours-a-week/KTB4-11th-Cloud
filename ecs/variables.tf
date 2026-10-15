@@ -161,7 +161,7 @@ variable "backend_test_rule_priority" {
 }
 
 # ---------------------------------------------------------------------------
-# AI market 서비스 공통 (market-http, market-streamer)
+# AI market-http
 # ---------------------------------------------------------------------------
 
 # AI CI Dev가 Public ECR(stockspoon-v1-ai)에 push한 통합 이미지의 태그(dev 커밋 SHA)
@@ -177,12 +177,6 @@ variable "ai_questdb_http_port" {
   description = "QuestDB HTTP port published on the V1 AI host private IP"
   type        = number
   default     = 9000
-}
-
-variable "ai_postgres_port" {
-  description = "PostgreSQL port published on the V1 AI host private IP"
-  type        = number
-  default     = 5432
 }
 
 # ---------------------------------------------------------------------------
@@ -248,42 +242,6 @@ variable "market_http_health_check_grace_period_seconds" {
 
 variable "market_http_log_level" {
   description = "market-http log level"
-  type        = string
-  default     = "INFO"
-}
-
-# ---------------------------------------------------------------------------
-# market-streamer (Market Data: 키움 0B WebSocket → Valkey)
-# ---------------------------------------------------------------------------
-
-# 단일 asyncio 프로세스, 운영 Compose mem_limit 384m 기준
-variable "market_streamer_task_cpu" {
-  description = "market-streamer task CPU units"
-  type        = number
-  default     = 256
-}
-
-variable "market_streamer_task_memory" {
-  description = "market-streamer task memory (MiB)"
-  type        = number
-  default     = 512
-}
-
-# 앱 기본값(15:40)이면 장 마감 후 ECS가 재시작을 반복하므로 하루의 끝으로 둔다. (svc_market_streamer.tf 참고)
-variable "market_streamer_stop_at" {
-  description = "KST HH:MM the streamer exits; ECS restarts it, so 23:59 means one restart a day"
-  type        = string
-  default     = "23:59"
-}
-
-variable "market_streamer_stop_timeout_seconds" {
-  description = "Time to wait after SIGTERM before SIGKILL"
-  type        = number
-  default     = 30
-}
-
-variable "market_streamer_log_level" {
-  description = "market-streamer log level"
   type        = string
   default     = "INFO"
 }

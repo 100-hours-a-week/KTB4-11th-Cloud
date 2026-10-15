@@ -91,7 +91,7 @@ resource "aws_lb_listener_rule" "market_http" {
 
 # ---------------------------------------------------------------------------
 # V1 AI 운영 서버 (ai-server/infra 소유 SG)
-# Compose가 QuestDB·PostgreSQL을 private IP에만 게시하고, 여기서 해당 Task SG만 허용한다.
+# Compose가 QuestDB를 private IP에만 게시하고, 여기서 market-http Task SG만 허용한다.
 # TODO: V2 데이터 저장소로 이전하면 제거
 # ---------------------------------------------------------------------------
 
@@ -102,13 +102,4 @@ resource "aws_vpc_security_group_ingress_rule" "ai_questdb_from_market_http" {
   to_port                      = var.ai_questdb_http_port
   ip_protocol                  = "tcp"
   description                  = "Allow V2 market-http tasks to query QuestDB"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "ai_postgres_from_market_streamer" {
-  security_group_id            = data.terraform_remote_state.ai.outputs.ai_security_group_id
-  referenced_security_group_id = aws_security_group.market_streamer_task.id
-  from_port                    = var.ai_postgres_port
-  to_port                      = var.ai_postgres_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow V2 market-streamer tasks to read KOSPI 200 members from PostgreSQL"
 }
