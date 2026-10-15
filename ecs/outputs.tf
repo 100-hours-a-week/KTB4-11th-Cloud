@@ -63,6 +63,11 @@ output "market_http_service_name" {
   value       = try(aws_ecs_service.market_http[0].name, null)
 }
 
+output "market_http_task_definition_arn" {
+  description = "Task definition ARN Terraform expects the market-http service to run"
+  value       = try(aws_ecs_task_definition.market_http[0].arn, null)
+}
+
 output "market_http_target_group_arn" {
   description = "Target group for market-http"
   value       = aws_lb_target_group.market_http.arn

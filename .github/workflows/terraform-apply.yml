@@ -129,13 +129,19 @@ jobs:
           cluster="$(terraform -chdir=ecs output -raw cluster_name)"
           backend="$(terraform -chdir=ecs output -raw backend_service_name)"
           market_http="$(terraform -chdir=ecs output -json market_http_service_name | jq -r '. // empty')"
+          market_http_task_definition="$(terraform -chdir=ecs output -json market_http_task_definition_arn | jq -r '. // empty')"
 
           services=("$backend")
+          expected_task_definitions=()
           if [[ -n "$market_http" ]]; then
             services+=("$market_http")
+            expected_task_definitions+=(
+              --expected-task-definition "$market_http=$market_http_task_definition"
+            )
           fi
 
           python3 .github/scripts/terraform_verify_ecs_services.py \
             --region "$AWS_REGION" \
             --cluster "$cluster" \
+            "${expected_task_definitions[@]}" \
             "${services[@]}"

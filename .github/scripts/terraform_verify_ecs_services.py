@@ -67,7 +67,11 @@ def task_definition_status(region: str, task_definition: str) -> str:
     return output.strip()
 
 
-def validate_service(service: dict[str, Any], task_status: str) -> list[str]:
+def validate_service(
+    service: dict[str, Any],
+    task_status: str,
+    expected_task_definition: str | None = None,
+) -> list[str]:
     name = service.get("serviceName", "unknown")
     errors: list[str] = []
 
@@ -86,6 +90,11 @@ def validate_service(service: dict[str, Any], task_status: str) -> list[str]:
     if task_status != "ACTIVE":
         errors.append(
             f"referenced task definition {task_definition} is {task_status}, expected ACTIVE"
+        )
+    if expected_task_definition and task_definition != expected_task_definition:
+        errors.append(
+            f"service references {task_definition}, expected deployed revision "
+            f"{expected_task_definition}"
         )
 
     primary = next(
@@ -136,8 +145,28 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--region", required=True)
     parser.add_argument("--cluster", required=True)
+    parser.add_argument(
+        "--expected-task-definition",
+        action="append",
+        default=[],
+        metavar="SERVICE=TASK_DEFINITION_ARN",
+    )
     parser.add_argument("services", nargs="+")
     args = parser.parse_args()
+
+    expected_task_definitions: dict[str, str] = {}
+    for value in args.expected_task_definition:
+        try:
+            service_name, task_definition = value.split("=", 1)
+        except ValueError as error:
+            raise SystemExit(
+                "--expected-task-definition must use SERVICE=TASK_DEFINITION_ARN"
+            ) from error
+        if not service_name or not task_definition:
+            raise SystemExit(
+                "--expected-task-definition must use SERVICE=TASK_DEFINITION_ARN"
+            )
+        expected_task_definitions[service_name] = task_definition
 
     run_aws(
         "ecs",
@@ -158,12 +187,19 @@ def main() -> None:
     rows: list[tuple[str, str, int, int, int]] = []
 
     for service in services:
+        service_name = service.get("serviceName", "unknown")
         task_definition = service.get("taskDefinition", "")
         status = task_definition_status(args.region, task_definition)
-        errors.extend(validate_service(service, status))
+        errors.extend(
+            validate_service(
+                service,
+                status,
+                expected_task_definitions.get(service_name),
+            )
+        )
         rows.append(
             (
-                service.get("serviceName", "unknown"),
+                service_name,
                 task_definition.rsplit("/", 1)[-1],
                 service.get("desiredCount", 0),
                 service.get("runningCount", 0),
