@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "app-server/**"
+      - "iam/**"
       - "shared-infra/**"
       - "test-infra/**"
       - "messaging/**"
@@ -45,7 +46,7 @@ jobs:
           CURRENT_SHA: ${{ github.sha }}
         run: |
           if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-            git ls-files app-server shared-infra test-infra messaging redis ai-server > changed-paths.txt
+            git ls-files app-server iam shared-infra test-infra messaging redis ai-server > changed-paths.txt
           else
             git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA" > changed-paths.txt
           fi

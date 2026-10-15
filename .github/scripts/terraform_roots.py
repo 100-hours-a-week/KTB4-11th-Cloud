@@ -20,6 +20,7 @@ ROOT_ORDER = [
     "redis",
     "redis@prod",
     "app-server",
+    "iam",
     "ecr",
     "ecs",
     "ai-server/infra",
