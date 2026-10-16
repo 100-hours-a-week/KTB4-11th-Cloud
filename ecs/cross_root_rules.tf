@@ -11,37 +11,6 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_backend_task" {
   description                  = "Allow application traffic and health checks to ECS backend tasks"
 }
 
-# 테스트 헤더가 있는 요청만 Green(ECS)으로 전달한다.
-# 기본 action(Blue, V1 EC2)은 변경하지 않으므로 운영 트래픽에는 영향이 없다.
-# Canary 배포 단계에서 가중치 규칙으로 교체한다.
-resource "aws_lb_listener_rule" "backend_test" {
-  listener_arn = data.terraform_remote_state.app.outputs.https_listener_arn
-  priority     = var.backend_test_rule_priority
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend_green.arn
-  }
-
-  # 두 조건을 모두 만족해야 한다. (경로 기반 분리: Backend는 /api/*)
-  condition {
-    http_header {
-      http_header_name = var.backend_test_header_name
-      values           = [var.backend_test_header_value]
-    }
-  }
-
-  condition {
-    path_pattern {
-      values = var.backend_path_patterns
-    }
-  }
-
-  tags = {
-    Name = "${var.name_prefix}-backend-test"
-  }
-}
-
 # ---------------------------------------------------------------------------
 # market-http (/market/*)
 # ---------------------------------------------------------------------------
