@@ -108,12 +108,12 @@ aws ssm put-parameter --type SecureString \
 
 | 경로 | 대상 | 비고 |
 |---|---|---|
-| `/api/*` | V1 Blue / V2 Green 가중치 분배 | Canary 활성화 시 우선 적용. 현재 기본 V1 0% / V2 100%, 헤더 조건 없음 |
+| `/api/*` | V1 Blue / V2 Green 가중치 분배 | Canary 활성화 시 우선 적용. 현재 기본 V1 100% / V2 0%, 헤더 조건 없음 |
 | `/market/*` | ECS market-http | ALB가 `/market` 접두사를 제거해 전달 (`/market/prices` → `/prices`). V1에 없는 경로라 헤더 없이 바로 운영 |
 | 그 외 | V1 EC2 (기본 action) | |
 
 ```bash
-# Backend는 현재 가중치를 따른다. 현재 기본값은 V1 0% / V2 100%.
+# Backend는 현재 가중치를 따른다. 현재 기본값은 V1 100% / V2 0%.
 curl -s https://stock-spoon.com/api/v1/auth/csrf
 
 # market-http
@@ -129,7 +129,7 @@ curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 | 변수 | 초기값 | 의미 |
 |---|---|---|
 | `backend_canary_enabled` | `true` | `false`로 apply하면 가중치 규칙을 삭제하고 V1 기본 경로로 복귀 |
-| `backend_canary_green_weight` | `100` | 희망 V2 비중(0~100 정수). 자동 롤백 상태가 `tripped`이면 실제 V2 비중은 0 |
+| `backend_canary_green_weight` | `0` | 희망 V2 비중(0~100 정수). 자동 롤백 상태가 `tripped`이면 실제 V2 비중은 0 |
 | `backend_canary_rule_priority` | `100` | HTTPS 리스너의 규칙 우선순위 번호 |
 
 V1 Blue는 EC2의 Nginx HTTPS:443으로 전달되고, Nginx의 `location /api/`가 내부 `backend:8080`으로 원래 URI를 유지해 프록시한다. V2 Green은 ECS Backend:8080으로 같은 URI를 직접 전달한다. 양쪽 백엔드는 `/api/v1/...`를 제공하므로 `/api` 접두사를 제거하지 않는다.
