@@ -23,6 +23,7 @@ ecs ──참조──> shared-infra      (VPC, Private Subnet)
 |---|---|
 | `platform_*.tf` | 모든 서비스가 공유하는 리소스 (계정 설정, IAM, Cluster, ASG, Capacity Provider) |
 | `svc_<서비스>.tf` | 서비스 전용 리소스 (로그 그룹, Task Role, Target Group, Task Definition, Service) |
+| `svc_proxysql.tf` | 단일 AZ ProxySQL ECS 서비스, MySQL 네트워크 검사 |
 | `cross_root_rules.tf` | 다른 root 소유 리소스에 추가하는 규칙 (리스너 규칙, SG 규칙) |
 
 ## 이름 규칙
@@ -200,6 +201,22 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 2. BE 레포 Secret `AWS_V2_ECS_DEPLOY_ROLE_ARN` 등록
 3. BE 레포 CD PR을 `dev`에 머지 → 그 머지 커밋으로 첫 ECS 배포
 4. 확인: Actions 요약의 Task Definition 리비전, `curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf`
+
+## ProxySQL DB migration rehearsal
+
+ProxySQL은 Backend와 별도 ECS 서비스로 실행하며, 우선 `private_subnet_ids[0]`의 단일 AZ에 Task 1개를 둡니다. 이번 단계에서는 Backend의 ProxySQL 접속 주소를 만들지 않습니다. ProxySQL Task SG는 V1 DB와 이관 DB의 3306 및 ECS Exec용 HTTPS만 허용하고, 다른 root가 소유한 두 DB 보안그룹에도 ProxySQL Task SG만 허용하는 규칙을 추가합니다.
+
+이 첫 단계는 ProxySQL 컨테이너 기동과 DB 네트워크 연결을 확인하기 위한 구성입니다. ProxySQL의 `mysql_servers`·`mysql_users`는 비워 두므로 아직 쿼리를 DB로 전달하지 않습니다. Backend의 `SPRING_DATASOURCE_URL`도 바꾸지 않습니다. `mysql-network-check` sidecar는 시작 시 V1 및 이관 DB의 3306에 TCP 연결을 확인하고 결과를 같은 CloudWatch Log Group에 기록합니다.
+
+적용 후 확인 예시:
+
+```bash
+aws logs tail "$(terraform -chdir=ecs output -raw proxysql_log_group_name)" --since 10m --follow
+```
+
+`mysql-network-check` 로그에서 각 DB에 대해 `TCP_OK <private-ip>:3306`을 확인합니다. 이 확인은 ProxySQL ECS 태스크에서 DB까지 TCP 연결만 검증하며, DB 인증이나 실제 SQL 라우팅은 아직 검증하지 않습니다. Backend가 ProxySQL에 연결하도록 바꾸려면 이후 고정 주소 또는 서비스 검색을 별도로 구성해야 합니다.
+
+비용은 NLB 없이 계산합니다. ECS EC2 시작 유형에는 태스크별 ECS 요금이 없으며, ProxySQL 태스크는 기존 `c6i.xlarge` Capacity Provider의 여유 자원을 먼저 사용합니다. 여유 용량에 배치되면 별도 EC2 비용은 없고 로그 사용량에 따른 CloudWatch Logs 비용만 추가될 수 있습니다. 용량 부족으로 ASG가 `c6i.xlarge` 한 대를 더 띄우면 서울 리전 Linux On-Demand 기준 약 `$140.16/월`이며, 30 GiB gp3 볼륨 약 `$2.74/월`을 더해 총 `$142.90/월` 정도입니다(730시간 가정). 이는 공개 지역별 요금표를 이용한 추정치로, 구매 옵션·실제 사용량·세금에 따라 달라집니다. [c6i.xlarge 요금 참고](https://aws-pricing.com/c6i.xlarge.html), [서울 리전 gp3 요금 참고](https://aws-pricing.com/ap-northeast-2.html).
 
 ## AI market-http
 

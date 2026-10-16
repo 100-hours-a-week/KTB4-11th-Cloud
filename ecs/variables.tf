@@ -139,6 +139,25 @@ variable "backend_container_port" {
   default     = 8080
 }
 
+# ProxySQL은 우선 네트워크 경로 검증용으로 단일 AZ에 1개만 띄운다.
+variable "proxysql_image" {
+  description = "Pinned public ProxySQL container image for the migration rehearsal"
+  type        = string
+  default     = "proxysql/proxysql:3.0.11"
+}
+
+variable "proxysql_task_cpu" {
+  description = "ProxySQL ECS task CPU units (1024 = 1 vCPU)"
+  type        = number
+  default     = 512
+}
+
+variable "proxysql_task_memory" {
+  description = "ProxySQL ECS task memory in MiB"
+  type        = number
+  default     = 1024
+}
+
 variable "backend_task_cpu" {
   description = "Backend task CPU units (1024 = 1 vCPU)"
   type        = number
