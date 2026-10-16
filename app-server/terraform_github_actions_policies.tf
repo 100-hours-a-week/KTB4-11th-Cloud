@@ -344,357 +344,57 @@ resource "aws_iam_role_policy" "github_actions_terraform_apply_state" {
   policy = data.aws_iam_policy_document.github_actions_terraform_apply_state.json
 }
 
-# 역할의 인라인 정책 총량 한도를 위해 설명용 Sid는 JSON 대신 주석으로 유지한다.
-data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
-  statement {
-    # ManageEc2AndElastiCacheInSeoul
-    effect = "Allow"
-    actions = [
-      "ec2:*",
-      "elasticache:*",
-    ]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = ["ap-northeast-2"]
-    }
+locals {
+  terraform_ci_write_documents = {
+    compute       = data.aws_iam_policy_document.terraform_ci_write_compute.json
+    application   = data.aws_iam_policy_document.terraform_ci_write_application.json
+    observability = data.aws_iam_policy_document.terraform_ci_write_observability.json
+    identity      = data.aws_iam_policy_document.terraform_ci_write_identity.json
   }
+}
 
-  statement {
-    # ManageRepositoryObservabilityInSeoul
-    effect = "Allow"
-    actions = [
-      "cloudwatch:DeleteAlarms",
-      "cloudwatch:DeleteDashboards",
-      "cloudwatch:PutDashboard",
-      "cloudwatch:PutMetricAlarm",
-      "cloudwatch:TagResource",
-      "cloudwatch:UntagResource",
-      "logs:CreateLogGroup",
-      "logs:DeleteLogGroup",
-      "logs:DeleteMetricFilter",
-      "logs:DeleteRetentionPolicy",
-      "logs:PutMetricFilter",
-      "logs:PutRetentionPolicy",
-      "logs:TagResource",
-      "logs:UntagResource",
-    ]
-    resources = ["*"]
+resource "aws_iam_policy" "terraform_ci_write" {
+  for_each = local.terraform_ci_write_documents
 
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = ["ap-northeast-2"]
-    }
-  }
+  name        = "stockspoon-v1-github-actions-terraform-write-${each.key}"
+  description = "Terraform CI resource writes: ${each.key}"
+  policy      = each.value
 
-  statement {
-    # ManageAlbAndCertificatesInSeoul
-    effect = "Allow"
-    actions = [
-      "acm:AddTagsToCertificate",
-      "acm:DeleteCertificate",
-      "acm:RemoveTagsFromCertificate",
-      "acm:RequestCertificate",
-      "acm:UpdateCertificateOptions",
-      "elasticloadbalancing:*",
-    ]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = ["ap-northeast-2"]
-    }
-  }
-
-  statement {
-    # ManageAlbAccessLogBucket
-    effect = "Allow"
-    actions = [
-      "s3:CreateBucket",
-      "s3:DeleteBucket",
-      "s3:DeleteBucketPolicy",
-      "s3:PutBucket*",
-      "s3:PutEncryptionConfiguration",
-      "s3:PutLifecycleConfiguration",
-    ]
-    resources = [local.alb_access_log_bucket_arn]
-  }
-
-  statement {
-    # ManageStockLogoBucket
-    effect = "Allow"
-    actions = [
-      "s3:CreateBucket",
-      "s3:DeleteBucket",
-      "s3:DeleteBucketPolicy",
-      "s3:PutBucketPolicy",
-      "s3:PutBucketOwnershipControls",
-      "s3:PutBucketPublicAccessBlock",
-      "s3:PutBucketTagging",
-      "s3:PutBucketVersioning",
-      "s3:PutEncryptionConfiguration",
-    ]
-    resources = [local.stock_logo_bucket_arn]
-  }
-
-  statement {
-    # ManageRepositoryLambdaFunctions
-    effect = "Allow"
-    actions = [
-      "lambda:AddPermission",
-      "lambda:CreateFunction",
-      "lambda:DeleteFunction",
-      "lambda:RemovePermission",
-      "lambda:TagResource",
-      "lambda:UntagResource",
-      "lambda:UpdateFunctionCode",
-      "lambda:UpdateFunctionConfiguration",
-    ]
-    resources = local.github_actions_terraform_lambda_arns
-  }
-
-  statement {
-    # ManageRepositorySecrets
-    effect = "Allow"
-    actions = [
-      "secretsmanager:CreateSecret",
-      "secretsmanager:DeleteSecret",
-      "secretsmanager:PutResourcePolicy",
-      "secretsmanager:RestoreSecret",
-      "secretsmanager:TagResource",
-      "secretsmanager:UntagResource",
-      "secretsmanager:UpdateSecret",
-    ]
-    resources = local.github_actions_terraform_secret_arns
-  }
-
-  statement {
-    # ManageRepositoryQueues
-    effect = "Allow"
-    actions = [
-      "sqs:CreateQueue",
-      "sqs:DeleteQueue",
-      "sqs:SetQueueAttributes",
-      "sqs:TagQueue",
-      "sqs:UntagQueue",
-    ]
-    resources = local.github_actions_terraform_sqs_queue_arns
-  }
-
-  statement {
-    # ManageApplicationEcrPublicRepositories
-    effect = "Allow"
-    actions = [
-      "ecr-public:CreateRepository",
-      "ecr-public:DeleteRepository",
-      "ecr-public:DeleteRepositoryPolicy",
-      "ecr-public:PutRepositoryCatalogData",
-      "ecr-public:SetRepositoryPolicy",
-      "ecr-public:TagResource",
-      "ecr-public:UntagResource",
-    ]
-    resources = local.github_actions_terraform_ecr_public_repository_arns
-  }
-
-  statement {
-    # ManageEcsAndAutoScalingInSeoul
-    effect = "Allow"
-    actions = [
-      "autoscaling:*",
-      "ecs:*",
-    ]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = ["ap-northeast-2"]
-    }
-  }
-
-  statement {
-    # ManageEcsServiceAutoScalingInSeoul
-    effect = "Allow"
-    actions = [
-      "application-autoscaling:RegisterScalableTarget",
-      "application-autoscaling:DeregisterScalableTarget",
-      "application-autoscaling:PutScalingPolicy",
-      "application-autoscaling:DeleteScalingPolicy",
-      "application-autoscaling:PutScheduledAction",
-      "application-autoscaling:DeleteScheduledAction",
-      "application-autoscaling:TagResource",
-      "application-autoscaling:UntagResource",
-    ]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = ["ap-northeast-2"]
-    }
-  }
-
-  statement {
-    # ManageApplicationEcrRepositories
-    effect = "Allow"
-    actions = [
-      "ecr:CreateRepository",
-      "ecr:DeleteLifecyclePolicy",
-      "ecr:DeleteRepository",
-      "ecr:DeleteRepositoryPolicy",
-      "ecr:PutImageScanningConfiguration",
-      "ecr:PutImageTagMutability",
-      "ecr:PutLifecyclePolicy",
-      "ecr:SetRepositoryPolicy",
-      "ecr:TagResource",
-      "ecr:UntagResource",
-    ]
-    resources = local.github_actions_terraform_ecr_repository_arns
-  }
-
-  statement {
-    # ManageApplicationSesIdentities
-    effect = "Allow"
-    actions = [
-      "ses:DeleteIdentity",
-      "ses:VerifyDomainDkim",
-      "ses:VerifyDomainIdentity",
-      "ses:VerifyEmailIdentity",
-    ]
-    resources = local.github_actions_terraform_ses_identity_arns
-  }
-
-  statement {
-    # ChangeRecordsInApplicationHostedZone
-    effect    = "Allow"
-    actions   = ["route53:ChangeResourceRecordSets"]
-    resources = ["arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"]
-  }
-
-  statement {
-    # ManageTerraformServiceRolesAndPolicies
-    effect = "Allow"
-    actions = [
-      "iam:AddRoleToInstanceProfile",
-      "iam:AttachRolePolicy",
-      "iam:CreateInstanceProfile",
-      "iam:CreatePolicy",
-      "iam:CreatePolicyVersion",
-      "iam:CreateRole",
-      "iam:DeleteInstanceProfile",
-      "iam:DeletePolicy",
-      "iam:DeletePolicyVersion",
-      "iam:DeleteRole",
-      "iam:DeleteRolePolicy",
-      "iam:DetachRolePolicy",
-      "iam:PutRolePolicy",
-      "iam:RemoveRoleFromInstanceProfile",
-      "iam:SetDefaultPolicyVersion",
-      "iam:TagInstanceProfile",
-      "iam:TagPolicy",
-      "iam:TagRole",
-      "iam:UntagInstanceProfile",
-      "iam:UntagPolicy",
-      "iam:UntagRole",
-      "iam:UpdateAssumeRolePolicy",
-      "iam:UpdateRole",
-      "iam:UpdateRoleDescription",
-    ]
-    resources = local.github_actions_terraform_iam_resource_arns
-  }
-
-  statement {
-    # ManageExistingAccountUsersAndGroups
-    effect = "Allow"
-    actions = [
-      "iam:AddUserToGroup",
-      "iam:AttachGroupPolicy",
-      "iam:AttachUserPolicy",
-      "iam:CreateGroup",
-      "iam:CreateUser",
-      "iam:DeleteGroup",
-      "iam:DeleteGroupPolicy",
-      "iam:DeleteUser",
-      "iam:DetachGroupPolicy",
-      "iam:DetachUserPolicy",
-      "iam:PutGroupPolicy",
-      "iam:RemoveUserFromGroup",
-      "iam:TagUser",
-      "iam:UntagUser",
-      "iam:UpdateGroup",
-      "iam:UpdateUser",
-    ]
-    resources = local.github_actions_terraform_account_iam_arns
-  }
-
-  statement {
-    # PassStockspoonRolesToTerraformManagedServices
-    effect    = "Allow"
-    actions   = ["iam:PassRole"]
-    resources = local.github_actions_terraform_pass_role_arns
-
-    condition {
-      test     = "StringLike"
-      variable = "iam:PassedToService"
-      values = [
-        "ec2.amazonaws.com",
-        "ecs-tasks.amazonaws.com",
-        "lambda.amazonaws.com",
-      ]
-    }
-  }
-
-  statement {
-    # CreateElastiCacheServiceLinkedRole
-    effect    = "Allow"
-    actions   = ["iam:CreateServiceLinkedRole"]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "iam:AWSServiceName"
-      values   = ["elasticache.amazonaws.com"]
-    }
-  }
-
-  statement {
-    # CreateElasticLoadBalancingServiceLinkedRole
-    effect    = "Allow"
-    actions   = ["iam:CreateServiceLinkedRole"]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "iam:AWSServiceName"
-      values   = ["elasticloadbalancing.amazonaws.com"]
-    }
-  }
-
-  # ECS 클러스터·Capacity Provider와 ASG가 처음 생성될 때 필요한 Service-Linked Role
-  statement {
-    # CreateEcsAndAutoScalingServiceLinkedRoles
-    effect    = "Allow"
-    actions   = ["iam:CreateServiceLinkedRole"]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "iam:AWSServiceName"
-      values = [
-        "autoscaling.amazonaws.com",
-        "ecs.amazonaws.com",
-        "ecs.application-autoscaling.amazonaws.com",
-      ]
+  lifecycle {
+    precondition {
+      condition     = length(jsonencode(jsondecode(each.value))) <= 6144
+      error_message = "Managed IAM policies must fit within 6144 characters."
     }
   }
 }
 
+resource "aws_iam_role_policy_attachment" "terraform_ci_write" {
+  for_each = aws_iam_policy.terraform_ci_write
+
+  role       = aws_iam_role.github_actions_terraform_apply.name
+  policy_arn = each.value.arn
+}
+
+# 1단계에서는 새 정책 연결과 동시에 기존 권한을 유지한다.
+# 연결 검증 후 retain_legacy_terraform_ci_write_policy=false로 2단계 전환한다.
 resource "aws_iam_role_policy" "github_actions_terraform_apply_resources" {
-  name   = "stockspoon-v1-github-actions-terraform-resource-write"
-  role   = aws_iam_role.github_actions_terraform_apply.id
-  policy = data.aws_iam_policy_document.github_actions_terraform_apply_resources.json
+  count = var.retain_legacy_terraform_ci_write_policy ? 1 : 0
+
+  name = "stockspoon-v1-github-actions-terraform-resource-write"
+  role = aws_iam_role.github_actions_terraform_apply.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = flatten([
+      for document in values(local.terraform_ci_write_documents) : [
+        for statement in jsondecode(document).Statement : {
+          for key, value in statement : key => value if key != "Sid"
+        }
+      ]
+    ])
+  })
+}
+
+moved {
+  from = aws_iam_role_policy.github_actions_terraform_apply_resources
+  to   = aws_iam_role_policy.github_actions_terraform_apply_resources[0]
 }

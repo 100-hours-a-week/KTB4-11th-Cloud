@@ -29,6 +29,7 @@ terraform -chdir=app-server init
 terraform -chdir=app-server plan \
   -target=aws_iam_policy.github_actions_terraform_read \
   -target=aws_iam_role_policy.github_actions_terraform_apply_state \
+  -target=aws_iam_role_policy_attachment.terraform_ci_write \
   -target=aws_iam_role_policy.github_actions_terraform_apply_resources \
   -lock-timeout=5m \
   -out=/tmp/stock-logo-ci-bootstrap.tfplan
@@ -44,6 +45,7 @@ terraform -chdir=app-server init
 terraform -chdir=app-server apply \
   -target=aws_iam_policy.github_actions_terraform_read \
   -target=aws_iam_role_policy.github_actions_terraform_apply_state \
+  -target=aws_iam_role_policy_attachment.terraform_ci_write \
   -target=aws_iam_role_policy.github_actions_terraform_apply_resources
 ```
 
