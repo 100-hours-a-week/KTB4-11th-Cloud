@@ -259,7 +259,7 @@ resource "aws_ecs_service" "backend" {
   # 실행 설정과 이미지 배포는 BE 레포 cd-ecs-v2.yaml이 새 리비전을 등록해 수행한다.
   # apply가 CD로 배포된 리비전을 backend_image_tag 리비전으로 되돌리지 않도록 무시한다.
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, desired_count]
   }
 
   depends_on = [
