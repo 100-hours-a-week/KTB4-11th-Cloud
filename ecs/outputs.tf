@@ -53,6 +53,16 @@ output "backend_task_security_group_id" {
   value       = aws_security_group.backend_task.id
 }
 
+output "proxysql_service_name" {
+  description = "Standalone ProxySQL ECS service used for the database migration rehearsal"
+  value       = aws_ecs_service.proxysql.name
+}
+
+output "proxysql_log_group_name" {
+  description = "CloudWatch Logs group for ProxySQL and its one-shot MySQL TCP checks"
+  value       = aws_cloudwatch_log_group.proxysql.name
+}
+
 output "backend_test_request_example" {
   description = "Example request that is routed to the ECS backend instead of V1"
   value       = "curl -s -H '${var.backend_test_header_name}: ${var.backend_test_header_value}' https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}/api/"

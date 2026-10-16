@@ -12,7 +12,7 @@ data "terraform_remote_state" "shared" {
   }
 }
 
-# ALB 리스너, Blue Target Group, ALB·V1 앱 Security Group
+# ALB 리스너, Blue Target Group, ALB·V1 앱 Security Group, DB 이관 호스트
 data "terraform_remote_state" "app" {
   backend = "s3"
 
