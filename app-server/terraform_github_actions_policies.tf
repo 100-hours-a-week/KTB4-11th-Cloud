@@ -344,9 +344,10 @@ resource "aws_iam_role_policy" "github_actions_terraform_apply_state" {
   policy = data.aws_iam_policy_document.github_actions_terraform_apply_state.json
 }
 
+# 역할의 인라인 정책 총량 한도를 위해 설명용 Sid는 JSON 대신 주석으로 유지한다.
 data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   statement {
-    sid    = "ManageEc2AndElastiCacheInSeoul"
+    # ManageEc2AndElastiCacheInSeoul
     effect = "Allow"
     actions = [
       "ec2:*",
@@ -362,7 +363,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageRepositoryObservabilityInSeoul"
+    # ManageRepositoryObservabilityInSeoul
     effect = "Allow"
     actions = [
       "cloudwatch:DeleteAlarms",
@@ -390,7 +391,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageAlbAndCertificatesInSeoul"
+    # ManageAlbAndCertificatesInSeoul
     effect = "Allow"
     actions = [
       "acm:AddTagsToCertificate",
@@ -410,7 +411,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageAlbAccessLogBucket"
+    # ManageAlbAccessLogBucket
     effect = "Allow"
     actions = [
       "s3:CreateBucket",
@@ -424,7 +425,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageStockLogoBucket"
+    # ManageStockLogoBucket
     effect = "Allow"
     actions = [
       "s3:CreateBucket",
@@ -441,7 +442,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageRepositoryLambdaFunctions"
+    # ManageRepositoryLambdaFunctions
     effect = "Allow"
     actions = [
       "lambda:AddPermission",
@@ -457,7 +458,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageRepositorySecrets"
+    # ManageRepositorySecrets
     effect = "Allow"
     actions = [
       "secretsmanager:CreateSecret",
@@ -472,7 +473,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageRepositoryQueues"
+    # ManageRepositoryQueues
     effect = "Allow"
     actions = [
       "sqs:CreateQueue",
@@ -485,7 +486,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageApplicationEcrPublicRepositories"
+    # ManageApplicationEcrPublicRepositories
     effect = "Allow"
     actions = [
       "ecr-public:CreateRepository",
@@ -500,7 +501,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageEcsAndAutoScalingInSeoul"
+    # ManageEcsAndAutoScalingInSeoul
     effect = "Allow"
     actions = [
       "autoscaling:*",
@@ -516,7 +517,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageEcsServiceAutoScalingInSeoul"
+    # ManageEcsServiceAutoScalingInSeoul
     effect = "Allow"
     actions = [
       "application-autoscaling:RegisterScalableTarget",
@@ -538,7 +539,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageApplicationEcrRepositories"
+    # ManageApplicationEcrRepositories
     effect = "Allow"
     actions = [
       "ecr:CreateRepository",
@@ -556,7 +557,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageApplicationSesIdentities"
+    # ManageApplicationSesIdentities
     effect = "Allow"
     actions = [
       "ses:DeleteIdentity",
@@ -568,14 +569,14 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid       = "ChangeRecordsInApplicationHostedZone"
+    # ChangeRecordsInApplicationHostedZone
     effect    = "Allow"
     actions   = ["route53:ChangeResourceRecordSets"]
     resources = ["arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"]
   }
 
   statement {
-    sid    = "ManageTerraformServiceRolesAndPolicies"
+    # ManageTerraformServiceRolesAndPolicies
     effect = "Allow"
     actions = [
       "iam:AddRoleToInstanceProfile",
@@ -607,7 +608,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid    = "ManageExistingAccountUsersAndGroups"
+    # ManageExistingAccountUsersAndGroups
     effect = "Allow"
     actions = [
       "iam:AddUserToGroup",
@@ -631,7 +632,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid       = "PassStockspoonRolesToTerraformManagedServices"
+    # PassStockspoonRolesToTerraformManagedServices
     effect    = "Allow"
     actions   = ["iam:PassRole"]
     resources = local.github_actions_terraform_pass_role_arns
@@ -648,7 +649,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid       = "CreateElastiCacheServiceLinkedRole"
+    # CreateElastiCacheServiceLinkedRole
     effect    = "Allow"
     actions   = ["iam:CreateServiceLinkedRole"]
     resources = ["*"]
@@ -661,7 +662,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
-    sid       = "CreateElasticLoadBalancingServiceLinkedRole"
+    # CreateElasticLoadBalancingServiceLinkedRole
     effect    = "Allow"
     actions   = ["iam:CreateServiceLinkedRole"]
     resources = ["*"]
@@ -675,7 +676,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
 
   # ECS 클러스터·Capacity Provider와 ASG가 처음 생성될 때 필요한 Service-Linked Role
   statement {
-    sid       = "CreateEcsAndAutoScalingServiceLinkedRoles"
+    # CreateEcsAndAutoScalingServiceLinkedRoles
     effect    = "Allow"
     actions   = ["iam:CreateServiceLinkedRole"]
     resources = ["*"]
