@@ -243,3 +243,7 @@ AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 `command = ["mar
 5. 확인: Target Group healthy, `/market/health`, `/market/bars/005930?timeframe=1d&limit=5`
 
 롤백: 이미지 문제는 이전 Task Definition 리비전으로 `aws ecs update-service --task-definition <이전 ARN>`. 서비스를 제거하려면 `ai_image_tag`를 비우고 apply합니다.
+
+## 실험 관측
+
+CloudWatch 전용 대시보드, ASG 지표, ECS·ASG 이벤트 보존, 서비스 건강 알람과 운영 절차는 [실험 관측 운영 안내](OBSERVABILITY.md)를 참고합니다. FIS 실험·실제 부하·알림 수신자 설정은 자동으로 실행하지 않습니다.

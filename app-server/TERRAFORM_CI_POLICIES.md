@@ -6,10 +6,10 @@
 |---|---|---|
 | compute | EC2·ElastiCache·ECS·ASG·Application Auto Scaling·ALB·ACM | `terraform_ci_write_compute.tf` |
 | application | S3·Lambda·Secrets Manager·SQS·ECR·SES·Route 53 | `terraform_ci_write_application.tf` |
-| observability | CloudWatch·Logs | `terraform_ci_write_observability.tf` |
+| observability | CloudWatch·Logs·EventBridge | `terraform_ci_write_observability.tf` |
 | identity | IAM 리소스·PassRole·서비스 연결 역할 | `terraform_ci_write_identity.tf` |
 
-관리형 정책 이름은 `stockspoon-v1-github-actions-terraform-write-<접미사>`다. 각 정책의 JSON 크기를 plan에서 6,144자 이하로 검사한다. 기존 Action·Resource·Condition은 유지하며, 새 서비스 권한은 추가하지 않는다. EventBridge와 Logs resource policy 권한은 후속 CloudWatch 관측 변경에서 추가한다.
+관리형 정책 이름은 `stockspoon-v1-github-actions-terraform-write-<접미사>`다. 각 정책의 JSON 크기를 plan에서 6,144자 이하로 검사한다. 기존 Action·Resource·Condition은 유지하며, 이번 CloudWatch 관측에 필요한 Logs resource policy·EventBridge 권한만 추가한다.
 
 ## 로컬 적용 자격 증명
 

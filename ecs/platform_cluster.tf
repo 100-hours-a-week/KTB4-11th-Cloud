@@ -105,6 +105,12 @@ resource "aws_autoscaling_group" "service" {
   max_size            = var.service_asg_max_size
   desired_capacity    = var.service_asg_min_size
   health_check_type   = "EC2"
+  metrics_granularity = "1Minute"
+  enabled_metrics = [
+    "GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity",
+    "GroupInServiceInstances", "GroupPendingInstances", "GroupTerminatingInstances",
+    "GroupTotalInstances",
+  ]
 
   # Managed Termination Protection을 쓰려면 필수
   protect_from_scale_in = true
