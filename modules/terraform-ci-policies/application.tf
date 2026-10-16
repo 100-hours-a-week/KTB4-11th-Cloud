@@ -10,7 +10,7 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "s3:PutEncryptionConfiguration",
       "s3:PutLifecycleConfiguration",
     ]
-    resources = [local.alb_access_log_bucket_arn]
+    resources = [var.resource_arns.alb_logs]
   }
 
   statement {
@@ -27,7 +27,7 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "s3:PutBucketVersioning",
       "s3:PutEncryptionConfiguration",
     ]
-    resources = [local.stock_logo_bucket_arn]
+    resources = [var.resource_arns.stock_logos]
   }
 
   statement {
@@ -43,7 +43,7 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",
     ]
-    resources = local.github_actions_terraform_lambda_arns
+    resources = var.resource_arns.lambda
   }
 
   statement {
@@ -58,7 +58,7 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "secretsmanager:UntagResource",
       "secretsmanager:UpdateSecret",
     ]
-    resources = local.github_actions_terraform_secret_arns
+    resources = var.resource_arns.secrets
   }
 
   statement {
@@ -71,7 +71,7 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "sqs:TagQueue",
       "sqs:UntagQueue",
     ]
-    resources = local.github_actions_terraform_sqs_queue_arns
+    resources = var.resource_arns.queues
   }
 
   statement {
@@ -86,7 +86,7 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "ecr-public:TagResource",
       "ecr-public:UntagResource",
     ]
-    resources = local.github_actions_terraform_ecr_public_repository_arns
+    resources = var.resource_arns.ecr_public
   }
 
   statement {
@@ -104,7 +104,7 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "ecr:TagResource",
       "ecr:UntagResource",
     ]
-    resources = local.github_actions_terraform_ecr_repository_arns
+    resources = var.resource_arns.ecr_private
   }
 
   statement {
@@ -116,13 +116,13 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "ses:VerifyDomainIdentity",
       "ses:VerifyEmailIdentity",
     ]
-    resources = local.github_actions_terraform_ses_identity_arns
+    resources = var.resource_arns.ses
   }
 
   statement {
     sid       = "ChangeRecordsInApplicationHostedZone"
     effect    = "Allow"
     actions   = ["route53:ChangeResourceRecordSets"]
-    resources = ["arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"]
+    resources = [var.resource_arns.hosted_zone]
   }
 }

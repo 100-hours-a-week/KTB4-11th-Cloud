@@ -28,7 +28,7 @@ data "aws_iam_policy_document" "terraform_ci_write_identity" {
       "iam:UpdateRole",
       "iam:UpdateRoleDescription",
     ]
-    resources = local.github_actions_terraform_iam_resource_arns
+    resources = var.resource_arns.iam_resources
   }
 
   statement {
@@ -52,14 +52,14 @@ data "aws_iam_policy_document" "terraform_ci_write_identity" {
       "iam:UpdateGroup",
       "iam:UpdateUser",
     ]
-    resources = local.github_actions_terraform_account_iam_arns
+    resources = var.resource_arns.iam_accounts
   }
 
   statement {
     sid       = "PassStockspoonRolesToTerraformManagedServices"
     effect    = "Allow"
     actions   = ["iam:PassRole"]
-    resources = local.github_actions_terraform_pass_role_arns
+    resources = var.resource_arns.pass_roles
 
     condition {
       test     = "StringLike"

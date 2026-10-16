@@ -347,13 +347,27 @@ resource "aws_iam_role_policy" "github_actions_terraform_apply_state" {
   policy = data.aws_iam_policy_document.github_actions_terraform_apply_state.json
 }
 
-locals {
-  terraform_ci_write_documents = {
-    compute       = data.aws_iam_policy_document.terraform_ci_write_compute.json
-    application   = data.aws_iam_policy_document.terraform_ci_write_application.json
-    observability = data.aws_iam_policy_document.terraform_ci_write_observability.json
-    identity      = data.aws_iam_policy_document.terraform_ci_write_identity.json
+module "terraform_ci_policies" {
+  source = "../modules/terraform-ci-policies"
+
+  resource_arns = {
+    alb_logs      = local.alb_access_log_bucket_arn
+    stock_logos   = local.stock_logo_bucket_arn
+    lambda        = local.github_actions_terraform_lambda_arns
+    secrets       = local.github_actions_terraform_secret_arns
+    queues        = local.github_actions_terraform_sqs_queue_arns
+    ecr_public    = local.github_actions_terraform_ecr_public_repository_arns
+    ecr_private   = local.github_actions_terraform_ecr_repository_arns
+    ses           = local.github_actions_terraform_ses_identity_arns
+    iam_resources = local.github_actions_terraform_iam_resource_arns
+    iam_accounts  = local.github_actions_terraform_account_iam_arns
+    pass_roles    = local.github_actions_terraform_pass_role_arns
+    hosted_zone   = "arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"
   }
+}
+
+locals {
+  terraform_ci_write_documents = module.terraform_ci_policies.documents
 }
 
 resource "aws_iam_policy" "terraform_ci_write" {

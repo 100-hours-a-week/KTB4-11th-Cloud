@@ -39,6 +39,10 @@ DEPENDENTS = {
     "ecr": {"ecs"},
 }
 
+MODULE_CONSUMERS = {
+    "modules/terraform-ci-policies": {"app-server"},
+}
+
 
 def root_dir(root: str) -> str:
     """Return the Terraform directory for a root ID such as ``messaging@prod``."""
@@ -56,6 +60,9 @@ def affected_roots(paths: list[str]) -> list[str]:
             continue
 
         normalized = path.as_posix()
+        for module, consumers in MODULE_CONSUMERS.items():
+            if normalized == module or normalized.startswith(f"{module}/"):
+                selected.update(consumers)
         for root in ROOT_ORDER:
             directory = root_dir(root)
             # Every environment of a directory shares its code, so select them all.

@@ -4,10 +4,12 @@
 
 | 정책 접미사 | 범위 | 소스 |
 |---|---|---|
-| compute | EC2·ElastiCache·ECS·ASG·Application Auto Scaling·ALB·ACM | `terraform_ci_write_compute.tf` |
-| application | S3·Lambda·Secrets Manager·SQS·ECR·SES·Route 53 | `terraform_ci_write_application.tf` |
-| observability | CloudWatch·Logs·EventBridge | `terraform_ci_write_observability.tf` |
-| identity | IAM 리소스·PassRole·서비스 연결 역할 | `terraform_ci_write_identity.tf` |
+| compute | EC2·ElastiCache·ECS·ASG·Application Auto Scaling·ALB·ACM | `modules/terraform-ci-policies/compute.tf` |
+| application | S3·Lambda·Secrets Manager·SQS·ECR·SES·Route 53 | `modules/terraform-ci-policies/application.tf` |
+| observability | CloudWatch·Logs·EventBridge | `modules/terraform-ci-policies/observability.tf` |
+| identity | IAM 리소스·PassRole·서비스 연결 역할 | `modules/terraform-ci-policies/identity.tf` |
+
+정책 문서 정의는 저장소 최상위 `modules/terraform-ci-policies/` 공용 모듈에 모은다. `app-server`에서는 `../modules/terraform-ci-policies`로 참조한다. 루트에서 ARN 범위를 전달하고 생성된 JSON을 받는다. 실제 IAM 정책·연결 리소스는 `app-server` 루트와 기존 state에 유지하므로 폴더 정리로 AWS 리소스 주소가 바뀌지 않는다. 공용 모듈 변경은 CI 영향 범위 감지에서 `app-server`와 기존 remote-state 의존 root로 전파된다.
 
 관리형 정책 이름은 `stockspoon-v1-github-actions-terraform-write-<접미사>`다. 각 정책의 JSON 크기를 plan에서 6,144자 이하로 검사한다. 기존 Action·Resource·Condition은 유지하며, 이번 CloudWatch 관측에 필요한 Logs resource policy·EventBridge 권한만 추가한다.
 
