@@ -89,7 +89,7 @@ resource "aws_iam_role_policy" "github_actions_ecs_deploy" {
 }
 
 # ---------------------------------------------------------------------------
-# BE 레포 cd-ecs-dev.yaml이 backend를 배포할 때 assume하는 Role
+# BE 레포 cd-ecs-v2.yaml이 backend를 배포할 때 assume하는 Role
 # AI 배포 Role과 분리해 각 레포가 자기 서비스만 갱신할 수 있게 한다.
 # ---------------------------------------------------------------------------
 

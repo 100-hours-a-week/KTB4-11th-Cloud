@@ -54,7 +54,7 @@ aws ssm put-parameter --type SecureString \
 | `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, Task Definition(V1 MySQL 사용), ECS Service |
 | `svc_market_common.tf` | market-http 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
 | `svc_market_http.tf` | market-http(Socket) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
-| `ci_deploy_role.tf` | ECS 배포 Role: AI 레포 `cd-ecs-v2.yaml`(market-http), BE 레포 `cd-ecs-dev.yaml`(backend). Task Definition 등록, 자기 서비스 갱신, Task Role PassRole |
+| `ci_deploy_role.tf` | ECS 배포 Role: 각 앱 레포 `cd-ecs-v2.yaml`. Task Definition 등록, 자기 서비스 갱신, Task Role PassRole |
 | `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB), V1 앱 SG ingress(MySQL) |
 
 ## 용량 설계
@@ -85,7 +85,7 @@ curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 
 BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지를 Service ASG(capacity provider `service`)에서 market-http와 함께 실행합니다.
 
-- `backend_image_tag`는 Task Definition 기준 리비전에만 쓰입니다. 이후 배포는 BE 레포 `cd-ecs-dev.yaml`이 담당합니다. (아래 [CD](#cd-be-레포-dev--ecs))
+- `backend_image_tag`는 최초 생성 리비전에만 쓰입니다. 이후 배포와 실행 설정은 BE 레포 `cd-ecs-v2.yaml`과 앱 템플릿이 담당합니다. (아래 [CD](#cd-be-레포-dev--ecs))
 
 - **DB는 V1 EC2의 MySQL을 그대로 사용합니다.** V1 Compose가 `3306`을 호스트에 게시하고, 외부 접근은 V1 앱 SG로만 통제합니다. 3306은 Backend Task SG만 허용합니다. (`cross_root_rules.tf`) 접속 주소는 `app-server` output `app_private_ip`를 참조합니다.
   - EIP로 들어온 트래픽도 private IP로 전달되므로 바인딩 주소로는 외부 노출을 막을 수 없습니다. V1 앱 SG에 넓은 인바운드 규칙을 추가하면 3306도 함께 열립니다.
@@ -128,15 +128,27 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 
 롤백: `backend_desired_count = 0`으로 apply하거나 이전 Task Definition 리비전으로 `update-service`. DB 경로까지 닫으려면 SG 규칙 제거 후 compose `ports`를 되돌리고 db를 재생성합니다.
 
+### 변경 책임
+
+| 대상 | 관리 주체 | 적용 경로 |
+|---|---|---|
+| 이미지 SHA, CPU·메모리, 환경변수, Secret 참조, 컨테이너 헬스체크 | BE·AI 앱/CD | 앱 레포 `.aws/ecs/*.json` 변경 → CD 등록·배포·검증 |
+| 클러스터, 서비스 용량·배포 정책, ALB, IAM 정책, SG·네트워크 | Cloud | Terraform plan·apply |
+| 포트, Role ARN, DB·Valkey 주소, Secret 경로 등 양쪽에 연결된 값 | 앱 담당자와 Cloud 공동 검토 | Cloud 리소스 준비 → 앱 템플릿 변경·배포 → 이전 리소스 정리 |
+
+템플릿을 옮기는 것만으로 소유권이 분리되지는 않습니다. 두 서비스의 `task_definition` 변경은 Terraform에서 무시하고, Terraform의 기존 Task Definition은 최초 생성용으로 실행 필드를 동결합니다. `skip_destroy`는 등록 해제 방지만 담당하며, 후속 리비전 생성을 막는 것은 실행 필드의 `ignore_changes`입니다. 기존 Terraform Task Definition에서 실행 설정을 변경하는 방식은 사용하지 않습니다.
+
+기존 Task Definition 리소스를 제거하거나 이름을 바꾸는 별도 정리는 이 변경에 포함하지 않습니다. 최초 생성용 리소스는 state에 유지하며, 향후 완전히 제거할 경우에도 AWS 등록 해제 없이 state 소유권을 해제하는 절차가 필요합니다.
+
 ### CD (BE 레포 dev → ECS)
 
-`dev` push → `ci-dev.yaml`(빌드·이미지 push) → `cd-dev.yaml`(V2 개발 EC2) 성공 → `cd-ecs-dev.yaml`(이 서비스) 순서로 배포합니다.
+`dev` push → `ci-dev.yaml`(빌드·이미지 push) → `cd-dev.yaml`(V2 개발 EC2) 성공 → `cd-ecs-v2.yaml`(이 서비스) 순서로 배포합니다.
 
-1. 패밀리 `stockspoon-v2-prod-backend`의 **최신 리비전**을 읽어 `backend` 컨테이너 이미지만 `:<dev 커밋 SHA>`로 바꿔 새 리비전을 등록합니다. 환경변수·Secret 등은 Terraform이 관리하는 값을 그대로 씁니다.
+1. BE 커밋의 `.aws/ecs/backend.json`에 검증한 `:<dev 커밋 SHA>` 이미지를 주입해 새 리비전을 등록합니다. 환경변수·Secret 참조·헬스체크·CPU·메모리도 이 템플릿이 관리합니다.
 2. 서비스를 새 리비전으로 갱신하고, 그 배포의 `rolloutState`가 `COMPLETED`가 될 때까지 기다립니다. Circuit Breaker가 롤백하면(`FAILED`) 워크플로도 실패합니다.
 
 - 서비스에 `ignore_changes = [task_definition]`이 있으므로 apply가 CD 배포를 되돌리지 않습니다.
-- Terraform으로 Task Definition(환경변수·Secret 등)을 바꾸면 새 리비전만 등록되고 서비스는 그대로입니다. **다음 CD부터 반영**되며, 바로 반영하려면 BE 레포에서 최근 `Backend Dev CI` 실행의 ECS 배포 job을 재실행합니다.
+- 최초 생성용 Terraform Task Definition의 실행 설정은 동결합니다. 기존 서비스의 실행 설정은 앱 템플릿을 수정하고 CD로 적용합니다.
 - 배포 Role(`stockspoon-v2-prod-github-actions-backend-deploy`)은 BE 레포 `dev` ref의 OIDC 토큰만 신뢰하며, backend 서비스 갱신과 backend Task Role PassRole만 허용합니다. AI 배포 Role과 분리되어 있습니다.
 - `dev` 커밋마다 **운영 DB(V1 MySQL)에 붙는** 이 서비스가 교체됩니다. V1 DB 사용 기간의 주의 사항(스키마 고정, 데이터 변경 테스트 금지)은 위와 같습니다.
 
@@ -155,8 +167,12 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 
 AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 `command = ["market-http"]`로 실행합니다. Service ASG(capacity provider `service`)에 배치합니다.
 
-- `ai_image_tag`(AI `dev` 커밋 SHA)가 비어 있으면 Task Definition과 Service는 만들지 않고 SG·Target Group·리스너 규칙·Role만 준비합니다. 이 값은 **서비스를 처음 만들 때만** 쓰입니다.
-- 이후 배포는 AI 레포 `cd-ecs-v2.yaml`이 담당합니다. `dev`의 CI Dev가 성공하면 그 커밋 이미지로 최신 Task Definition의 이미지만 바꿔 새 리비전을 등록하고 서비스를 갱신합니다. `ignore_changes = [task_definition]`이므로 apply가 CD 배포를 되돌리지 않습니다.
+- `ai_image_tag`가 비어 있으면 Task Definition과 Service는 만들지 않고 SG·Target Group·리스너 규칙·Role만 준비합니다. 최초 생성 때는 이 값으로 초기 이미지를 지정합니다.
+- 이후 Task Definition과 배포는 AI 레포 `cd-ecs-v2.yaml`이 담당합니다. 성공한 CI의 커밋 SHA를 같은 커밋의 `.aws/ecs/market-http.json`에 주입해 새 리비전을 등록합니다. 환경변수·Secret 참조·컨테이너 헬스체크·CPU·메모리는 앱 템플릿을 수정하고 CD로 적용합니다.
+- Terraform은 클러스터·서비스·ALB·IAM·네트워크를 관리합니다. 서비스의 `task_definition`은 무시하고, 최초 생성용 Task Definition은 실행 필드를 `ignore_changes`로 동결하고 `skip_destroy = true`로 등록 해제를 방지합니다. 최초 생성용 HCL의 실행 설정을 바꿔도 기존 서비스에는 반영되지 않습니다.
+- BE도 동일하게 `.aws/ecs/backend.json`과 `cd-ecs-v2.yaml`에서 실행 설정과 리비전을 관리합니다. 개발 EC2 배포 이후 같은 SHA로 ECS를 배포합니다.
+- Cloud 검증은 실제 서비스의 배포 완료·태스크 수·참조 Task Definition의 ACTIVE 상태를 검사합니다. Terraform 최초 생성 리비전과의 일치 여부는 검사하지 않으며, 배포한 리비전의 성공 여부는 앱 CD가 확인합니다.
+- 이미지 조회 Python 스크립트와 external provider는 사용하지 않습니다. 최초 배포는 Cloud로 서비스를 생성한 뒤 앱 CD를 실행합니다. 기존 환경 이전은 앱 템플릿과 현재 실행 설정을 검토한 뒤 Cloud 변경을 먼저 적용하고 앱 CD를 실행합니다.
 - 과거 시세(`/market/bars`)는 **V1 AI 운영 서버** QuestDB(`9000`)를 조회합니다. AI Compose가 `AI_PRIVATE_IP`에만 게시하고, AI SG는 market-http Task SG만 허용합니다. QuestDB `9000`은 인증 없이 SQL을 실행할 수 있으므로 SG와 private IP 바인딩으로만 막고 있습니다.
 - 현재가(`/market/prices`)는 Valkey를 먼저 읽고, 없으면 QuestDB 최근 1분봉으로 채워 Valkey에 저장합니다. 이 저장에는 TTL이 없고 V2에는 현재가를 갱신하는 서비스(market-streamer)가 없으므로, **처음 조회된 값이 고정됩니다.** 현재는 `/market/bars`만 검증 대상으로 보고, `/market/prices`는 AI 코드 수정(TTL) 전까지 사용하지 않습니다.
 - market-streamer(키움 실시간 → Valkey)는 V2 ECS에서 운영하지 않습니다.
@@ -185,7 +201,7 @@ AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 `command = ["mar
 1. 이 root apply (`ai_image_tag` 비움): SG·Target Group·`/market/*` 규칙·Task Role·ECS 배포 Role 생성
 2. AI 레포 Variable `AWS_ECS_DEPLOY_ROLE_ARN`에 output `github_actions_ecs_deploy_role_arn` 등록
 3. 운영 AI 서버 QuestDB `9000`이 `AI_PRIVATE_IP`에 게시됐는지 확인: `sudo ss -ltnp | grep :9000`
-4. `ai_image_tag`를 AI `dev` 커밋 SHA(CI Dev가 push한 이미지)로 설정해 apply → market-http 서비스 생성
+4. `ai_image_tag`를 CI에서 검증하고 ECR에 업로드한 커밋 SHA로 설정해 apply → market-http 서비스 최초 생성
 5. 확인: Target Group healthy, `/market/health`, `/market/bars/005930?timeframe=1d&limit=5`
 
 롤백: 이미지 문제는 이전 Task Definition 리비전으로 `aws ecs update-service --task-definition <이전 ARN>`. 서비스를 제거하려면 `ai_image_tag`를 비우고 apply합니다.

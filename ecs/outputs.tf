@@ -63,11 +63,6 @@ output "market_http_service_name" {
   value       = try(aws_ecs_service.market_http[0].name, null)
 }
 
-output "market_http_task_definition_arn" {
-  description = "Task definition ARN Terraform expects the market-http service to run"
-  value       = try(aws_ecs_task_definition.market_http[0].arn, null)
-}
-
 output "market_http_target_group_arn" {
   description = "Target group for market-http"
   value       = aws_lb_target_group.market_http.arn
@@ -89,6 +84,6 @@ output "github_actions_ecs_deploy_role_arn" {
 }
 
 output "github_actions_backend_deploy_role_arn" {
-  description = "Role ARN for the BE repository AWS_V2_ECS_DEPLOY_ROLE_ARN secret (cd-ecs-dev.yaml)"
+  description = "Role ARN for the BE repository AWS_V2_ECS_DEPLOY_ROLE_ARN secret (cd-ecs-v2.yaml)"
   value       = aws_iam_role.github_actions_backend_deploy.arn
 }

@@ -197,11 +197,10 @@ variable "backend_test_rule_priority" {
 # AI market-http
 # ---------------------------------------------------------------------------
 
-# AI CI Dev가 Public ECR(stockspoon-v1-ai)에 push한 통합 이미지의 태그(dev 커밋 SHA)
+# AI 서비스 최초 생성에 사용할 검증된 이미지 태그. 이후 Task Definition은 앱 CD가 관리한다.
 # 비어 있으면 Task Definition과 ECS Service를 만들지 않고 SG·Target Group·리스너 규칙 등만 준비한다.
-# 서비스를 처음 만들 때만 쓰이며, 이후 이미지 배포는 AI 레포 cd-ecs-v2.yaml이 담당한다.
 variable "ai_image_tag" {
-  description = "Tag (git SHA) of the AI app image in the public ECR repository; empty skips task definitions and services"
+  description = "Bootstrap AI image tag; subsequent task definitions are app-CD owned; empty skips AI services"
   type        = string
   default     = "339f334d22a8c17aff3bc3a8c4ec24e361b730fc"
 }

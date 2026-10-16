@@ -144,6 +144,15 @@ resource "aws_lb_target_group" "backend_green" {
 # ---------------------------------------------------------------------------
 
 resource "aws_ecs_task_definition" "backend" {
+  skip_destroy = true
+
+  lifecycle {
+    ignore_changes = [
+      family, network_mode, requires_compatibilities, cpu, memory,
+      execution_role_arn, task_role_arn, runtime_platform, container_definitions,
+    ]
+  }
+
   family                   = "${var.name_prefix}-backend"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
@@ -247,7 +256,7 @@ resource "aws_ecs_service" "backend" {
   enable_ecs_managed_tags = true
 
   # Target Group이 리스너에 연결된 뒤에 Service를 만들어야 한다.
-  # 이미지 배포는 BE 레포 dev CI(cd-ecs-dev.yaml)가 새 리비전을 등록해 수행한다.
+  # 실행 설정과 이미지 배포는 BE 레포 cd-ecs-v2.yaml이 새 리비전을 등록해 수행한다.
   # apply가 CD로 배포된 리비전을 backend_image_tag 리비전으로 되돌리지 않도록 무시한다.
   lifecycle {
     ignore_changes = [task_definition]
