@@ -188,6 +188,21 @@ data "aws_caller_identity" "github_actions_terraform" {}
 data "aws_partition" "github_actions_terraform" {}
 
 data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
+  # DescribeParameters does not support parameter-level resource scoping.
+  # Grant metadata discovery in Seoul; parameter values remain scoped below.
+  statement {
+    sid       = "DescribeSsmParameterMetadataInSeoul"
+    effect    = "Allow"
+    actions   = ["ssm:DescribeParameters"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
+  }
+
   statement {
     sid       = "ReadBackendRollbackLatch"
     effect    = "Allow"
