@@ -196,6 +196,8 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
       "cloudwatch:Get*",
       "cloudwatch:List*",
       "autoscaling:Describe*",
+      "application-autoscaling:Describe*",
+      "application-autoscaling:ListTagsForResource",
       "ec2:Describe*",
       "ec2:Get*",
       "ecr:Describe*",
@@ -514,6 +516,28 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
   }
 
   statement {
+    sid    = "ManageEcsServiceAutoScalingInSeoul"
+    effect = "Allow"
+    actions = [
+      "application-autoscaling:RegisterScalableTarget",
+      "application-autoscaling:DeregisterScalableTarget",
+      "application-autoscaling:PutScalingPolicy",
+      "application-autoscaling:DeleteScalingPolicy",
+      "application-autoscaling:PutScheduledAction",
+      "application-autoscaling:DeleteScheduledAction",
+      "application-autoscaling:TagResource",
+      "application-autoscaling:UntagResource",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
+  }
+
+  statement {
     sid    = "ManageApplicationEcrRepositories"
     effect = "Allow"
     actions = [
@@ -662,6 +686,7 @@ data "aws_iam_policy_document" "github_actions_terraform_apply_resources" {
       values = [
         "autoscaling.amazonaws.com",
         "ecs.amazonaws.com",
+        "ecs.application-autoscaling.amazonaws.com",
       ]
     }
   }
