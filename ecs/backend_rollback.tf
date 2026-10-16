@@ -152,16 +152,15 @@ data "archive_file" "backend_rollback" {
 }
 
 resource "aws_lambda_function" "backend_rollback" {
-  count                          = local.backend_rollback_enabled ? 1 : 0
-  function_name                  = local.backend_rollback_name
-  role                           = aws_iam_role.backend_rollback[0].arn
-  runtime                        = "python3.12"
-  handler                        = "backend_rollback.handler"
-  filename                       = data.archive_file.backend_rollback[0].output_path
-  source_code_hash               = data.archive_file.backend_rollback[0].output_base64sha256
-  timeout                        = 45
-  memory_size                    = 128
-  reserved_concurrent_executions = 1
+  count            = local.backend_rollback_enabled ? 1 : 0
+  function_name    = local.backend_rollback_name
+  role             = aws_iam_role.backend_rollback[0].arn
+  runtime          = "python3.12"
+  handler          = "backend_rollback.handler"
+  filename         = data.archive_file.backend_rollback[0].output_path
+  source_code_hash = data.archive_file.backend_rollback[0].output_base64sha256
+  timeout          = 45
+  memory_size      = 128
   dead_letter_config {
     target_arn = aws_sqs_queue.backend_rollback_failures[0].arn
   }
