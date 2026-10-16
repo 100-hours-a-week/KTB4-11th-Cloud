@@ -70,9 +70,9 @@ output "backend_canary_routing" {
     priority        = var.backend_canary_rule_priority
     path_patterns   = var.backend_path_patterns
     v1_target_group = data.terraform_remote_state.app.outputs.blue_target_group_arn
-    v1_weight       = 100 - var.backend_canary_green_weight
+    v1_weight       = 100 - local.backend_effective_green_weight
     v2_target_group = aws_lb_target_group.backend_green.arn
-    v2_weight       = var.backend_canary_green_weight
+    v2_weight       = local.backend_effective_green_weight
   } : null
 }
 

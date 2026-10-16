@@ -108,12 +108,12 @@ aws ssm put-parameter --type SecureString \
 
 | 경로 | 대상 | 비고 |
 |---|---|---|
-| `/api/*` | V1 Blue / V2 Green 가중치 분배 | Canary 활성화 시 우선 적용. 초기 V1 100% / V2 0%, 헤더 조건 없음 |
+| `/api/*` | V1 Blue / V2 Green 가중치 분배 | Canary 활성화 시 우선 적용. 현재 기본 V1 0% / V2 100%, 헤더 조건 없음 |
 | `/market/*` | ECS market-http | ALB가 `/market` 접두사를 제거해 전달 (`/market/prices` → `/prices`). V1에 없는 경로라 헤더 없이 바로 운영 |
 | 그 외 | V1 EC2 (기본 action) | |
 
 ```bash
-# Backend는 현재 가중치를 따른다. 기본값은 V1 100% / V2 0%.
+# Backend는 현재 가중치를 따른다. 현재 기본값은 V1 0% / V2 100%.
 curl -s https://stock-spoon.com/api/v1/auth/csrf
 
 # market-http
@@ -129,12 +129,12 @@ curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 | 변수 | 초기값 | 의미 |
 |---|---|---|
 | `backend_canary_enabled` | `true` | `false`로 apply하면 가중치 규칙을 삭제하고 V1 기본 경로로 복귀 |
-| `backend_canary_green_weight` | `0` | V2 비중(0~100 정수). V1 비중은 `100 - V2` |
+| `backend_canary_green_weight` | `100` | 희망 V2 비중(0~100 정수). 자동 롤백 상태가 `tripped`이면 실제 V2 비중은 0 |
 | `backend_canary_rule_priority` | `100` | HTTPS 리스너의 규칙 우선순위 번호 |
 
 V1 Blue는 EC2의 Nginx HTTPS:443으로 전달되고, Nginx의 `location /api/`가 내부 `backend:8080`으로 원래 URI를 유지해 프록시한다. V2 Green은 ECS Backend:8080으로 같은 URI를 직접 전달한다. 양쪽 백엔드는 `/api/v1/...`를 제공하므로 `/api` 접두사를 제거하지 않는다.
 
-가중치는 요청을 확률적으로 분배한다. 타깃 그룹 stickiness는 비활성화하며, 로그인한 한 계정의 요청도 양쪽으로 전달될 수 있다. 이 설정은 실제 일반 요청에 적용되며 프로필 GET으로만 제한되지 않는다. V1/V2의 API·인증·DB 호환성은 별도로 확인한다. ALB 가중치가 있는 타깃 그룹의 장애를 자동으로 다른 그룹에 전환해 주지는 않으므로 오류 발생 시 V2 비중을 0으로 적용한다.
+가중치는 요청을 확률적으로 분배한다. 타깃 그룹 stickiness는 비활성화하며, 로그인한 한 계정의 요청도 양쪽으로 전달될 수 있다. 이 설정은 실제 일반 요청에 적용되며 프로필 GET으로만 제한되지 않는다. V1/V2의 API·인증·DB 호환성은 별도로 확인한다. ALB 가중치 자체에는 타깃 그룹 간 자동 장애 전환이 없다. [자동 롤백](BACKEND_ROLLBACK.md)은 별도의 CloudWatch 알람과 Lambda로 V1 복구를 수행하며, 최초 생성 상태는 `disarmed`이므로 확인 후 활성화해야 한다. 수동 복구는 V2 비중을 0으로 적용한다.
 
 로컬에서는 ALB 변경 권한이 있는 본인 프로필을 선택해 실행한다. 아래 경로의 저장소 `ecs` root를 사용하며, 이전에 준비했던 `/tmp`의 독립 실험 Terraform root는 적용하지 않는다. 동일 리스너의 실험 규칙을 별도 state에서 이미 생성했다면 중복 생성하지 말고 먼저 소유권을 정리한다.
 
@@ -156,6 +156,10 @@ terraform -chdir=ecs output backend_canary_routing
 확인 후 `variables.tf`의 `backend_canary_green_weight` 기본값을 `10 → 50 → 100`으로 단계마다 수정하고 새 plan/apply를 진행한다. 비율만 바꾸면 규칙 수정 1개가 예상된다. 현재 단계를 코드에 반영해 커밋하면 CI에서도 같은 값을 사용한다. 로컬 `-var`만 바꾸면 다음 CI가 코드의 기본값으로 되돌릴 수 있다. 가중치가 달라질 때마다 ALB 적용 값, HTTP 실패·프로필 불일치·지연, 타깃 및 ECS 상태를 확인한다.
 
 실험 후 V1으로 복구할 때는 규칙을 유지하고 `backend_canary_green_weight=0`으로 수정·apply한다. `backend_canary_enabled=false`는 규칙 삭제용이며 기존 헤더 규칙을 복원하지 않는다. 이 경우 V2 타깃 그룹과 ALB 리스너의 연결도 없어지므로 V2 서비스 운영을 계속하는 일반적인 롤백에는 사용하지 않는다. 매번 새 plan을 생성하며, 이전 단계의 saved plan을 재사용하지 않는다. 로컬 apply와 CI apply를 동시에 실행하지 않는다.
+
+### Backend 자동 롤백
+
+[자동 롤백 적용·검증 절차](BACKEND_ROLLBACK.md)를 따른다. CI 정책을 로컬에서 먼저 적용한 뒤 컨트롤러를 생성하고, V1 상태 확인 후 SSM 감시 상태를 활성화한다. 롤백 후에는 `tripped` 상태가 새로운 Terraform plan에도 반영되어 V2 재전환을 막는다. 이미 저장해 둔 plan은 폐기해야 한다.
 
 ## Backend (V1 DB 사용)
 

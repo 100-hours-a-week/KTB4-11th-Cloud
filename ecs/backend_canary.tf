@@ -18,12 +18,12 @@ resource "aws_lb_listener_rule" "backend_canary" {
     forward {
       target_group {
         arn    = data.terraform_remote_state.app.outputs.blue_target_group_arn
-        weight = 100 - var.backend_canary_green_weight
+        weight = 100 - local.backend_effective_green_weight
       }
 
       target_group {
         arn    = aws_lb_target_group.backend_green.arn
-        weight = var.backend_canary_green_weight
+        weight = local.backend_effective_green_weight
       }
 
       # 한 계정으로 보내는 요청도 설정한 가중치에 따라 양쪽으로 분배한다.
