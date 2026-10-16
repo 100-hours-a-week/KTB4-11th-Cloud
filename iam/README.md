@@ -20,6 +20,19 @@
 
 `ezra`에는 `stockspoon-stock-logo-reader-writer` 정책을 연결한다. 이 정책은 주식 로고 버킷의 객체 조회, 업로드, 덮어쓰기만 허용하며 객체 삭제, 버킷 설정 또는 공개 접근 정책 변경은 허용하지 않는다.
 
+## terraform 그룹의 CI 정책 편집 권한
+
+`terraform` 그룹은 기존 read-only 및 인라인 편집 정책에 더해 `stockspoon-v1-terraform-ci-managed-policy-editor` 관리형 정책을 사용한다.
+
+- CI 쓰기 관리형 정책 4개(compute/application/observability/identity)의 생성·삭제·태그 및 버전 변경
+- CI read·state-access 정책의 버전 변경
+- 지정된 쓰기 정책 4개만 CI apply 역할에 연결·해제
+- CI apply 역할의 이전 인라인 정책 삭제
+
+그룹의 사용자 멤버십은 변경하지 않는다. 기존 인라인 정책의 app-server state·lock 접근과 PutRolePolicy 권한도 유지한다. IAM의 DeleteRolePolicy는 개별 인라인 정책 이름으로 제한할 수 없어 CI apply 역할 단위로 제한한다.
+
+이 편집 권한을 그룹에 처음 부여하거나 수정하는 작업은 관리자 로컬 프로필로 적용한다. 그룹 구성원이 자기 편집 권한을 변경하는 권한은 부여하지 않는다.
+
 ## 주식 로고 버킷 CI 권한 bootstrap
 
 버킷과 Ezra 정책은 CI/CD에서 생성한다. 병합 전에 CI 역할에 버킷 및 IAM 정책 관리 권한만 로컬에서 선적용한다. 아래 target plan에는 실제 S3 버킷이나 Ezra 정책이 포함되지 않는다.
@@ -29,6 +42,7 @@ terraform -chdir=app-server init
 terraform -chdir=app-server plan \
   -target=aws_iam_policy.github_actions_terraform_read \
   -target=aws_iam_role_policy.github_actions_terraform_apply_state \
+  -target=aws_iam_role_policy_attachment.terraform_ci_write \
   -target=aws_iam_role_policy.github_actions_terraform_apply_resources \
   -lock-timeout=5m \
   -out=/tmp/stock-logo-ci-bootstrap.tfplan
@@ -44,6 +58,7 @@ terraform -chdir=app-server init
 terraform -chdir=app-server apply \
   -target=aws_iam_policy.github_actions_terraform_read \
   -target=aws_iam_role_policy.github_actions_terraform_apply_state \
+  -target=aws_iam_role_policy_attachment.terraform_ci_write \
   -target=aws_iam_role_policy.github_actions_terraform_apply_resources
 ```
 

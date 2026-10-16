@@ -23,6 +23,23 @@ variable "container_log_retention_days" {
   default     = 30
 }
 
+variable "observability_log_retention_days" {
+  description = "Retention for ECS performance, lifecycle events, and experiment logs"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = contains([7, 14, 30, 60, 90, 120, 150, 180, 365], var.observability_log_retention_days)
+    error_message = "Choose a supported retention of at least 7 days."
+  }
+}
+
+variable "observability_alarm_actions" {
+  description = "Optional SNS/action ARNs for service health alarms; empty keeps alarms observable without notifications"
+  type        = list(string)
+  default     = []
+}
+
 # 두 서비스 모두 평일 08:40~15:40에는 최소 3개, 그 외에는 최소 2개를 유지한다.
 variable "service_preopen_scaling" {
   description = "Paired schedules in Asia/Seoul; both services default to minimum 3 at 08:40 and minimum 2 at 15:40 on weekdays"
