@@ -254,7 +254,7 @@ variable "backend_canary_enabled" {
 variable "backend_canary_green_weight" {
   description = "V2 traffic weight from 0 to 100; V1 receives the remaining weight"
   type        = number
-  default     = 50
+  default     = 100
 
   validation {
     condition = (
