@@ -246,4 +246,4 @@ AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 `command = ["mar
 
 ## 실험 관측
 
-CloudWatch 전용 대시보드, ASG 지표, ECS·ASG 이벤트 보존, 서비스 건강 알람과 운영 절차는 [실험 관측 운영 안내](OBSERVABILITY.md)를 참고합니다. FIS 실험·실제 부하·알림 수신자 설정은 자동으로 실행하지 않습니다.
+CloudWatch 전용 대시보드, ASG 지표, ECS·ASG 이벤트 보존, 서비스 건강 알람, 실험 마커·k6 원시 결과 업로드 절차는 [실험 관측 운영 안내](OBSERVABILITY.md)를 참고합니다. FIS 실험·실제 부하·알림 수신자 설정은 자동으로 실행하지 않습니다.
