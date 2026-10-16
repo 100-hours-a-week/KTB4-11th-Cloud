@@ -53,15 +53,53 @@ aws ssm put-parameter --type SecureString \
 | `platform_cluster.tf` | ECS Cluster, Service ASG(Launch Template, 인스턴스 SG), Capacity Provider |
 | `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, Task Definition(V1 MySQL 사용), ECS Service |
 | `svc_market_common.tf` | market-http 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
-| `svc_market_http.tf` | market-http(Socket) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
+| `service_scaling.tf` | 서비스별 Task 2~4개, Backend CPU 60%, SSE 연결 400개/Task, 선택적 예약 확장 |
+| `svc_market_http.tf` | market-http(SSE) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
 | `ci_deploy_role.tf` | ECS 배포 Role: 각 앱 레포 `cd-ecs-v2.yaml`. Task Definition 등록, 자기 서비스 갱신, Task Role PassRole |
 | `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB), V1 앱 SG ingress(MySQL) |
 
 ## 용량 설계
 
-- Service ASG 인스턴스는 기준 Task 조합(Backend 1 + Socket 1 = 3 vCPU / 5 GiB)에 20% Headroom을 적용한 3.75 vCPU / 6.25 GiB를 충족하는 `c6i.xlarge`입니다.
-- Headroom은 인스턴스 크기에서 확보하므로 Capacity Provider `target_capacity`는 100입니다.
-- ASG는 min 2로 2a·2c에 1대씩 배치합니다. Backend Task는 AZ → 인스턴스 순서로 분산합니다.
+- Backend와 market-http(SSE)는 `c6i.xlarge`(4 vCPU / 8 GiB) ASG와 Capacity Provider 하나를 공유합니다. ASG min / 초기 desired / max는 2 / 2 / 4입니다.
+- Task 사양은 Backend 1 vCPU / 2 GiB, market-http 2 vCPU / 4 GiB입니다. 각 EC2에 하나씩 배치하면 3 vCPU / 6 GiB를 예약하며 나머지는 OS·ECS Agent와 추가 Task에 사용합니다.
+- Capacity Provider `target_capacity=100`, warmup 300초, 확장 step 최소·최대 1대를 사용합니다. Managed Draining·Termination Protection을 유지합니다.
+- 서울 리전 2a·2c의 private subnet을 사용하며, 두 서비스 모두 AZ → 인스턴스 순서로 분산합니다. `spread`는 최선 노력 방식이며 `distinctInstance` 제약은 적용하지 않습니다.
+- 평상시 합계 예약은 6 vCPU / 12 GiB, 두 서비스가 각각 4개면 12 vCPU / 24 GiB입니다. 실제 등록 메모리는 EC2 명목 메모리보다 작으므로 최대 Task 구성에 EC2 4대가 필요할 수 있습니다. 배포용 추가 Task에도 여유 용량이 필요합니다. 특히 각 서비스 4개·EC2 4대가 모두 찬 상태에서는 Rolling 100/200 배포가 진행되지 않을 수 있으므로, 배포 전에 ASG 상한·여유 용량 또는 배포 정책을 별도로 조정해야 합니다.
+
+### Task Auto Scaling
+
+| 서비스 | 최소 / 초기 desired / 최대 | 동적 확장 기준 |
+|---|---|---|
+| Backend | 2 / 2 / 4 | ECS 서비스 평균 CPU 60% |
+| market-http (SSE) | 2 / 2 / 4 | Task별 활성 SSE 연결 수의 평균 400개 |
+
+- 확장 cooldown은 60초, 축소 cooldown은 300초입니다. Task 확장 후 EC2가 부족하면 Capacity Provider가 ASG를 확장합니다.
+- Terraform은 서비스 `desired_count`를 무시하며, 최초 생성 이후에는 Application Auto Scaling이 관리합니다. 대상 등록 시 최소 2개를 적용하므로 기존 Backend desired 1도 2로 올라갑니다.
+- SSE 앱의 순수 ASGI 미들웨어는 `text/event-stream` 응답이 열린 동안 연결을 세고, 종료·취소·전송 실패 시 해제합니다. 가격·호가 스트림을 합산하며 일반 REST·헬스체크는 제외합니다.
+- 앱은 Task마다 단일 uvicorn 프로세스로 60초마다 연결 gauge를 EMF JSON으로 stdout에 기록합니다. 유휴 Task도 0을 발행하며 CloudWatch `Average`로 Task 평균을 계산합니다. 다중 worker 전환 시 이 집계 방식을 먼저 변경해야 합니다.
+- 지표는 `StockSpoon/ECS`, `ActiveSSEConnections`, `Count`, dimensions `ClusterName` / `ServiceName`입니다. 기존 awslogs 경로를 사용하므로 `cloudwatch:PutMetricData` 추가 권한은 필요 없습니다.
+- 앱 배포 템플릿에 `MARKET_HTTP_METRICS_NAMESPACE`, `MARKET_HTTP_METRICS_CLUSTER_NAME`, `MARKET_HTTP_METRICS_SERVICE_NAME`을 지정해야 합니다. 기존 이미지에는 계측 코드가 없으므로 AI 앱 코드의 CI·배포가 필요합니다. 지표가 없으면 SSE 동적 확장은 동작하지 않습니다.
+- 400개와 Task 사양은 기존 WebSocket 설계의 초기값입니다. SSE 연결 수는 사용자 수나 구독 종목 수가 아니며, 현재의 이벤트 전송량·지연·메모리·재연결을 부하 테스트로 검증해야 합니다.
+- SSE 종료 정책은 현재 운영 설정인 ALB drain 30초 / stopTimeout 30초를 유지합니다. 브라우저 재연결 후 최신 snapshot을 받는 동작을 검증합니다. 원문 WebSocket의 drain 120초는 자동으로 이식하지 않습니다.
+
+### 개장 전 선확장
+
+- Backend와 SSE(market-http) 모두 평일 08:40(Asia/Seoul)에 최소 3개로 선확장하고, 15:40에 최소치를 2개로 복귀합니다. 최대치는 항상 4개입니다.
+- `service_preopen_scaling` 기본값에 두 서비스의 시작·복귀 예약이 포함됩니다. Terraform apply 시 서비스별 2개씩 총 4개의 예약 작업이 생성됩니다. `{}`로 재정의하면 예약을 비활성화할 수 있습니다.
+- 서비스 키 `backend` 또는 `market-http`에 `min_capacity`, `preopen_schedule`, `restore_schedule`을 지정합니다. 기본 시작 cron은 `cron(40 8 ? * MON-FRI *)`, 복귀 cron은 `cron(40 15 ? * MON-FRI *)`입니다.
+- 복귀 예약은 최소치만 2로 낮추고 최대 4는 유지합니다. 실행 중 Task를 즉시 2개로 강제하지 않고 동적 정책으로 축소합니다.
+- 예약이 변경한 `min_capacity`는 Terraform이 무시합니다. 예약 삭제 시에는 런타임 최소치가 자동으로 2로 돌아오지 않으므로 Application Auto Scaling에서 최소 2를 명시적으로 복원합니다.
+- 평일 cron에는 한국 증시 휴장일이 자동 반영되지 않습니다.
+
+### 적용 순서
+
+1. `app-server`의 Terraform CI IAM 정책을 먼저 반영합니다. ECS 서비스 Auto Scaling API와 서비스 연결 역할 생성 권한이 추가됩니다.
+2. BE `.aws/ecs/backend.json`(1 vCPU / 2 GiB), AI `.aws/ecs/market-http.json`(2 vCPU / 4 GiB, 계측 환경변수)과 AI SSE 계측 코드를 각 앱 CI·CD로 배포합니다. BE·AI 간 순서는 무관합니다.
+3. 실제 Task Definition 사양과 SSE 지표의 유휴 0·연결 증가·해제를 확인합니다.
+4. 이 root의 plan을 검토하고 apply합니다. Task 실행 사양은 앱 템플릿과 CD 소유이므로 Terraform apply만으로 변경되지 않습니다.
+5. 서비스별 Task 확장 범위 2~4개, Target Tracking 알람과 08:40 선확장·15:40 최소치 복귀 예약을 확인합니다. 장중 예약이 실행된 뒤에는 최소치가 3개입니다.
+
+로컬 AWS 명령과 Terraform은 `AWS_PROFILE=pattie_for_terraform`을 사용합니다.
 
 ## 경로 라우팅
 
@@ -95,7 +133,7 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
     - V1과 ECS가 같은 PENDING 지정가 주문을 동시에 체결하려 해도, 양쪽 코드(V1 main·dev) 모두 `executeLimit`에서 계좌 행을 `FOR UPDATE`로 잠근 뒤 주문이 아직 PENDING인지 다시 읽으므로 먼저 커밋한 쪽만 체결됩니다. 호출부(`OrderExecutionListener`)에 바깥 트랜잭션이 없어 주문 재조회가 락 이후 최신 커밋을 봅니다.
     - 끄면(`false`) ECS에서 주문 접수가 `MARKET_STREAM_UNAVAILABLE`로 거절될 수 있습니다. CD 적용 후에는 apply만으로 실행 중 Task가 바뀌지 않으므로 ECS 배포 job 재실행이 필요합니다.
   - `KIWOOM_COLLECTOR_ENABLED=false`: collector는 V1 운영 서버가 담당합니다.
-  - `backend_desired_count=1`: dev 코드의 주기 작업(만료 주문 정리)이 V1과 함께 운영 DB에 씁니다. 동시 실행 안전성을 BE와 확인한 뒤 늘립니다.
+  - `backend_desired_count=2`: 최초 생성 기본값이며 이후 Task 수는 Auto Scaling이 2~4개로 관리합니다. dev 코드의 주기 작업(만료 주문 정리)은 V1과 함께 운영 DB에 씁니다.
 - 운영 트래픽은 받지 않습니다. 테스트 헤더(`X-StockSpoon-Target: ecs`)가 있는 `/api/*` 요청만 들어옵니다.
 - 헬스체크는 actuator가 없어 인증 없이 200을 주는 `/api/v1/auth/csrf`를 임시로 사용합니다. DB·Valkey 상태는 반영하지 않으므로 Canary 전에 `/actuator/health`로 교체합니다.
 - Valkey는 운영 Valkey의 `backend` 사용자로 IAM 인증합니다. (Task Role에 Connect Policy 연결)
@@ -126,7 +164,7 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 4. 이 root PR 머지·apply: V1 앱 SG 규칙, Task Definition(dev 이미지), Valkey 정책
 5. 확인: `curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf`, Target Group healthy, 로그에 Hikari·Valkey 연결 오류 없음
 
-롤백: `backend_desired_count = 0`으로 apply하거나 이전 Task Definition 리비전으로 `update-service`. DB 경로까지 닫으려면 SG 규칙 제거 후 compose `ports`를 되돌리고 db를 재생성합니다.
+롤백: 이전 Task Definition 리비전으로 `update-service`합니다. 서비스를 0개로 중단하려면 먼저 Auto Scaling의 예약·동적 확장을 중단하고 최소치를 0으로 조정한 뒤 서비스 desired를 0으로 변경합니다. `desired_count`는 Terraform이 무시하므로 변수 변경만으로 중단되지 않습니다. DB 경로까지 닫으려면 SG 규칙 제거 후 compose `ports`를 되돌리고 db를 재생성합니다.
 
 ### 변경 책임
 
@@ -179,7 +217,7 @@ AI 레포의 통합 이미지(Public ECR `stockspoon-v1-ai`)를 `command = ["mar
 
 | 서비스 | Task | 개수 | 배포 |
 |---|---|---|---|
-| market-http | 1 vCPU / 1 GiB (uvicorn 단일 프로세스) | 2, AZ·인스턴스 분산 | Rolling 100/200, Circuit Breaker |
+| market-http | 2 vCPU / 4 GiB (uvicorn 단일 프로세스, 부하 테스트로 보정) | 기본 2, Auto Scaling 2~4, AZ·인스턴스 분산 | Rolling 100/200, Circuit Breaker |
 
 ### ECS 배포 Role 신뢰 조건
 

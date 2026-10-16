@@ -23,12 +23,49 @@ variable "container_log_retention_days" {
   default     = 30
 }
 
+# 두 서비스 모두 평일 08:40~15:40에는 최소 3개, 그 외에는 최소 2개를 유지한다.
+variable "service_preopen_scaling" {
+  description = "Paired schedules in Asia/Seoul; both services default to minimum 3 at 08:40 and minimum 2 at 15:40 on weekdays"
+  type = map(object({
+    min_capacity     = number
+    preopen_schedule = string
+    restore_schedule = string
+  }))
+  default = {
+    backend = {
+      min_capacity     = 3
+      preopen_schedule = "cron(40 8 ? * MON-FRI *)"
+      restore_schedule = "cron(40 15 ? * MON-FRI *)"
+    }
+    market-http = {
+      min_capacity     = 3
+      preopen_schedule = "cron(40 8 ? * MON-FRI *)"
+      restore_schedule = "cron(40 15 ? * MON-FRI *)"
+    }
+  }
+
+  validation {
+    condition = alltrue([
+      for service, config in var.service_preopen_scaling :
+      contains(["backend", "market-http"], service) &&
+      contains([3, 4], config.min_capacity) &&
+      can(regex("^cron\\(.+\\)$", config.preopen_schedule)) &&
+      can(regex("^cron\\(.+\\)$", config.restore_schedule)) &&
+      config.preopen_schedule != config.restore_schedule &&
+      (service != "backend" || (
+        config.min_capacity == 3 && config.preopen_schedule == "cron(40 8 ? * MON-FRI *)"
+      ))
+    ])
+    error_message = "Use backend/market-http keys, minimum 3 or 4, and distinct cron schedules; backend preopen must be weekdays at 08:40 with minimum 3."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Service ASG (Backend + Socket)
 # ---------------------------------------------------------------------------
 
-# 기준 Task 조합(Backend 1 vCPU/1 GiB + Socket 2 vCPU/4 GiB)에 20% Headroom을 적용한
-# 3.75 vCPU / 6.25 GiB를 충족하고, ENI Trunking을 지원하는 x86 타입 (t3a 계열은 미지원)
+# 인스턴스당 Backend 1 vCPU/2 GiB + SSE 2 vCPU/4 GiB를 기본 조합으로 배치한다.
+# c6i.xlarge(4 vCPU/8 GiB)의 남은 자원은 OS·ECS Agent와 추가 Task에 사용한다.
 variable "service_instance_type" {
   description = "Instance type for the service ASG (must support ENI trunking)"
   type        = string
@@ -53,7 +90,7 @@ variable "service_root_volume_size_gib" {
   default     = 30
 }
 
-# Headroom은 인스턴스 크기에서 20% 확보하므로 Capacity Provider 여유분은 두지 않는다.
+# Capacity Provider에서 별도 예비 인스턴스 용량은 두지 않는다.
 variable "service_target_capacity" {
   description = "Capacity provider managed scaling target capacity (percent)"
   type        = number
@@ -94,15 +131,14 @@ variable "backend_task_cpu" {
 variable "backend_task_memory" {
   description = "Backend task memory (MiB)"
   type        = number
-  default     = 1024
+  default     = 2048
 }
 
-# V1 Backend와 같은 DB를 쓰는 동안은 1개로 둔다.
-# dev 코드의 주기 작업(만료 주문 정리 등)이 V1과 함께 운영 DB에 쓰므로, 동시 실행 안전성을 BE와 확인한 뒤 늘린다.
+# Backend Task는 AZ와 인스턴스에 분산해 2개를 유지한다.
 variable "backend_desired_count" {
   description = "Number of backend tasks"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "backend_stop_timeout_seconds" {
@@ -221,17 +257,17 @@ variable "market_http_container_port" {
   default     = 8000
 }
 
-# uvicorn 단일 프로세스(이벤트 루프 1개)라 1 vCPU를 넘게 줘도 쓰지 못한다. Task 수로 확장한다.
+# SSE 서버 초기 설계값. 단일 uvicorn 프로세스의 실제 처리량은 부하 테스트로 검증한다.
 variable "market_http_task_cpu" {
   description = "market-http task CPU units (1024 = 1 vCPU)"
   type        = number
-  default     = 1024
+  default     = 2048
 }
 
 variable "market_http_task_memory" {
   description = "market-http task memory (MiB)"
   type        = number
-  default     = 1024
+  default     = 4096
 }
 
 variable "market_http_desired_count" {

@@ -156,6 +156,9 @@ resource "aws_ecs_task_definition" "market_http" {
         { name = "MARKET_HTTP_DOCS_ENABLED", value = "true" },
         { name = "MARKET_HTTP_DOCS_PATH_PREFIX", value = "/market" },
         { name = "MARKET_HTTP_LOG_LEVEL", value = var.market_http_log_level },
+        { name = "MARKET_HTTP_METRICS_NAMESPACE", value = local.sse_metrics_namespace },
+        { name = "MARKET_HTTP_METRICS_CLUSTER_NAME", value = aws_ecs_cluster.main.name },
+        { name = "MARKET_HTTP_METRICS_SERVICE_NAME", value = "${var.name_prefix}-market-http" },
       ]
 
       logConfiguration = {
@@ -222,7 +225,7 @@ resource "aws_ecs_service" "market_http" {
   enable_ecs_managed_tags = true
 
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, desired_count]
   }
 
   depends_on = [
