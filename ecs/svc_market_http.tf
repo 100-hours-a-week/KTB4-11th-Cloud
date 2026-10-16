@@ -91,6 +91,15 @@ resource "aws_lb_target_group" "market_http" {
 resource "aws_ecs_task_definition" "market_http" {
   count = local.ai_market_enabled ? 1 : 0
 
+  skip_destroy = true
+
+  lifecycle {
+    ignore_changes = [
+      family, network_mode, requires_compatibilities, cpu, memory,
+      execution_role_arn, task_role_arn, runtime_platform, container_definitions,
+    ]
+  }
+
   family                   = "${var.name_prefix}-market-http"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
@@ -211,6 +220,10 @@ resource "aws_ecs_service" "market_http" {
 
   propagate_tags          = "SERVICE"
   enable_ecs_managed_tags = true
+
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 
   depends_on = [
     aws_lb_listener_rule.market_http,
