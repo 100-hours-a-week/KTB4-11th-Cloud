@@ -37,6 +37,11 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "lambda:AddPermission",
       "lambda:CreateFunction",
       "lambda:DeleteFunction",
+      "lambda:PutFunctionConcurrency",
+      "lambda:DeleteFunctionConcurrency",
+      "lambda:PutFunctionEventInvokeConfig",
+      "lambda:UpdateFunctionEventInvokeConfig",
+      "lambda:DeleteFunctionEventInvokeConfig",
       "lambda:RemovePermission",
       "lambda:TagResource",
       "lambda:UntagResource",
@@ -44,6 +49,13 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
       "lambda:UpdateFunctionConfiguration",
     ]
     resources = var.resource_arns.lambda
+  }
+
+  statement {
+    sid       = "ManageBackendRollbackLatch"
+    effect    = "Allow"
+    actions   = ["ssm:PutParameter", "ssm:DeleteParameter", "ssm:AddTagsToResource", "ssm:RemoveTagsFromResource"]
+    resources = [var.resource_arns.backend_rollback_parameter]
   }
 
   statement {
