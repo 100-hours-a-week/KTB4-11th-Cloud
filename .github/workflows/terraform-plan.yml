@@ -71,6 +71,9 @@ jobs:
       - name: Check out pull request
         uses: actions/checkout@v7
 
+      - name: Test backend rollback controller
+        run: python3 -m unittest discover -s ecs/tests -v
+
       - name: Compile Python helper scripts
         run: python3 -m py_compile .github/scripts/terraform_*.py
 

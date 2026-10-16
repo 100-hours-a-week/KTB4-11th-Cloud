@@ -63,9 +63,17 @@ output "proxysql_log_group_name" {
   value       = aws_cloudwatch_log_group.proxysql.name
 }
 
-output "backend_test_request_example" {
-  description = "Example request that is routed to the ECS backend instead of V1"
-  value       = "curl -s -H '${var.backend_test_header_name}: ${var.backend_test_header_value}' https://${try(trimsuffix(data.terraform_remote_state.app.outputs.app_dns_record_fqdn, "."), "<app-domain>")}/api/"
+output "backend_canary_routing" {
+  description = "Weighted API routing and target groups (null when canary routing is disabled)"
+  value = var.backend_canary_enabled ? {
+    rule_arn        = aws_lb_listener_rule.backend_canary[0].arn
+    priority        = var.backend_canary_rule_priority
+    path_patterns   = var.backend_path_patterns
+    v1_target_group = data.terraform_remote_state.app.outputs.blue_target_group_arn
+    v1_weight       = 100 - local.backend_effective_green_weight
+    v2_target_group = aws_lb_target_group.backend_green.arn
+    v2_weight       = local.backend_effective_green_weight
+  } : null
 }
 
 output "market_http_service_name" {

@@ -210,20 +210,6 @@ variable "backend_deployment_controller" {
   default     = "ECS"
 }
 
-# 운영 트래픽에 영향 없이 Green(ECS)을 검증하기 위한 헤더 조건
-# 이 헤더가 있는 요청만 Green Target Group으로 전달된다.
-variable "backend_test_header_name" {
-  description = "HTTP header that routes test requests to the ECS backend"
-  type        = string
-  default     = "X-StockSpoon-Target"
-}
-
-variable "backend_test_header_value" {
-  description = "Header value that routes test requests to the ECS backend"
-  type        = string
-  default     = "ecs"
-}
-
 # 경로 기반 라우팅: Backend는 /api/*, Socket(market-http)은 /market/*
 variable "backend_path_patterns" {
   description = "ALB path patterns routed to the ECS backend"
@@ -259,10 +245,41 @@ variable "backend_kiwoom_stream_enabled" {
   default     = true
 }
 
-variable "backend_test_rule_priority" {
-  description = "Priority of the test listener rule on the HTTPS listener"
+variable "backend_canary_enabled" {
+  description = "Enable weighted routing for all backend API requests; false sends API requests through the default V1 route"
+  type        = bool
+  default     = true
+}
+
+variable "backend_canary_green_weight" {
+  description = "V2 traffic weight from 0 to 100; V1 receives the remaining weight"
+  type        = number
+  default     = 0 # 현재 값에 따라 V1만 처리한다. 0이면 V2는 ALB에 등록되지 않는다.
+
+  validation {
+    condition = (
+      var.backend_canary_green_weight >= 0 &&
+      var.backend_canary_green_weight <= 100 &&
+      floor(var.backend_canary_green_weight) == var.backend_canary_green_weight
+    )
+    error_message = "backend_canary_green_weight must be an integer between 0 and 100."
+  }
+}
+
+variable "backend_canary_rule_priority" {
+  description = "Priority of the weighted API rule on the HTTPS listener"
   type        = number
   default     = 100
+
+  validation {
+    condition = (
+      var.backend_canary_rule_priority >= 1 &&
+      var.backend_canary_rule_priority <= 50000 &&
+      floor(var.backend_canary_rule_priority) == var.backend_canary_rule_priority &&
+      var.backend_canary_rule_priority != var.market_http_rule_priority
+    )
+    error_message = "Canary priority must be an integer from 1 to 50000 and different from market_http_rule_priority."
+  }
 }
 
 # ---------------------------------------------------------------------------

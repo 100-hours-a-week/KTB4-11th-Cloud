@@ -25,6 +25,7 @@ ecs ──참조──> shared-infra      (VPC, Private Subnet)
 | `svc_<서비스>.tf` | 서비스 전용 리소스 (로그 그룹, Task Role, Target Group, Task Definition, Service) |
 | `svc_proxysql.tf` | 단일 AZ ProxySQL ECS 서비스, MySQL 네트워크 검사 |
 | `cross_root_rules.tf` | 다른 root 소유 리소스에 추가하는 규칙 (리스너 규칙, SG 규칙) |
+| `backend_canary.tf` | Backend API 요청의 V1/V2 가중치 라우팅 |
 
 ## 이름 규칙
 
@@ -57,7 +58,8 @@ aws ssm put-parameter --type SecureString \
 | `service_scaling.tf` | 서비스별 Task 2~4개, Backend CPU 60%, SSE 연결 400개/Task, 선택적 예약 확장 |
 | `svc_market_http.tf` | market-http(SSE) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
 | `ci_deploy_role.tf` | ECS 배포 Role: 각 앱 레포 `cd-ecs-v2.yaml`. Task Definition 등록, 자기 서비스 갱신, Task Role PassRole |
-| `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(Backend 테스트, market-http `/market/*`), V1 AI SG ingress(QuestDB), V1 앱 SG ingress(MySQL) |
+| `cross_root_rules.tf` | ALB SG → Task egress, HTTPS 리스너 규칙(market-http `/market/*`), V1 AI SG ingress(QuestDB), V1 앱 SG ingress(MySQL) |
+| `backend_canary.tf` | 운영 `/api/*` 요청을 V1 Blue/V2 Green에 가중치로 분배하는 선택적 리스너 규칙 |
 
 ## 용량 설계
 
@@ -106,19 +108,58 @@ aws ssm put-parameter --type SecureString \
 
 | 경로 | 대상 | 비고 |
 |---|---|---|
-| `/api/*` + 테스트 헤더 | ECS Backend(Green) | 운영 트래픽은 V1(Blue). Canary 단계에서 가중치 규칙으로 교체 |
+| `/api/*` | V1 Blue / V2 Green 가중치 분배 | Canary 활성화 시 우선 적용. 현재 기본 V1 100% / V2 0%, 헤더 조건 없음 |
 | `/market/*` | ECS market-http | ALB가 `/market` 접두사를 제거해 전달 (`/market/prices` → `/prices`). V1에 없는 경로라 헤더 없이 바로 운영 |
 | 그 외 | V1 EC2 (기본 action) | |
 
 ```bash
-# ECS Backend 테스트 (운영 트래픽은 그대로 V1)
-curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf
+# Backend는 현재 가중치를 따른다. 현재 기본값은 V1 100% / V2 0%.
+curl -s https://stock-spoon.com/api/v1/auth/csrf
 
 # market-http
 curl -s 'https://stock-spoon.com/market/prices?codes=005930'
 curl -sN 'https://stock-spoon.com/market/prices/stream?codes=005930'   # SSE
 curl -s 'https://stock-spoon.com/market/bars/005930?timeframe=1d&limit=5'
 ```
+
+### Backend 운영 트래픽 전환
+
+`backend_canary_enabled=true`가 기본값이다. 기존 priority 100 헤더 규칙의 Terraform 주소를 `moved` 선언으로 가중치 규칙에 인계하고, 같은 AWS 규칙에서 헤더 조건을 제거해 가중치 전달로 수정한다. 같은 우선순위로 새 규칙을 생성하다 충돌하는 상황을 피하며 리스너 규칙 ARN은 유지한다. 규칙은 `/api/*`의 모든 HTTP 메서드에 적용되며 헤더에 따라 V2로 직행하는 경로는 남기지 않는다. `/market/*`와 프런트엔드 기본 경로는 유지한다.
+
+| 변수 | 초기값 | 의미 |
+|---|---|---|
+| `backend_canary_enabled` | `true` | `false`로 apply하면 가중치 규칙을 삭제하고 V1 기본 경로로 복귀 |
+| `backend_canary_green_weight` | `0` | 희망 V2 비중(0~100 정수). 자동 롤백 상태가 `tripped`이면 실제 V2 비중은 0 |
+| `backend_canary_rule_priority` | `100` | HTTPS 리스너의 규칙 우선순위 번호 |
+
+V1 Blue는 EC2의 Nginx HTTPS:443으로 전달되고, Nginx의 `location /api/`가 내부 `backend:8080`으로 원래 URI를 유지해 프록시한다. V2 Green은 ECS Backend:8080으로 같은 URI를 직접 전달한다. 양쪽 백엔드는 `/api/v1/...`를 제공하므로 `/api` 접두사를 제거하지 않는다.
+
+가중치는 요청을 확률적으로 분배한다. 타깃 그룹 stickiness는 비활성화하며, 로그인한 한 계정의 요청도 양쪽으로 전달될 수 있다. 이 설정은 실제 일반 요청에 적용되며 프로필 GET으로만 제한되지 않는다. V1/V2의 API·인증·DB 호환성은 별도로 확인한다. ALB 가중치 자체에는 타깃 그룹 간 자동 장애 전환이 없다. [자동 롤백](BACKEND_ROLLBACK.md)은 별도의 CloudWatch 알람과 Lambda로 V1 복구를 수행하며, 최초 생성 상태는 `disarmed`이므로 확인 후 활성화해야 한다. 수동 복구는 V2 비중을 0으로 적용한다.
+
+로컬에서는 ALB 변경 권한이 있는 본인 프로필을 선택해 실행한다. 아래 경로의 저장소 `ecs` root를 사용하며, 이전에 준비했던 `/tmp`의 독립 실험 Terraform root는 적용하지 않는다. 동일 리스너의 실험 규칙을 별도 state에서 이미 생성했다면 중복 생성하지 말고 먼저 소유권을 정리한다.
+
+```bash
+export AWS_PROFILE='<apply 권한이 있는 프로필>'
+terraform -chdir=ecs plan \
+  -target=aws_lb_listener_rule.backend_canary \
+  -target=aws_lb_listener_rule.backend_test \
+  -out=/tmp/backend-canary.tfplan
+terraform -chdir=ecs show -no-color /tmp/backend-canary.tfplan
+terraform -chdir=ecs apply /tmp/backend-canary.tfplan
+terraform -chdir=ecs output backend_canary_routing
+```
+
+기존 헤더 규칙이 state에 있는 최초 전환의 targeted plan 기대값은 `aws_lb_listener_rule.backend_test` → `aws_lb_listener_rule.backend_canary[0]` 주소 이동과 규칙 수정 1개다(추가·삭제 0개). 최초 전환 시 주소 이동의 양쪽을 포함하도록 두 target을 지정한다. 기존 헤더 조건은 제거되고 V1 100 / V2 0 가중치가 적용된다. 기존 규칙이 전혀 없는 새 환경에서는 추가 1개다. 기존 리스너·서비스·태스크 설정 변경은 없다. 이번 전환 실험에 한해 ALB 변경만 분리해 적용한다. Terraform의 `-target` 경고는 예상되며 일반적인 전체 인프라 적용에 상시 사용하지 않는다.
+
+2026-10-17 확인 시 전체 plan은 ALB 규칙 변경 외에 ECS 권장 AMI 조회값 변경으로 Launch Template·ASG 변경 2개를 포함했다. 이 변경은 ALB 코드와 별개이며 위 대상 지정 plan에서는 제외된다. 전체 plan이나 CI apply에서는 다시 포함될 수 있으므로 별도 검토한다. 이후 전체 plan에 남은 변경을 확인하되, 검토 없이 apply하지 않는다.
+
+확인 후 `variables.tf`의 `backend_canary_green_weight` 기본값을 `10 → 50 → 100`으로 단계마다 수정하고 새 plan/apply를 진행한다. 비율만 바꾸면 규칙 수정 1개가 예상된다. 현재 단계를 코드에 반영해 커밋하면 CI에서도 같은 값을 사용한다. 로컬 `-var`만 바꾸면 다음 CI가 코드의 기본값으로 되돌릴 수 있다. 가중치가 달라질 때마다 ALB 적용 값, HTTP 실패·프로필 불일치·지연, 타깃 및 ECS 상태를 확인한다.
+
+실험 후 V1으로 복구할 때는 규칙을 유지하고 `backend_canary_green_weight=0`으로 수정·apply한다. `backend_canary_enabled=false`는 규칙 삭제용이며 기존 헤더 규칙을 복원하지 않는다. 이 경우 V2 타깃 그룹과 ALB 리스너의 연결도 없어지므로 V2 서비스 운영을 계속하는 일반적인 롤백에는 사용하지 않는다. 매번 새 plan을 생성하며, 이전 단계의 saved plan을 재사용하지 않는다. 로컬 apply와 CI apply를 동시에 실행하지 않는다.
+
+### Backend 자동 롤백
+
+[자동 롤백 적용·검증 절차](BACKEND_ROLLBACK.md)를 따른다. CI 정책을 로컬에서 먼저 적용한 뒤 컨트롤러를 생성하고, V1 상태 확인 후 SSM 감시 상태를 활성화한다. 롤백 후에는 `tripped` 상태가 새로운 Terraform plan에도 반영되어 V2 재전환을 막는다. 이미 저장해 둔 plan은 폐기해야 한다.
 
 ## Backend (V1 DB 사용)
 
@@ -135,7 +176,7 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
     - 끄면(`false`) ECS에서 주문 접수가 `MARKET_STREAM_UNAVAILABLE`로 거절될 수 있습니다. CD 적용 후에는 apply만으로 실행 중 Task가 바뀌지 않으므로 ECS 배포 job 재실행이 필요합니다.
   - `KIWOOM_COLLECTOR_ENABLED=false`: collector는 V1 운영 서버가 담당합니다.
   - `backend_desired_count=2`: 최초 생성 기본값이며 이후 Task 수는 Auto Scaling이 2~4개로 관리합니다. dev 코드의 주기 작업(만료 주문 정리)은 V1과 함께 운영 DB에 씁니다.
-- 운영 트래픽은 받지 않습니다. 테스트 헤더(`X-StockSpoon-Target: ecs`)가 있는 `/api/*` 요청만 들어옵니다.
+- Backend 트래픽은 위 Canary 가중치를 따릅니다. 초기 V2 비중은 0입니다. Canary를 비활성화하면 `/api/*` 요청도 V1 기본 경로로 전달됩니다.
 - 헬스체크는 actuator가 없어 인증 없이 200을 주는 `/api/v1/auth/csrf`를 임시로 사용합니다. DB·Valkey 상태는 반영하지 않으므로 Canary 전에 `/actuator/health`로 교체합니다.
 - Valkey는 운영 Valkey의 `backend` 사용자로 IAM 인증합니다. (Task Role에 Connect Policy 연결)
 
@@ -163,7 +204,7 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
    - 머지 후 다음 V1 CD(`git pull` + 전체 `compose up`)도 db를 재생성하므로, 장중에 머지하지 않습니다.
    - 확인: `sudo ss -ltnp | grep 3306` → `0.0.0.0:3306` 표시, V1 backend 정상
 4. 이 root PR 머지·apply: V1 앱 SG 규칙, Task Definition(dev 이미지), Valkey 정책
-5. 확인: `curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf`, Target Group healthy, 로그에 Hikari·Valkey 연결 오류 없음
+5. 확인: `curl -s https://stock-spoon.com/api/v1/auth/csrf`, Target Group healthy, 로그에 Hikari·Valkey 연결 오류 없음. curl은 현재 가중치의 대상을 확인하며 V2 직행 테스트가 아님
 
 롤백: 이전 Task Definition 리비전으로 `update-service`합니다. 서비스를 0개로 중단하려면 먼저 Auto Scaling의 예약·동적 확장을 중단하고 최소치를 0으로 조정한 뒤 서비스 desired를 0으로 변경합니다. `desired_count`는 Terraform이 무시하므로 변수 변경만으로 중단되지 않습니다. DB 경로까지 닫으려면 SG 규칙 제거 후 compose `ports`를 되돌리고 db를 재생성합니다.
 
@@ -200,7 +241,7 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 1. 이 변경 apply: 배포 Role 생성, 서비스 `ignore_changes` 추가 (서비스·Task Definition 변경 없음)
 2. BE 레포 Secret `AWS_V2_ECS_DEPLOY_ROLE_ARN` 등록
 3. BE 레포 CD PR을 `dev`에 머지 → 그 머지 커밋으로 첫 ECS 배포
-4. 확인: Actions 요약의 Task Definition 리비전, `curl -s -H 'X-StockSpoon-Target: ecs' https://stock-spoon.com/api/v1/auth/csrf`
+4. 확인: Actions 요약의 Task Definition 리비전과 V2 타깃 상태. `curl -s https://stock-spoon.com/api/v1/auth/csrf`는 현재 ALB 가중치에 따라 전달되므로 V2 배포 검증으로 단독 사용하지 않는다.
 
 ## ProxySQL DB migration rehearsal
 
