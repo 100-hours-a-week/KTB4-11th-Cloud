@@ -213,7 +213,7 @@ variable "db_migration_pmm_instance_type" {
 variable "retain_legacy_terraform_ci_write_policy" {
   description = "Keep the legacy inline policy during managed-policy attachment; set false only after verifying all four attachments"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "db_migration_admin_cidrs" {

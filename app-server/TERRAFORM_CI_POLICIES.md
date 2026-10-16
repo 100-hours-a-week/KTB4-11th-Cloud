@@ -2,6 +2,8 @@
 
 기존 resource-write 인라인 정책을 4개의 고객 관리형 정책으로 나눈다. state-write 인라인 정책과 기존 read/state-access 관리형 정책은 유지한다.
 
+2026-10-16 운영 역할의 관리형 정책 4개 연결과 기존 resource-write 제거를 완료했다. 현재 `retain_legacy_terraform_ci_write_policy` 기본값은 `false`다. 아래 2단계 절차는 기존 인라인 정책이 남아 있는 환경을 전환할 때 사용한다.
+
 | 정책 접미사 | 범위 | 소스 |
 |---|---|---|
 | compute | EC2·ElastiCache·ECS·ASG·Application Auto Scaling·ALB·ACM | `modules/terraform-ci-policies/compute.tf` |
@@ -15,7 +17,7 @@
 
 ## 로컬 적용 자격 증명
 
-CI 역할은 자기 자신의 권한을 수정할 수 없으므로 이 변경은 로컬에서 먼저 적용해야 한다. `pattie_for_terraform`의 현재 정책 시뮬레이션에서는 `iam:CreatePolicy`, `iam:AttachRolePolicy`, `iam:DeleteRolePolicy`가 거부됐다. 현재 자격 증명으로 apply를 반복하지 않는다.
+CI 역할은 자기 자신의 권한을 수정할 수 없으므로 이 변경은 로컬에서 먼저 적용해야 한다. `pattie_for_terraform`의 현재 정책 시뮬레이션에서는 `iam:CreatePolicy`, `iam:AttachRolePolicy`, `iam:DeleteRolePolicy`가 거부됐다. 이 권한이 없는 프로필로 apply를 반복하지 않는다. 운영 전환은 사용자가 지정한 관리자 프로필 `stockspoon`으로 수행했다.
 
 관리자는 아래 작업을 필요한 대상에 한정해 허용해야 한다.
 
@@ -28,15 +30,15 @@ CI 역할은 자기 자신의 권한을 수정할 수 없으므로 이 변경은
 
 ## 1단계: 관리형 정책 연결
 
-`retain_legacy_terraform_ci_write_policy=true`가 기본값이다. 새 정책 4개와 연결 4개를 추가하면서 기존 인라인 권한을 유지한다. `moved` 블록은 기존 인라인 리소스를 `[0]` 주소로 연결해 재생성하지 않는다.
+기존 인라인 정책이 남아 있는 환경의 최초 전환에서는 `retain_legacy_terraform_ci_write_policy` 기본값을 임시로 `true`로 설정한다. 새 정책 4개와 연결 4개를 추가하면서 기존 인라인 권한을 유지한다. `moved` 블록은 기존 인라인 리소스를 `[0]` 주소로 연결해 재생성하지 않는다.
 
 ```bash
-AWS_PROFILE=pattie_for_terraform terraform -chdir=app-server plan \
+AWS_PROFILE=stockspoon terraform -chdir=app-server plan \
   -target=aws_iam_policy.github_actions_terraform_read \
   -target=aws_iam_role_policy_attachment.terraform_ci_write \
   -target=aws_iam_role_policy.github_actions_terraform_apply_resources \
   -out=/tmp/ci-policy-phase1.tfplan
-AWS_PROFILE=pattie_for_terraform terraform -chdir=app-server apply /tmp/ci-policy-phase1.tfplan
+AWS_PROFILE=stockspoon terraform -chdir=app-server apply /tmp/ci-policy-phase1.tfplan
 ```
 
 계획에 새 정책 4개·연결 4개가 있으며 삭제가 없는지 확인한다. 기존 read 및 인라인 정책의 갱신은 포함될 수 있다. 기존 인라인 정책은 전환 기간 동안 Sid를 제거한 동일 권한으로 유지한다.
@@ -44,7 +46,7 @@ AWS_PROFILE=pattie_for_terraform terraform -chdir=app-server apply /tmp/ci-polic
 연결 상태를 조회한다.
 
 ```bash
-aws iam list-attached-role-policies --profile pattie_for_terraform \
+aws iam list-attached-role-policies --profile stockspoon \
   --role-name stockspoon-v1-github-actions-terraform-apply
 ```
 
@@ -52,7 +54,7 @@ aws iam list-attached-role-policies --profile pattie_for_terraform \
 
 ## 2단계: 기존 인라인 쓰기 정책 제거
 
-4개 연결 확인 후 `variables.tf`의 `retain_legacy_terraform_ci_write_policy` 기본값을 `false`로 변경해 커밋한다. 일회성 `-var=false`만 사용하면 다음 CI apply가 기본값 true로 복원하므로 사용하지 않는다.
+4개 연결 확인 후 `variables.tf`의 `retain_legacy_terraform_ci_write_policy` 기본값을 `false`로 변경해 커밋한다. 일회성 `-var=false`만 사용하고 코드 기본값을 true로 남기면 다음 CI apply가 인라인 정책을 복원하므로 코드도 함께 변경한다.
 
 같은 target으로 새 plan을 만들고, 관리형 정책·연결이 모두 유지된 채 기존 resource-write 인라인 정책 1개만 삭제되는지 확인한 뒤 적용한다. state-write 정책은 삭제하지 않는다. 이후 CI 권한을 다시 확인한다.
 
