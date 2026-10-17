@@ -238,6 +238,12 @@ variable "proxysql_port" {
   default     = 6033
 }
 
+variable "proxysql_monitor_username" {
+  description = "MySQL account ProxySQL uses to monitor read_only status"
+  type        = string
+  default     = "proxysql_monitor"
+}
+
 variable "backend_mysql_database" {
   description = "MySQL database name used by the backend"
   type        = string

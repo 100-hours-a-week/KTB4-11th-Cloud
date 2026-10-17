@@ -1,6 +1,5 @@
 # DB migration rehearsal ProxySQL service.
-# This first stage starts ProxySQL and tests TCP reachability to MySQL;
-# it does not expose a stable endpoint or route Backend writes.
+# A bootstrap sidecar reapplies routing configuration on every fresh ECS task.
 
 locals {
   proxysql_subnet_ids = [data.terraform_remote_state.shared.outputs.private_subnet_ids[0]]
@@ -8,6 +7,86 @@ locals {
   proxysql_v1_mysql_host        = data.terraform_remote_state.app.outputs.app_private_ip
   proxysql_migration_mysql_host = try(data.terraform_remote_state.app.outputs.db_migration_host.private_ip, "")
   proxysql_migration_mysql_sg   = try(data.terraform_remote_state.app.outputs.db_migration_host.security_group_id, "")
+  proxysql_monitor_password_arn = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/PROXYSQL_MONITOR_PASSWORD"
+
+  # ProxySQL starts with an empty config database, then this sidecar sets the
+  # servers, app user, read_only monitoring, and writer/reader hostgroups.
+  proxysql_bootstrap_command = <<-EOT
+    set -eu
+
+    if [ -z "$PROXYSQL_MIGRATION_HOST" ]; then
+      echo "ERROR: migration MySQL host is missing from Terraform remote state" >&2
+      exit 1
+    fi
+    : "$PROXYSQL_APP_USER"
+    : "$PROXYSQL_APP_PASSWORD"
+    : "$PROXYSQL_MONITOR_PASSWORD"
+
+    cat > /tmp/proxysql-admin.cnf <<'ADMIN'
+    [client]
+    user=admin
+    password=admin
+    protocol=tcp
+    host=127.0.0.1
+    port=6032
+    ADMIN
+    chmod 0600 /tmp/proxysql-admin.cnf
+
+    attempt=0
+    until mysql --defaults-extra-file=/tmp/proxysql-admin.cnf -Nse 'SELECT 1' >/dev/null 2>&1; do
+      attempt=$((attempt + 1))
+      if [ "$attempt" -ge 60 ]; then
+        echo "ERROR: ProxySQL Admin interface did not become ready" >&2
+        exit 1
+      fi
+      sleep 2
+    done
+
+    # Escape SQL string literals without printing credential values to logs.
+    sql_escape() {
+      printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e "s/'/''/g"
+    }
+    app_user_sql=$(sql_escape "$PROXYSQL_APP_USER")
+    app_password_sql=$(sql_escape "$PROXYSQL_APP_PASSWORD")
+    monitor_user_sql=$(sql_escape "$PROXYSQL_MONITOR_USER")
+    monitor_password_sql=$(sql_escape "$PROXYSQL_MONITOR_PASSWORD")
+
+    mysql --defaults-extra-file=/tmp/proxysql-admin.cnf <<SQL
+    DELETE FROM mysql_servers
+      WHERE hostname IN ('${local.proxysql_v1_mysql_host}', '${local.proxysql_migration_mysql_host}');
+    INSERT INTO mysql_servers (hostgroup_id, hostname, port, comment) VALUES
+      (10, '${local.proxysql_v1_mysql_host}', ${var.v1_mysql_port}, 'V1 primary candidate'),
+      (20, '${local.proxysql_migration_mysql_host}', ${var.v1_mysql_port}, 'Migration replica candidate');
+
+    DELETE FROM mysql_replication_hostgroups
+      WHERE writer_hostgroup = 10 OR reader_hostgroup = 20;
+    INSERT INTO mysql_replication_hostgroups (writer_hostgroup, reader_hostgroup, check_type, comment)
+      VALUES (10, 20, 'read_only', 'V1 and migration DB');
+
+    DELETE FROM mysql_users WHERE username = '$app_user_sql';
+    INSERT INTO mysql_users
+      (username, password, default_hostgroup, active, frontend, backend, transaction_persistent)
+      VALUES ('$app_user_sql', '$app_password_sql', 10, 1, 1, 1, 1);
+
+    UPDATE global_variables SET variable_value = '$monitor_user_sql'
+      WHERE variable_name = 'mysql-monitor_username';
+    UPDATE global_variables SET variable_value = '$monitor_password_sql'
+      WHERE variable_name = 'mysql-monitor_password';
+    UPDATE global_variables SET variable_value = 'false'
+      WHERE variable_name = 'mysql-monitor_writer_is_also_reader';
+
+    LOAD MYSQL VARIABLES TO RUNTIME;
+    LOAD MYSQL SERVERS TO RUNTIME;
+    LOAD MYSQL USERS TO RUNTIME;
+    SAVE MYSQL VARIABLES TO DISK;
+    SAVE MYSQL SERVERS TO DISK;
+    SAVE MYSQL USERS TO DISK;
+    SQL
+
+    echo "ProxySQL bootstrap completed for V1 and migration MySQL"
+  EOT
+
+  proxysql_healthcheck_command = "mysql --defaults-extra-file=/tmp/proxysql-admin.cnf -Nse \"SELECT IF((SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostname IN ('${local.proxysql_v1_mysql_host}', '${local.proxysql_migration_mysql_host}') AND status = 'ONLINE') = 2 AND (SELECT COUNT(*) FROM runtime_mysql_replication_hostgroups WHERE writer_hostgroup = 10 AND reader_hostgroup = 20) = 1 AND (SELECT COUNT(DISTINCT username) FROM runtime_mysql_users) >= 1, 1, 0)\" | grep -qx '1'"
 
   proxysql_network_check_command = join("\n", concat(
     [
@@ -149,12 +228,31 @@ resource "aws_ecs_task_definition" "proxysql" {
         mysql_servers=()
         mysql_users=()
         CONFIG
+      cat > /tmp/proxysql-admin.cnf <<'ADMIN'
+      [client]
+      user=admin
+      password=admin
+      protocol=tcp
+      host=127.0.0.1
+      port=6032
+      ADMIN
+      chmod 0600 /tmp/proxysql-admin.cnf
         exec proxysql -f --initial -c /tmp/proxysql.cnf
       EOT
       ]
-      cpu         = var.proxysql_task_cpu - 32
-      memory      = var.proxysql_task_memory - 64
+      cpu         = var.proxysql_task_cpu - 64
+      memory      = var.proxysql_task_memory - 128
       stopTimeout = 30
+
+      healthCheck = {
+        command  = ["CMD-SHELL", local.proxysql_healthcheck_command]
+        interval = 10
+        timeout  = 5
+        retries  = 6
+        # The bootstrap sidecar can wait up to 120s for the Admin interface and
+        # then applies the routing config; allow that before health failures count.
+        startPeriod = 180
+      }
 
       portMappings = [
         {
@@ -169,6 +267,49 @@ resource "aws_ecs_task_definition" "proxysql" {
           awslogs-group         = aws_cloudwatch_log_group.proxysql.name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "proxysql"
+        }
+      }
+    },
+    {
+      name       = "proxysql-bootstrap"
+      image      = var.proxysql_image
+      essential  = false
+      entryPoint = ["/bin/sh", "-ec"]
+      command    = [local.proxysql_bootstrap_command]
+      environment = [
+        { name = "PROXYSQL_V1_HOST", value = local.proxysql_v1_mysql_host },
+        { name = "PROXYSQL_MIGRATION_HOST", value = local.proxysql_migration_mysql_host },
+        { name = "PROXYSQL_MONITOR_USER", value = var.proxysql_monitor_username },
+      ]
+      secrets = [
+        {
+          name      = "PROXYSQL_APP_USER"
+          valueFrom = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/MYSQL_USER"
+        },
+        {
+          name      = "PROXYSQL_APP_PASSWORD"
+          valueFrom = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/MYSQL_PASSWORD"
+        },
+        {
+          name      = "PROXYSQL_MONITOR_PASSWORD"
+          valueFrom = local.proxysql_monitor_password_arn
+        },
+      ]
+      dependsOn = [
+        {
+          containerName = "proxysql"
+          condition     = "START"
+        }
+      ]
+      cpu    = 32
+      memory = 64
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.proxysql.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "proxysql-bootstrap"
         }
       }
     },
@@ -208,7 +349,7 @@ resource "aws_ecs_service" "proxysql" {
   health_check_grace_period_seconds  = 60
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
-  wait_for_steady_state              = false
+  wait_for_steady_state              = true
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.service.name
