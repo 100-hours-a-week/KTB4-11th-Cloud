@@ -59,6 +59,21 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
   }
 
   statement {
+    sid    = "ManageBackendDatasourceUrl"
+    effect = "Allow"
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:PutParameter",
+      "ssm:DeleteParameter",
+      "ssm:AddTagsToResource",
+      "ssm:RemoveTagsFromResource",
+      "ssm:ListTagsForResource",
+    ]
+    resources = [var.resource_arns.backend_datasource_url_parameter]
+  }
+
+  statement {
     sid    = "ManageRepositorySecrets"
     effect = "Allow"
     actions = [
