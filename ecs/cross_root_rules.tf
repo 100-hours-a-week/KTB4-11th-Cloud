@@ -84,7 +84,7 @@ resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_backend" {
   description                  = "Allow V2 backend tasks to use V1 MySQL"
 }
 
-# Backend가 ProxySQL로 전환되면 사용할 경로. ProxySQL SG는 이 root에서 관리한다.
+# Backend task SG가 ProxySQL port로 접속할 수 있게 한다.
 resource "aws_vpc_security_group_ingress_rule" "proxysql_from_backend" {
   security_group_id            = aws_security_group.proxysql_task.id
   referenced_security_group_id = aws_security_group.backend_task.id
@@ -94,7 +94,7 @@ resource "aws_vpc_security_group_ingress_rule" "proxysql_from_backend" {
   description                  = "Allow V2 backend tasks to connect to ProxySQL"
 }
 
-# ProxySQL은 별도 ECS 서비스이며 Backend datasource는 이 단계에서 변경하지 않는다.
+# ProxySQL task SG는 V1 MySQL에 접속할 수 있다.
 resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_proxysql" {
   security_group_id            = data.terraform_remote_state.app.outputs.app_security_group_id
   referenced_security_group_id = aws_security_group.proxysql_task.id

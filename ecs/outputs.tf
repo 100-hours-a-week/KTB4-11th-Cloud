@@ -58,6 +58,11 @@ output "proxysql_service_name" {
   value       = aws_ecs_service.proxysql.name
 }
 
+output "proxysql_dns_name" {
+  description = "Stable private DNS name for the ProxySQL ECS service"
+  value       = local.proxysql_dns_name
+}
+
 output "proxysql_log_group_name" {
   description = "CloudWatch Logs group for ProxySQL and its one-shot MySQL TCP checks"
   value       = aws_cloudwatch_log_group.proxysql.name
