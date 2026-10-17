@@ -30,6 +30,29 @@ resource "aws_vpc_security_group_ingress_rule" "valkey_from_ai" {
   description                  = "Allow the development AI host to connect to Valkey over TLS"
 }
 
+# dev도 Serverless reader endpoint에 접근할 수 있도록 기존 서버 SG만 허용한다.
+resource "aws_vpc_security_group_ingress_rule" "valkey_reader_from_backend" {
+  count = local.backend_security_group_id == null ? 0 : 1
+
+  security_group_id            = aws_security_group.valkey.id
+  referenced_security_group_id = local.backend_security_group_id
+  from_port                    = 6380
+  to_port                      = 6380
+  ip_protocol                  = "tcp"
+  description                  = "Allow the development application host to connect to the Valkey reader endpoint"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "valkey_reader_from_ai" {
+  count = local.ai_security_group_id == null ? 0 : 1
+
+  security_group_id            = aws_security_group.valkey.id
+  referenced_security_group_id = local.ai_security_group_id
+  from_port                    = 6380
+  to_port                      = 6380
+  ip_protocol                  = "tcp"
+  description                  = "Allow the development AI host to connect to the Valkey reader endpoint"
+}
+
 # prod: ECS Task가 실행되는 Private Subnet(2a, 2c) 전체에서 접근을 허용합니다.
 # Public Subnet(V1 EC2, ALB)은 제외되며, 실제 접속 통제는 서비스별 IAM 인증 사용자와 Connect Policy가 담당합니다.
 # TODO: ECS 서비스(backend, socket, market-data, match-engine)가 모두 배포되면 ecs root에서
