@@ -9,7 +9,7 @@ variable "aws_region" {
 variable "repository_names" {
   description = "Private ECR repository names"
   type        = set(string)
-  default     = ["stockspoon-v2-prod-backend"]
+  default     = ["stockspoon-v2-prod-backend", "stockspoon-v2-prod-frontend"]
 }
 
 variable "keep_image_count" {

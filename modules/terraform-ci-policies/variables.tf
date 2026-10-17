@@ -5,6 +5,8 @@ variable "resource_arns" {
     backend_datasource_url_parameter = string
     alb_logs                         = string
     stock_logos                      = string
+    frontend_assets                  = string
+    cloudfront_distributions         = string
     lambda                           = list(string)
     secrets                          = list(string)
     queues                           = list(string)

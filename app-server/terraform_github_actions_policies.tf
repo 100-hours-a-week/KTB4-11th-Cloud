@@ -148,6 +148,7 @@ locals {
   github_actions_terraform_ecr_repository_arns = [
     for name in [
       "stockspoon-v2-prod-backend",
+      "stockspoon-v2-prod-frontend",
     ] :
     "arn:${data.aws_partition.github_actions_terraform.partition}:ecr:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:repository/${name}"
   ]
@@ -224,6 +225,14 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
       "acm:Describe*",
       "acm:Get*",
       "acm:List*",
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+      "cloudfront:GetOriginAccessControl",
+      "cloudfront:GetCachePolicy",
+      "cloudfront:GetOriginRequestPolicy",
+      "cloudfront:ListCachePolicies",
+      "cloudfront:ListOriginRequestPolicies",
+      "cloudfront:ListTagsForResource",
       "cloudwatch:Describe*",
       "cloudwatch:Get*",
       "cloudwatch:List*",
@@ -280,6 +289,7 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     resources = [
       local.alb_access_log_bucket_arn,
       local.stock_logo_bucket_arn,
+      local.frontend_assets_bucket_arn,
     ]
   }
 
@@ -387,6 +397,8 @@ module "terraform_ci_policies" {
     backend_datasource_url_parameter = local.backend_datasource_url_parameter_arn
     alb_logs                         = local.alb_access_log_bucket_arn
     stock_logos                      = local.stock_logo_bucket_arn
+    frontend_assets                  = local.frontend_assets_bucket_arn
+    cloudfront_distributions         = "arn:aws:cloudfront::${data.aws_caller_identity.github_actions_terraform.account_id}:distribution/*"
     lambda                           = local.github_actions_terraform_lambda_arns
     secrets                          = local.github_actions_terraform_secret_arns
     queues                           = local.github_actions_terraform_sqs_queue_arns
