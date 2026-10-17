@@ -17,13 +17,13 @@
 
 Valkey는 test-infra의 개발 애플리케이션 EC2에서 실행되는 Backend가 사용한다. 개발 EC2는 기존 loadtest 애플리케이션과 분리된 전용 Security Group과 IAM Role을 사용한다.
 
-Redis Terraform은 test-infra의 `dev_app_security_group_id` Output으로 식별한 개발 Security Group에서만 Valkey TCP 6379 포트를 허용하고, `dev_app_iam_role_name` Output의 EC2 Role에 Backend용 IAM Policy를 연결한다.
+Redis Terraform은 test-infra의 `dev_app_security_group_id` Output으로 식별한 개발 Security Group에서만 Valkey TCP 6379·6380 포트를 허용하고, `dev_app_iam_role_name` Output의 EC2 Role에 Backend용 IAM Policy를 연결한다.
 
 Valkey 접근에는 IAM 인증을 사용한다. 공용 Policy는 해당 Valkey Cache와 애플리케이션용 ElastiCache User ARN의 `elasticache:Connect`만 허용한다.
 
 ### AI 개발 서버
 
-Redis Terraform은 `ai-server/dev-infra` Remote State에서 개발 AI Security Group과 IAM Role을 참조한다. Valkey Security Group은 AI Security Group에서 오는 TLS TCP `6379`를 허용하고, AI EC2 Role에는 공용 애플리케이션 User와 Cache에 대한 `elasticache:Connect` Policy를 연결한다.
+Redis Terraform은 `ai-server/dev-infra` Remote State에서 개발 AI Security Group과 IAM Role을 참조한다. Valkey Security Group은 AI Security Group에서 오는 TLS TCP `6379`·`6380`을 허용하고, AI EC2 Role에는 공용 애플리케이션 User와 Cache에 대한 `elasticache:Connect` Policy를 연결한다.
 
 개발 편의를 위해 Backend와 AI는 같은 IAM User를 사용하고 모든 Key·채널과 일반 명령에 접근할 수 있다. `@dangerous` 범주의 명령은 차단한다.
 
@@ -38,7 +38,7 @@ Valkey는 `test-infra` VPC 안의 공용 개발 Private Subnet 두 개를 사용
 
 두 Subnet은 `test-infra`의 별도 Private Route Table에 연결한다. Route Table에는 AWS가 자동으로 만드는 VPC `local` 경로만 존재하며 Internet Gateway와 NAT Gateway 경로를 추가하지 않는다. 기존 Public Subnet, Route Table, EC2 Network Interface는 수정하지 않는다.
 
-Valkey Security Group은 test-infra의 개발 전용 앱 Security Group과 개발 AI Security Group에서 오는 TCP `6379`만 허용한다. `0.0.0.0/0`, loadtest 앱 및 개발자 개인 IP에는 열지 않는다.
+Valkey Security Group은 test-infra의 개발 전용 앱 Security Group과 개발 AI Security Group에서 오는 TCP `6379`·`6380`만 허용한다. 기본 읽기·쓰기는 `6379`를 사용하며, `6380`은 Serverless 읽기 엔드포인트 및 클라이언트의 클러스터 토폴로지 갱신을 위해 허용한다. `0.0.0.0/0`, loadtest 앱 및 개발자 개인 IP에는 열지 않는다.
 
 ## Terraform 상태
 
@@ -132,7 +132,7 @@ ECS 서비스마다 IAM 인증 사용자와 Connect Policy를 분리한다. Poli
 
 ### 접근 허용
 
-- **네트워크 (이 root):** ECS Task가 실행되는 shared-infra Private Subnet(2a, 2c) CIDR에서 `6379`를 허용한다. Public Subnet(V1 EC2, ALB)은 제외한다. 서비스가 늘어도 규칙을 추가할 필요가 없도록 한 개발 단계의 설정이다.
+- **네트워크 (이 root):** ECS Task가 실행되는 shared-infra Private Subnet(2a, 2c) CIDR에서 기본 엔드포인트 `6379`와 읽기 엔드포인트 `6380`을 허용한다. Lettuce는 클러스터 토폴로지 갱신 중 `6380`에도 연결하므로 두 포트가 모두 필요하다. Public Subnet(V1 EC2, ALB)은 제외한다. 서비스가 늘어도 규칙을 추가할 필요가 없도록 한 개발 단계의 설정이다.
 - **인증 (ecs root):** 실제 접속 통제는 IAM이 담당한다. Task Role ↔ 서비스별 Connect Policy 연결은 `ecs` root가 이 root의 Output(`valkey_connect_policy_arns`, `valkey_user_names`)을 참조해 관리한다.
 - **추후 축소:** ECS 서비스가 모두 배포되면 `ecs` root에서 Task Security Group별 ingress를 먼저 추가하고(`valkey_security_group_id` 참조), 이후 이 root의 CIDR 규칙을 제거한다. 순서를 지키면 접속 중단이 없다.
 

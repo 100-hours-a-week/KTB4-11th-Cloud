@@ -91,6 +91,15 @@ resource "aws_lb_target_group" "market_http" {
 resource "aws_ecs_task_definition" "market_http" {
   count = local.ai_market_enabled ? 1 : 0
 
+  skip_destroy = true
+
+  lifecycle {
+    ignore_changes = [
+      family, network_mode, requires_compatibilities, cpu, memory,
+      execution_role_arn, task_role_arn, runtime_platform, container_definitions,
+    ]
+  }
+
   family                   = "${var.name_prefix}-market-http"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
@@ -112,6 +121,17 @@ resource "aws_ecs_task_definition" "market_http" {
       essential   = true
       stopTimeout = var.market_http_stop_timeout_seconds
 
+      healthCheck = {
+        command = [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${var.market_http_container_port}/health', timeout=3)\" || exit 1",
+        ]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 30
+      }
+
       portMappings = [
         {
           containerPort = var.market_http_container_port
@@ -131,8 +151,14 @@ resource "aws_ecs_task_definition" "market_http" {
         { name = "MARKET_HTTP_VALKEY_TLS", value = "true" },
         { name = "MARKET_HTTP_VALKEY_AUTH_MODE", value = "iam" },
         { name = "MARKET_HTTP_AWS_REGION", value = var.aws_region },
-        { name = "MARKET_HTTP_DOCS_ENABLED", value = "false" },
+        { name = "MARKET_HTTP_CORS_ORIGINS", value = jsonencode(["*"]) },
+        { name = "MARKET_HTTP_CORS_HEADERS", value = jsonencode(["*"]) },
+        { name = "MARKET_HTTP_DOCS_ENABLED", value = "true" },
+        { name = "MARKET_HTTP_DOCS_PATH_PREFIX", value = "/market" },
         { name = "MARKET_HTTP_LOG_LEVEL", value = var.market_http_log_level },
+        { name = "MARKET_HTTP_METRICS_NAMESPACE", value = local.sse_metrics_namespace },
+        { name = "MARKET_HTTP_METRICS_CLUSTER_NAME", value = aws_ecs_cluster.main.name },
+        { name = "MARKET_HTTP_METRICS_SERVICE_NAME", value = "${var.name_prefix}-market-http" },
       ]
 
       logConfiguration = {
@@ -198,10 +224,8 @@ resource "aws_ecs_service" "market_http" {
   propagate_tags          = "SERVICE"
   enable_ecs_managed_tags = true
 
-  # 이미지 배포는 AI 레포 cd-ecs-v2.yaml이 새 리비전을 등록해 수행한다.
-  # apply가 CD로 배포된 리비전을 ai_image_tag 리비전으로 되돌리지 않도록 무시한다.
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, desired_count]
   }
 
   depends_on = [

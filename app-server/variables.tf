@@ -210,6 +210,12 @@ variable "db_migration_pmm_instance_type" {
   default     = "t3a.medium"
 }
 
+variable "retain_legacy_terraform_ci_write_policy" {
+  description = "Keep the legacy inline policy during managed-policy attachment; set false only after verifying all four attachments"
+  type        = bool
+  default     = false
+}
+
 variable "db_migration_admin_cidrs" {
   description = "Administrator IPv4 CIDRs allowed to use SSH and the PMM HTTPS UI"
   type        = set(string)

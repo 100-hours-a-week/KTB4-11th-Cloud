@@ -23,12 +23,66 @@ variable "container_log_retention_days" {
   default     = 30
 }
 
+variable "observability_log_retention_days" {
+  description = "Retention for ECS performance, lifecycle events, and experiment logs"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = contains([7, 14, 30, 60, 90, 120, 150, 180, 365], var.observability_log_retention_days)
+    error_message = "Choose a supported retention of at least 7 days."
+  }
+}
+
+variable "observability_alarm_actions" {
+  description = "Optional SNS/action ARNs for service health alarms; empty keeps alarms observable without notifications"
+  type        = list(string)
+  default     = []
+}
+
+# 두 서비스 모두 평일 08:40~15:40에는 최소 3개, 그 외에는 최소 2개를 유지한다.
+variable "service_preopen_scaling" {
+  description = "Paired schedules in Asia/Seoul; both services default to minimum 3 at 08:40 and minimum 2 at 15:40 on weekdays"
+  type = map(object({
+    min_capacity     = number
+    preopen_schedule = string
+    restore_schedule = string
+  }))
+  default = {
+    backend = {
+      min_capacity     = 3
+      preopen_schedule = "cron(40 8 ? * MON-FRI *)"
+      restore_schedule = "cron(40 15 ? * MON-FRI *)"
+    }
+    market-http = {
+      min_capacity     = 3
+      preopen_schedule = "cron(40 8 ? * MON-FRI *)"
+      restore_schedule = "cron(40 15 ? * MON-FRI *)"
+    }
+  }
+
+  validation {
+    condition = alltrue([
+      for service, config in var.service_preopen_scaling :
+      contains(["backend", "market-http"], service) &&
+      contains([3, 4], config.min_capacity) &&
+      can(regex("^cron\\(.+\\)$", config.preopen_schedule)) &&
+      can(regex("^cron\\(.+\\)$", config.restore_schedule)) &&
+      config.preopen_schedule != config.restore_schedule &&
+      (service != "backend" || (
+        config.min_capacity == 3 && config.preopen_schedule == "cron(40 8 ? * MON-FRI *)"
+      ))
+    ])
+    error_message = "Use backend/market-http keys, minimum 3 or 4, and distinct cron schedules; backend preopen must be weekdays at 08:40 with minimum 3."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Service ASG (Backend + Socket)
 # ---------------------------------------------------------------------------
 
-# 기준 Task 조합(Backend 1 vCPU/1 GiB + Socket 2 vCPU/4 GiB)에 20% Headroom을 적용한
-# 3.75 vCPU / 6.25 GiB를 충족하고, ENI Trunking을 지원하는 x86 타입 (t3a 계열은 미지원)
+# 인스턴스당 Backend 1 vCPU/2 GiB + SSE 2 vCPU/4 GiB를 기본 조합으로 배치한다.
+# c6i.xlarge(4 vCPU/8 GiB)의 남은 자원은 OS·ECS Agent와 추가 Task에 사용한다.
 variable "service_instance_type" {
   description = "Instance type for the service ASG (must support ENI trunking)"
   type        = string
@@ -53,7 +107,7 @@ variable "service_root_volume_size_gib" {
   default     = 30
 }
 
-# Headroom은 인스턴스 크기에서 20% 확보하므로 Capacity Provider 여유분은 두지 않는다.
+# Capacity Provider에서 별도 예비 인스턴스 용량은 두지 않는다.
 variable "service_target_capacity" {
   description = "Capacity provider managed scaling target capacity (percent)"
   type        = number
@@ -72,6 +126,7 @@ variable "ecs_container_stop_timeout_seconds" {
 # ---------------------------------------------------------------------------
 
 # BE 레포 dev CI가 Public ECR(stockspoon-v2-backend)에 push한 이미지 태그(dev 커밋 SHA)
+# Task Definition의 기준 리비전에만 쓰인다. 서비스가 실제로 실행하는 이미지는 BE 레포 cd-ecs-dev.yaml이 배포한다.
 variable "backend_image_tag" {
   description = "Tag (git SHA) of the backend image in the public ECR repository stockspoon-v2-backend"
   type        = string
@@ -84,6 +139,25 @@ variable "backend_container_port" {
   default     = 8080
 }
 
+# ProxySQL은 우선 네트워크 경로 검증용으로 단일 AZ에 1개만 띄운다.
+variable "proxysql_image" {
+  description = "Pinned public ProxySQL container image for the migration rehearsal"
+  type        = string
+  default     = "proxysql/proxysql:3.0.11"
+}
+
+variable "proxysql_task_cpu" {
+  description = "ProxySQL ECS task CPU units (1024 = 1 vCPU)"
+  type        = number
+  default     = 512
+}
+
+variable "proxysql_task_memory" {
+  description = "ProxySQL ECS task memory in MiB"
+  type        = number
+  default     = 1024
+}
+
 variable "backend_task_cpu" {
   description = "Backend task CPU units (1024 = 1 vCPU)"
   type        = number
@@ -93,15 +167,14 @@ variable "backend_task_cpu" {
 variable "backend_task_memory" {
   description = "Backend task memory (MiB)"
   type        = number
-  default     = 1024
+  default     = 2048
 }
 
-# V1 Backend와 같은 DB를 쓰는 동안은 1개로 둔다.
-# dev 코드의 주기 작업(만료 주문 정리 등)이 V1과 함께 운영 DB에 쓰므로, 동시 실행 안전성을 BE와 확인한 뒤 늘린다.
+# Backend Task는 AZ와 인스턴스에 분산해 2개를 유지한다.
 variable "backend_desired_count" {
   description = "Number of backend tasks"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "backend_stop_timeout_seconds" {
@@ -137,25 +210,18 @@ variable "backend_deployment_controller" {
   default     = "ECS"
 }
 
-# 운영 트래픽에 영향 없이 Green(ECS)을 검증하기 위한 헤더 조건
-# 이 헤더가 있는 요청만 Green Target Group으로 전달된다.
-variable "backend_test_header_name" {
-  description = "HTTP header that routes test requests to the ECS backend"
-  type        = string
-  default     = "X-StockSpoon-Target"
-}
-
-variable "backend_test_header_value" {
-  description = "Header value that routes test requests to the ECS backend"
-  type        = string
-  default     = "ecs"
-}
-
 # 경로 기반 라우팅: Backend는 /api/*, Socket(market-http)은 /market/*
 variable "backend_path_patterns" {
   description = "ALB path patterns routed to the ECS backend"
   type        = list(string)
   default     = ["/api/*"]
+}
+
+# MySQL port used by the ProxySQL rehearsal targets.
+variable "v1_mysql_port" {
+  description = "MySQL port published by the V1 and migration database hosts"
+  type        = number
+  default     = 3306
 }
 
 # Current private IP of the standalone ProxySQL ECS task used for the migration rehearsal.
@@ -194,21 +260,51 @@ variable "backend_kiwoom_stream_enabled" {
   default     = true
 }
 
-variable "backend_test_rule_priority" {
-  description = "Priority of the test listener rule on the HTTPS listener"
+variable "backend_canary_enabled" {
+  description = "Enable weighted routing for all backend API requests; false sends API requests through the default V1 route"
+  type        = bool
+  default     = true
+}
+
+variable "backend_canary_green_weight" {
+  description = "V2 traffic weight from 0 to 100; V1 receives the remaining weight"
+  type        = number
+  default     = 0 # 현재 값에 따라 V1만 처리한다. 0이면 V2는 ALB에 등록되지 않는다.
+
+  validation {
+    condition = (
+      var.backend_canary_green_weight >= 0 &&
+      var.backend_canary_green_weight <= 100 &&
+      floor(var.backend_canary_green_weight) == var.backend_canary_green_weight
+    )
+    error_message = "backend_canary_green_weight must be an integer between 0 and 100."
+  }
+}
+
+variable "backend_canary_rule_priority" {
+  description = "Priority of the weighted API rule on the HTTPS listener"
   type        = number
   default     = 100
+
+  validation {
+    condition = (
+      var.backend_canary_rule_priority >= 1 &&
+      var.backend_canary_rule_priority <= 50000 &&
+      floor(var.backend_canary_rule_priority) == var.backend_canary_rule_priority &&
+      var.backend_canary_rule_priority != var.market_http_rule_priority
+    )
+    error_message = "Canary priority must be an integer from 1 to 50000 and different from market_http_rule_priority."
+  }
 }
 
 # ---------------------------------------------------------------------------
 # AI market-http
 # ---------------------------------------------------------------------------
 
-# AI CI Dev가 Public ECR(stockspoon-v1-ai)에 push한 통합 이미지의 태그(dev 커밋 SHA)
+# AI 서비스 최초 생성에 사용할 검증된 이미지 태그. 이후 Task Definition은 앱 CD가 관리한다.
 # 비어 있으면 Task Definition과 ECS Service를 만들지 않고 SG·Target Group·리스너 규칙 등만 준비한다.
-# 서비스를 처음 만들 때만 쓰이며, 이후 이미지 배포는 AI 레포 cd-ecs-v2.yaml이 담당한다.
 variable "ai_image_tag" {
-  description = "Tag (git SHA) of the AI app image in the public ECR repository; empty skips task definitions and services"
+  description = "Bootstrap AI image tag; subsequent task definitions are app-CD owned; empty skips AI services"
   type        = string
   default     = "339f334d22a8c17aff3bc3a8c4ec24e361b730fc"
 }
@@ -229,17 +325,17 @@ variable "market_http_container_port" {
   default     = 8000
 }
 
-# uvicorn 단일 프로세스(이벤트 루프 1개)라 1 vCPU를 넘게 줘도 쓰지 못한다. Task 수로 확장한다.
+# SSE 서버 초기 설계값. 단일 uvicorn 프로세스의 실제 처리량은 부하 테스트로 검증한다.
 variable "market_http_task_cpu" {
   description = "market-http task CPU units (1024 = 1 vCPU)"
   type        = number
-  default     = 1024
+  default     = 2048
 }
 
 variable "market_http_task_memory" {
   description = "market-http task memory (MiB)"
   type        = number
-  default     = 1024
+  default     = 4096
 }
 
 variable "market_http_desired_count" {

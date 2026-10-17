@@ -110,3 +110,7 @@ IAM 역할은 다음 다섯 버킷의 state object와 `.tflock` object만 대상
 Apply 역할은 EC2와 ElastiCache의 쓰기 작업을 서울 리전으로 제한하고, IAM 변경은 이 Terraform root들이 사용하는 `stockspoon-v1-app-*`, `stockspoon-v1-ai-*`, `stockspoon-loadtest-*`, `stockspoon-v2-dev-*`, `stockspoon-v2-prod-*` 이름 범위와 `iam` root에 명시된 기존 사용자·그룹으로 제한합니다. GitHub Actions 역할 자체와 기존 ECR 배포 역할은 이 IAM 쓰기 범위에 포함하지 않습니다. Route 53 변경은 기존 애플리케이션 hosted zone으로 제한합니다. Lambda 함수, SQS queue, SES identity, Secrets Manager secret, ECR Public repository 변경은 저장소에서 사용하는 이름으로 제한합니다. CloudWatch와 Logs의 쓰기 작업은 서울 리전으로 제한하지만 IAM 리소스 범위는 `*`입니다.
 
 이 apply 역할은 인프라를 수정하는 권한이므로, OIDC trust는 저장소의 `main` 브랜치로 제한합니다. 이 역할 자체의 trust policy를 변경하려면 역할이 자기 자신을 수정할 수 없으므로, 로컬 AWS 자격 증명으로 `app-server` root를 plan/apply해야 합니다. Plan 역할은 지정된 S3 state object 전체를 읽을 수 있으며 Secrets Manager 값 조회 API 권한은 받지 않습니다.
+
+## CI 쓰기 정책 관리형 분리
+
+CI 역할의 인라인 정책 총량 제한을 피하기 위한 4개 관리형 정책과 2단계 전환 절차는 [CI 정책 운영 안내](../app-server/TERRAFORM_CI_POLICIES.md)를 따른다. 새 관리형 정책 연결을 확인하기 전에는 기존 인라인 정책을 제거하지 않는다.
