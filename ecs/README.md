@@ -168,7 +168,7 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
 
 - `backend_image_tag`는 최초 생성 리비전에만 쓰입니다. 이후 배포와 실행 설정은 BE 레포 `cd-ecs-v2.yaml`과 앱 템플릿이 담당합니다. (아래 [CD](#cd-be-레포-dev--ecs))
 
-- **DB 접속은 아래 [DB 연결](#db-연결)을 따릅니다.** 현재 실행 중인 Task는 BE 템플릿에 직접 적힌 V1 MySQL(`10.0.1.246:3306`)에 접속하며, ProxySQL(`6033`) 경유로 전환을 준비 중입니다.
+- **DB 접속은 아래 [DB 연결](#db-연결)을 따릅니다.** 현재 실행 중인 Task는 BE 템플릿에 직접 적힌 V1 MySQL(`10.0.1.246:3306`)에 접속합니다. BE 템플릿이 SSM을 참조하도록 바꾼 변경(BE #144, `feat/144-ecs-ssm`)이 `dev`에 머지되면 ProxySQL(`6033`) 경유로 전환됩니다.
   - V1 MySQL 3306은 V1 앱 SG에서 Backend Task SG와 ProxySQL Task SG만 허용합니다. (`cross_root_rules.tf`) EIP로 들어온 트래픽도 private IP로 전달되므로 V1 앱 SG에 넓은 인바운드 규칙을 추가하면 3306도 함께 열립니다.
 - V1 Backend(main 코드)와 같은 DB를 쓰므로 설정으로 운영 영향을 막습니다.
   - `JPA_DDL_AUTO`·`SPRING_JPA_HIBERNATE_DDL_AUTO=none`: dev 코드가 운영 스키마를 변경하지 않습니다. DB 이관 기간에는 V1 스키마를 고정하므로 검증(`validate`)도 하지 않아, dev에 테이블이 추가돼도 기동은 되고 해당 API만 SQL 오류가 납니다.
@@ -187,7 +187,8 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
 
 | 항목 | 상태 |
 |---|---|
-| 실행 중인 Backend Task | BE `.aws/ecs/backend.json`의 `environment`에 V1 MySQL 주소(`jdbc:mysql://10.0.1.246:3306/stockspoon?...`)가 직접 들어 있음. ProxySQL을 거치지 않음 |
+| 실행 중인 Backend Task | BE `dev` 템플릿의 `environment`에 V1 MySQL 주소(`jdbc:mysql://10.0.1.246:3306/stockspoon?...`)가 직접 들어 있음. ProxySQL을 거치지 않음 |
+| BE 템플릿 변경 | BE #144(`feat/144-ecs-ssm`)에서 `SPRING_DATASOURCE_URL`을 SSM `secrets` 참조로 변경. **`dev` 머지 전.** 머지하면 DB 주소·계정·비밀번호가 모두 SSM에서 주입됨 |
 | SSM `SPRING_DATASOURCE_URL` | Terraform 코드가 설정하는 값은 `jdbc:mysql://10.0.11.19:6033/stockspoon?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8`. **ecs root apply 성공 여부와 실제 SSM 값은 미확인** (아래 명령으로 확인 후 이 표를 갱신) |
 | ProxySQL | V1(`10.0.1.246`) writer hostgroup 10, 이관 DB(`10.0.1.217`) reader hostgroup 20, 둘 다 ONLINE. read_only 감지 결과 V1 `0`, 이관 DB `1`. `stockspoon` 사용자로 6033 접속 확인. 설정은 ECS Exec로 Admin에 SQL로 직접 입력 |
 | 복제 | 마지막 확인 시 `Replica_IO_Running=Yes`, `Replica_SQL_Running=Yes`, Auto Position 사용, `Seconds_Behind_Source=0`. 이후 V1 GTID가 더 진행된 기록이 있어 현재 상태는 이관 DB에서 재확인 필요 |
@@ -211,7 +212,7 @@ aws ecs describe-tasks --cluster stockspoon-v2-prod-cluster \
 Terraform은 SSM 파라미터만 만듭니다. 실행 중인 Backend Task가 이 값을 읽게 하는 것은 BE 템플릿입니다.
 
 - `svc_backend.tf`의 Task Definition에도 같은 `secrets` 참조와 `TF_DATASOURCE_URL_PARAMETER_VERSION` 표시값이 있지만, 이 리소스는 최초 생성용이라 `container_definitions`가 `ignore_changes`입니다. apply해도 새 리비전이 생기지 않고, 서비스도 `task_definition`을 무시합니다. **Terraform apply만으로는 Backend의 DB 주소가 바뀌지 않습니다.**
-- BE `.aws/ecs/backend.json`에서 `environment`의 `SPRING_DATASOURCE_URL`을 제거하고 `secrets`에 아래 항목을 추가합니다. 템플릿을 바꾸지 않으면 다음 BE 배포가 V1 주소로 다시 등록합니다.
+- BE `.aws/ecs/backend.json`은 `secrets`로 이 파라미터를 참조합니다. (BE #144, `dev` 머지 전) DB 주소를 템플릿 `environment`에 직접 적으면 다음 BE 배포가 그 주소로 리비전을 다시 등록하므로, 템플릿에는 주소를 적지 않습니다.
 
 ```json
 {
@@ -220,12 +221,28 @@ Terraform은 SSM 파라미터만 만듭니다. 실행 중인 Backend Task가 이
 }
 ```
 
+  앱(`application.yaml`)이 읽는 DB 설정과 주입 경로:
+
+  | 환경변수 | SSM 파라미터 | 생성·관리 |
+  |---|---|---|
+  | `SPRING_DATASOURCE_URL` | `/stockspoon/v2/prod/backend/SPRING_DATASOURCE_URL` (`String`) | Terraform (`svc_backend.tf`) |
+  | `MYSQL_USER`, `MYSQL_PASSWORD` | `/stockspoon/v2/prod/backend/MYSQL_USER`, `MYSQL_PASSWORD` (`SecureString`) | CLI 등록 ([Secret 등록](#secret-등록)) |
+
+  SSM 파라미터가 없거나 Task Execution Role이 읽지 못하면 Task가 기동하지 못하고 Circuit Breaker가 이전 리비전으로 롤백합니다.
+
 - **SSM 값을 바꿔도 Backend에 자동으로 반영되지 않습니다. 값을 바꾼 사람이 Backend를 수동으로 재배포해야 합니다.**
   - ECS는 Task가 **시작될 때만** SSM 값을 읽어 환경변수로 넣습니다. 실행 중인 Task와 Hikari 커넥션 풀은 이전 주소를 계속 씁니다.
   - Terraform apply로 SSM 값만 갱신되고, Backend 서비스는 바뀌지 않습니다.
   - 재배포 전에 Auto Scaling으로 추가된 Task는 새 값을, 기존 Task는 이전 값을 쓰게 되어 **Task마다 DB 주소가 달라집니다.** 값을 바꾼 직후 재배포합니다.
 
-  수동 재배포 절차 (값만 바꾼 경우):
+  새 Task가 뜨면 SSM을 다시 읽으므로, 아래 둘 중 하나로 재배포하면 반영됩니다. **두 방법 모두 BE #144가 `dev`에 머지된 뒤부터 적용됩니다.** 그 전 리비전은 V1 주소를 직접 갖고 있어서 재배포해도 V1으로 뜹니다.
+
+  | 방법 | 실행 | 주의 |
+  |---|---|---|
+  | BE CD 재실행 | BE 레포 `dev` push, 또는 `cd-ecs-v2.yaml`을 `dev` 브랜치에서 수동 실행 | 수동 실행 시 **dev 최신 커밋 SHA**를 입력. 이전 SHA는 그 시점의 템플릿으로 리비전을 등록함 |
+  | 같은 리비전으로 Task 교체 | `aws ecs update-service ... --force-new-deployment` (아래) | 이미지·템플릿은 그대로 두고 SSM 값만 다시 읽음 |
+
+  `force-new-deployment` 절차:
 
   ```bash
   # 1. 새 값 확인
@@ -244,14 +261,14 @@ Terraform은 SSM 파라미터만 만듭니다. 실행 중인 Backend Task가 이
 
   4. 새 Task 로그에 Hikari 연결 오류가 없는지, [연결 확인](#연결-확인)의 `stats_mysql_connection_pool`에서 연결이 새 주소로 늘어나는지 확인합니다.
 
-  BE 템플릿을 함께 바꾸는 경우에는 `dev` 머지로 `cd-ecs-v2.yaml`이 새 리비전을 등록·배포하므로 별도 재배포가 필요 없습니다.
-- ProxySQL Task가 교체되면 IP가 바뀝니다. `proxysql_host`를 새 IP로 바꿔 apply한 뒤(SSM 값 갱신) 위 절차로 Backend를 **수동 재배포**합니다.
+  BE 템플릿을 함께 바꾸는 경우에는 `dev` 머지로 BE CD가 새 리비전을 등록·배포하므로 별도 재배포가 필요 없습니다.
+- ProxySQL Task가 교체되면 IP가 바뀝니다. `proxysql_host`를 새 IP로 바꿔 apply한 뒤(SSM 값 갱신) 위 방법 중 하나로 Backend를 **수동 재배포**합니다.
 
 #### 전환 순서 (V1 직접 → ProxySQL)
 
 1. ecs root apply 결과, SSM 실제 값, ProxySQL Task IP가 서로 일치하는지 확인합니다. (위 명령)
 2. ProxySQL 상태를 확인합니다. 두 서버 ONLINE, hostgroup 10에 V1만 있음, `stockspoon` 사용자로 6033 접속. ([연결 확인](#연결-확인))
-3. BE `backend.json`을 SSM 참조로 바꿔 `dev`에 머지합니다. CD가 새 리비전으로 롤링 배포합니다.
+3. BE #144(`backend.json` SSM 참조)를 `dev`에 머지합니다. **머지 즉시 CD가 운영 ECS에 롤링 배포하므로 1·2단계 확인 후 머지합니다.**
 4. 새 Task 로그에 Hikari 연결 오류가 없고, ProxySQL `stats_mysql_connection_pool`에서 hostgroup 10(V1)의 연결·쿼리가 늘어나는지 확인합니다. **이 시점을 전환 완료로 봅니다.**
 5. V1 MySQL 직접 경로(`v1_mysql_from_backend` SG 규칙)는 롤백 경로로 남기고, ProxySQL 운영이 안정된 뒤 제거합니다.
 
