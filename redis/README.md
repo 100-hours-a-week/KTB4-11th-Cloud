@@ -132,7 +132,7 @@ ECS 서비스마다 IAM 인증 사용자와 Connect Policy를 분리한다. Poli
 
 ### 접근 허용
 
-- **네트워크 (이 root):** ECS Task가 실행되는 shared-infra Private Subnet(2a, 2c) CIDR에서 `6379`를 허용한다. Public Subnet(V1 EC2, ALB)은 제외한다. 서비스가 늘어도 규칙을 추가할 필요가 없도록 한 개발 단계의 설정이다.
+- **네트워크 (이 root):** ECS Task가 실행되는 shared-infra Private Subnet(2a, 2c) CIDR에서 기본 엔드포인트 `6379`와 읽기 엔드포인트 `6380`을 허용한다. Lettuce는 클러스터 토폴로지 갱신 중 `6380`에도 연결하므로 두 포트가 모두 필요하다. Public Subnet(V1 EC2, ALB)은 제외한다. 서비스가 늘어도 규칙을 추가할 필요가 없도록 한 개발 단계의 설정이다.
 - **인증 (ecs root):** 실제 접속 통제는 IAM이 담당한다. Task Role ↔ 서비스별 Connect Policy 연결은 `ecs` root가 이 root의 Output(`valkey_connect_policy_arns`, `valkey_user_names`)을 참조해 관리한다.
 - **추후 축소:** ECS 서비스가 모두 배포되면 `ecs` root에서 Task Security Group별 ingress를 먼저 추가하고(`valkey_security_group_id` 참조), 이후 이 root의 CIDR 규칙을 제거한다. 순서를 지키면 접속 중단이 없다.
 

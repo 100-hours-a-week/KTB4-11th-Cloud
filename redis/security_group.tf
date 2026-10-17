@@ -50,6 +50,19 @@ resource "aws_vpc_security_group_ingress_rule" "valkey_from_private_subnets" {
   description       = "Allow ECS tasks in private subnet ${each.value.availability_zone} to connect to Valkey over TLS"
 }
 
+# Serverless의 reader endpoint는 6380을 사용한다. Lettuce는 읽기 분산을
+# 사용하지 않아도 클러스터 토폴로지 갱신 중 이 포트에 연결할 수 있다.
+resource "aws_vpc_security_group_ingress_rule" "valkey_reader_from_private_subnets" {
+  for_each = data.aws_subnet.private
+
+  security_group_id = aws_security_group.valkey.id
+  cidr_ipv4         = each.value.cidr_block
+  from_port         = 6380
+  to_port           = 6380
+  ip_protocol       = "tcp"
+  description       = "Allow ECS tasks in private subnet ${each.value.availability_zone} to connect to the Valkey reader endpoint"
+}
+
 # 응답 트래픽과 VPC 내부 통신만 허용하며 인터넷 목적지 규칙은 만들지 않습니다.
 resource "aws_vpc_security_group_egress_rule" "valkey_to_vpc" {
   security_group_id = aws_security_group.valkey.id
