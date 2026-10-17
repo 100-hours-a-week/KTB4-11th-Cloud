@@ -37,7 +37,7 @@ Terraform CI 권한이 이 접두사로 제한되어 있습니다.
 - 애플리케이션 Secret은 **SSM Parameter Store SecureString**에 저장합니다.
 - 경로: `/stockspoon/v2/prod/<서비스>/<이름>` (예: `/stockspoon/v2/prod/backend/DB_PASSWORD`)
 - 앱 자격 증명 등 Secret 값은 콘솔이나 CLI로 등록하고 Terraform으로 관리하지 않습니다. (값이 state에 남지 않게 하기 위함)
-- `SPRING_DATASOURCE_URL`은 비밀이 아닌 JDBC 주소이므로 Terraform이 SSM `String` 파라미터로 생성·관리합니다.
+- `SPRING_DATASOURCE_URL`은 비밀이 아닌 JDBC 주소이므로 Terraform이 SSM `String` 파라미터로 생성·관리합니다. 실행 중인 Backend에 주입하는 것은 BE 템플릿의 `secrets` 참조입니다. ([DB 연결](#db-연결))
 - Task Execution Role은 `/stockspoon/v2/prod/*` 경로만 읽을 수 있습니다.
 
 ```bash
@@ -54,7 +54,7 @@ aws ssm put-parameter --type SecureString \
 | 파일 | 리소스 |
 |---|---|
 | `platform_cluster.tf` | ECS Cluster, Service ASG(Launch Template, 인스턴스 SG), Capacity Provider |
-| `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, JDBC URL SSM 파라미터, Task Definition, ECS Service |
+| `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, JDBC URL SSM 파라미터, 최초 생성용 Task Definition, ECS Service |
 | `svc_market_common.tf` | market-http 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
 | `service_scaling.tf` | 서비스별 Task 2~4개, Backend CPU 60%, SSE 연결 400개/Task, 선택적 예약 확장 |
 | `svc_market_http.tf` | market-http(SSE) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
@@ -162,14 +162,14 @@ terraform -chdir=ecs output backend_canary_routing
 
 [자동 롤백 적용·검증 절차](BACKEND_ROLLBACK.md)를 따른다. CI 정책을 로컬에서 먼저 적용한 뒤 컨트롤러를 생성하고, V1 상태 확인 후 SSM 감시 상태를 활성화한다. 롤백 후에는 `tripped` 상태가 새로운 Terraform plan에도 반영되어 V2 재전환을 막는다. 이미 저장해 둔 plan은 폐기해야 한다.
 
-## Backend (V1 DB 사용)
+## Backend
 
 BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지를 Service ASG(capacity provider `service`)에서 market-http와 함께 실행합니다.
 
 - `backend_image_tag`는 최초 생성 리비전에만 쓰입니다. 이후 배포와 실행 설정은 BE 레포 `cd-ecs-v2.yaml`과 앱 템플릿이 담당합니다. (아래 [CD](#cd-be-레포-dev--ecs))
 
-- **DB는 V1 EC2의 MySQL을 그대로 사용합니다.** V1 Compose가 `3306`을 호스트에 게시하고, 외부 접근은 V1 앱 SG로만 통제합니다. 3306은 Backend Task SG만 허용합니다. (`cross_root_rules.tf`) 접속 주소는 `app-server` output `app_private_ip`를 참조합니다.
-  - EIP로 들어온 트래픽도 private IP로 전달되므로 바인딩 주소로는 외부 노출을 막을 수 없습니다. V1 앱 SG에 넓은 인바운드 규칙을 추가하면 3306도 함께 열립니다.
+- **DB 접속은 아래 [DB 연결](#db-연결)을 따릅니다.** 현재 실행 중인 Task는 BE 템플릿에 직접 적힌 V1 MySQL(`10.0.1.246:3306`)에 접속하며, ProxySQL(`6033`) 경유로 전환을 준비 중입니다.
+  - V1 MySQL 3306은 V1 앱 SG에서 Backend Task SG와 ProxySQL Task SG만 허용합니다. (`cross_root_rules.tf`) EIP로 들어온 트래픽도 private IP로 전달되므로 V1 앱 SG에 넓은 인바운드 규칙을 추가하면 3306도 함께 열립니다.
 - V1 Backend(main 코드)와 같은 DB를 쓰므로 설정으로 운영 영향을 막습니다.
   - `JPA_DDL_AUTO`·`SPRING_JPA_HIBERNATE_DDL_AUTO=none`: dev 코드가 운영 스키마를 변경하지 않습니다. DB 이관 기간에는 V1 스키마를 고정하므로 검증(`validate`)도 하지 않아, dev에 테이블이 추가돼도 기동은 되고 해당 API만 SQL 오류가 납니다.
   - 키움 시세 스트림은 `backend_kiwoom_stream_enabled`(기본 `true`)로 켭니다. V1과 **별도로 발급한 키**(SSM `KIWOOM_APP_KEY`·`KIWOOM_APP_SECRET`)를 쓰므로 세션 충돌은 없습니다. 키움 허용 IP에 NAT Gateway EIP가 등록돼 있어야 합니다.
@@ -181,14 +181,90 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
 - 헬스체크는 actuator가 없어 인증 없이 200을 주는 `/api/v1/auth/csrf`를 임시로 사용합니다. DB·Valkey 상태는 반영하지 않으므로 Canary 전에 `/actuator/health`로 교체합니다.
 - Valkey는 운영 Valkey의 `backend` 사용자로 IAM 인증합니다. (Task Role에 Connect Policy 연결)
 
+### DB 연결
+
+#### 현재 상태 (2026-10-17 기준)
+
+| 항목 | 상태 |
+|---|---|
+| 실행 중인 Backend Task | BE `.aws/ecs/backend.json`의 `environment`에 V1 MySQL 주소(`jdbc:mysql://10.0.1.246:3306/stockspoon?...`)가 직접 들어 있음. ProxySQL을 거치지 않음 |
+| SSM `SPRING_DATASOURCE_URL` | Terraform 코드가 설정하는 값은 `jdbc:mysql://10.0.11.19:6033/stockspoon?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8`. **ecs root apply 성공 여부와 실제 SSM 값은 미확인** (아래 명령으로 확인 후 이 표를 갱신) |
+| ProxySQL | V1(`10.0.1.246`) writer hostgroup 10, 이관 DB(`10.0.1.217`) reader hostgroup 20, 둘 다 ONLINE. read_only 감지 결과 V1 `0`, 이관 DB `1`. `stockspoon` 사용자로 6033 접속 확인. 설정은 ECS Exec로 Admin에 SQL로 직접 입력 |
+| 복제 | 마지막 확인 시 `Replica_IO_Running=Yes`, `Replica_SQL_Running=Yes`, Auto Position 사용, `Seconds_Behind_Source=0`. 이후 V1 GTID가 더 진행된 기록이 있어 현재 상태는 이관 DB에서 재확인 필요 |
+
+DB 비밀번호는 이 문서와 `SPRING_DATASOURCE_URL`에 넣지 않습니다. 계정은 `MYSQL_USER`·`MYSQL_PASSWORD` SecureString으로 따로 주입합니다.
+
+```bash
+# apply 후 실제 SSM 값 확인
+aws ssm get-parameter --name /stockspoon/v2/prod/backend/SPRING_DATASOURCE_URL \
+  --query 'Parameter.[Value,Version,LastModifiedDate]' --output text
+
+# 현재 ProxySQL Task IP (변수 proxysql_host 및 SSM 값의 주소와 같아야 함)
+aws ecs describe-tasks --cluster stockspoon-v2-prod-cluster \
+  --tasks "$(aws ecs list-tasks --cluster stockspoon-v2-prod-cluster \
+    --service-name stockspoon-v2-prod-proxysql --query 'taskArns[0]' --output text)" \
+  --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' --output text
+```
+
+#### 주입 경로
+
+Terraform은 SSM 파라미터만 만듭니다. 실행 중인 Backend Task가 이 값을 읽게 하는 것은 BE 템플릿입니다.
+
+- `svc_backend.tf`의 Task Definition에도 같은 `secrets` 참조와 `TF_DATASOURCE_URL_PARAMETER_VERSION` 표시값이 있지만, 이 리소스는 최초 생성용이라 `container_definitions`가 `ignore_changes`입니다. apply해도 새 리비전이 생기지 않고, 서비스도 `task_definition`을 무시합니다. **Terraform apply만으로는 Backend의 DB 주소가 바뀌지 않습니다.**
+- BE `.aws/ecs/backend.json`에서 `environment`의 `SPRING_DATASOURCE_URL`을 제거하고 `secrets`에 아래 항목을 추가합니다. 템플릿을 바꾸지 않으면 다음 BE 배포가 V1 주소로 다시 등록합니다.
+
+```json
+{
+  "name": "SPRING_DATASOURCE_URL",
+  "valueFrom": "arn:aws:ssm:ap-northeast-2:250832562715:parameter/stockspoon/v2/prod/backend/SPRING_DATASOURCE_URL"
+}
+```
+
+- **SSM 값을 바꿔도 Backend에 자동으로 반영되지 않습니다. 값을 바꾼 사람이 Backend를 수동으로 재배포해야 합니다.**
+  - ECS는 Task가 **시작될 때만** SSM 값을 읽어 환경변수로 넣습니다. 실행 중인 Task와 Hikari 커넥션 풀은 이전 주소를 계속 씁니다.
+  - Terraform apply로 SSM 값만 갱신되고, Backend 서비스는 바뀌지 않습니다.
+  - 재배포 전에 Auto Scaling으로 추가된 Task는 새 값을, 기존 Task는 이전 값을 쓰게 되어 **Task마다 DB 주소가 달라집니다.** 값을 바꾼 직후 재배포합니다.
+
+  수동 재배포 절차 (값만 바꾼 경우):
+
+  ```bash
+  # 1. 새 값 확인
+  aws ssm get-parameter --name /stockspoon/v2/prod/backend/SPRING_DATASOURCE_URL \
+    --query 'Parameter.[Value,Version]' --output text
+
+  # 2. 같은 Task Definition 리비전으로 Task 교체 (새 Task가 SSM을 다시 읽음)
+  aws ecs update-service --cluster stockspoon-v2-prod-cluster \
+    --service stockspoon-v2-prod-backend --force-new-deployment
+
+  # 3. 배포 완료 확인 (PRIMARY 하나, rolloutState=COMPLETED)
+  aws ecs describe-services --cluster stockspoon-v2-prod-cluster \
+    --services stockspoon-v2-prod-backend \
+    --query 'services[0].deployments[].[status,rolloutState,runningCount,desiredCount]' --output table
+  ```
+
+  4. 새 Task 로그에 Hikari 연결 오류가 없는지, [연결 확인](#연결-확인)의 `stats_mysql_connection_pool`에서 연결이 새 주소로 늘어나는지 확인합니다.
+
+  BE 템플릿을 함께 바꾸는 경우에는 `dev` 머지로 `cd-ecs-v2.yaml`이 새 리비전을 등록·배포하므로 별도 재배포가 필요 없습니다.
+- ProxySQL Task가 교체되면 IP가 바뀝니다. `proxysql_host`를 새 IP로 바꿔 apply한 뒤(SSM 값 갱신) 위 절차로 Backend를 **수동 재배포**합니다.
+
+#### 전환 순서 (V1 직접 → ProxySQL)
+
+1. ecs root apply 결과, SSM 실제 값, ProxySQL Task IP가 서로 일치하는지 확인합니다. (위 명령)
+2. ProxySQL 상태를 확인합니다. 두 서버 ONLINE, hostgroup 10에 V1만 있음, `stockspoon` 사용자로 6033 접속. ([연결 확인](#연결-확인))
+3. BE `backend.json`을 SSM 참조로 바꿔 `dev`에 머지합니다. CD가 새 리비전으로 롤링 배포합니다.
+4. 새 Task 로그에 Hikari 연결 오류가 없고, ProxySQL `stats_mysql_connection_pool`에서 hostgroup 10(V1)의 연결·쿼리가 늘어나는지 확인합니다. **이 시점을 전환 완료로 봅니다.**
+5. V1 MySQL 직접 경로(`v1_mysql_from_backend` SG 규칙)는 롤백 경로로 남기고, ProxySQL 운영이 안정된 뒤 제거합니다.
+
+롤백: BE 템플릿을 V1 주소로 되돌려 배포하거나, 전환 전 Task Definition 리비전으로 `update-service`합니다. V1 직접 경로 SG 규칙이 남아 있어야 합니다.
+
 ### Secret 등록
 
 `/stockspoon/v2/prod/backend/<이름>`에 V1 운영 `.env`(`/opt/cloud/.env`)와 **같은 값**을 등록합니다. `JWT_SECRET`이 같아야 V1에서 발급한 로그인 쿠키가 ECS에서도 유효합니다.
 
 | 이름 | 비고 |
 |---|---|
-| `SPRING_DATASOURCE_URL` | JDBC 주소. Terraform이 ProxySQL 주소와 포트로 `String` 파라미터를 생성·주입하므로 별도 등록하지 않음 |
-| `MYSQL_USER`, `MYSQL_PASSWORD` | V1 MySQL 계정 |
+| `SPRING_DATASOURCE_URL` | JDBC 주소. Terraform이 ProxySQL 주소와 포트로 `String` 파라미터를 생성하므로 직접 등록하지 않음. 주입은 BE 템플릿 `secrets` 참조 ([DB 연결](#db-연결)) |
+| `MYSQL_USER`, `MYSQL_PASSWORD` | V1 MySQL 계정. ProxySQL 경유 시 ProxySQL `mysql_users`에도 같은 계정이 있어야 함 |
 | `JWT_SECRET` | V1과 동일 |
 | `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI` | V1 `.env`의 `KAKAO_CLIENT_SECRET`이 비어 있으면 등록하지 않고 `backend_kakao_client_secret_enabled = false` |
 | `FRONTEND_ORIGIN` | V1과 동일 |
@@ -198,7 +274,7 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
 scripts/put-ssm-env.sh backend /path/to/.env.backend
 ```
 
-### 전환 순서
+### 최초 구성 순서 (V1 DB 직접 연결, 완료)
 
 1. `app-server`에 `app_private_ip` output 추가 PR 머지·apply (리소스 변경 없음). 이 output이 state에 있어야 이 root의 plan이 성공합니다.
 2. 위 Secret 등록
@@ -232,7 +308,7 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 - 서비스에 `ignore_changes = [task_definition]`이 있으므로 apply가 CD 배포를 되돌리지 않습니다.
 - 최초 생성용 Terraform Task Definition의 실행 설정은 동결합니다. 기존 서비스의 실행 설정은 앱 템플릿을 수정하고 CD로 적용합니다.
 - 배포 Role(`stockspoon-v2-prod-github-actions-backend-deploy`)은 BE 레포 `dev` ref의 OIDC 토큰만 신뢰하며, backend 서비스 갱신과 backend Task Role PassRole만 허용합니다. AI 배포 Role과 분리되어 있습니다.
-- `dev` 커밋마다 **운영 DB(V1 MySQL)에 붙는** 이 서비스가 교체됩니다. V1 DB 사용 기간의 주의 사항(스키마 고정, 데이터 변경 테스트 금지)은 위와 같습니다.
+- `dev` 커밋마다 **운영 DB에 붙는** 이 서비스가 교체됩니다. Task Definition은 매번 BE 템플릿으로 다시 등록되므로 DB 주소도 템플릿 값을 따릅니다. V1 DB 사용 기간의 주의 사항(스키마 고정, 데이터 변경 테스트 금지)은 위와 같습니다.
 
 | 이름 | 위치 | 값 |
 |---|---|---|
@@ -247,9 +323,9 @@ scripts/put-ssm-env.sh backend /path/to/.env.backend
 
 ## ProxySQL DB migration rehearsal
 
-ProxySQL은 Backend와 별도 ECS 서비스로 실행하며, 우선 `private_subnet_ids[0]`의 단일 AZ에 Task 1개를 둡니다. 이번 단계에서는 Backend의 ProxySQL 접속 주소를 만들지 않습니다. ProxySQL Task SG는 V1 DB와 이관 DB의 3306 및 ECS Exec용 HTTPS만 허용하고, 다른 root가 소유한 두 DB 보안그룹에도 ProxySQL Task SG만 허용하는 규칙을 추가합니다.
+ProxySQL은 Backend와 별도 ECS 서비스(`stockspoon-v2-prod-proxysql`)로 실행하며, `private_subnet_ids[0]`의 단일 AZ에 Task 1개를 둡니다. ProxySQL Task SG는 V1 DB와 이관 DB의 3306 및 ECS Exec용 HTTPS로 나가는 것만 허용하고, 들어오는 것은 Backend Task SG의 6033만 허용합니다. 다른 root가 소유한 두 DB 보안그룹에도 ProxySQL Task SG만 허용하는 규칙을 추가합니다.
 
-이 첫 단계는 ProxySQL 컨테이너 기동과 DB 네트워크 연결을 확인하기 위한 구성입니다. ProxySQL의 `mysql_servers`·`mysql_users`는 비워 두므로 아직 쿼리를 DB로 전달하지 않습니다. Backend의 `SPRING_DATASOURCE_URL`도 바꾸지 않습니다. `mysql-network-check` sidecar는 시작 시 V1 및 이관 DB의 3306에 TCP 연결을 확인하고 결과를 같은 CloudWatch Log Group에 기록합니다.
+`mysql-network-check` sidecar는 시작 시 V1 및 이관 DB의 3306에 TCP 연결을 확인하고 결과를 같은 CloudWatch Log Group에 기록합니다.
 
 적용 후 확인 예시:
 
@@ -257,7 +333,72 @@ ProxySQL은 Backend와 별도 ECS 서비스로 실행하며, 우선 `private_sub
 aws logs tail "$(terraform -chdir=ecs output -raw proxysql_log_group_name)" --since 10m --follow
 ```
 
-`mysql-network-check` 로그에서 각 DB에 대해 `TCP_OK <private-ip>:3306`을 확인합니다. 이 확인은 ProxySQL ECS 태스크에서 DB까지 TCP 연결만 검증하며, DB 인증이나 실제 SQL 라우팅은 아직 검증하지 않습니다. Backend가 ProxySQL에 연결하도록 바꾸려면 이후 고정 주소 또는 서비스 검색을 별도로 구성해야 합니다.
+`mysql-network-check` 로그에서 각 DB에 대해 `TCP_OK <private-ip>:3306`을 확인합니다. 이 확인은 ProxySQL ECS 태스크에서 DB까지 TCP 연결만 검증하며, DB 인증이나 실제 SQL 라우팅은 아래 [연결 확인](#연결-확인)으로 검증합니다.
+
+### 설정 방식과 한계
+
+- Terraform 설정 파일은 `mysql_servers`·`mysql_users`를 비워 두고 `--initial`로 시작합니다. 현재 서버·hostgroup·사용자·`read_only` 감지 설정은 **ECS Exec로 Admin(`127.0.0.1:6032`)에 SQL로 직접 입력한 값**입니다.
+- 이 설정을 다시 적용하는 스크립트는 저장소에 없습니다. Task가 재시작·교체되면(재배포, EC2 Scale-in·교체, 장애) 설정이 사라지고 IP도 바뀌어, ProxySQL을 쓰는 Backend의 DB 연결이 끊깁니다. `deployment_minimum_healthy_percent = 0`이라 교체 중에도 Task가 없는 구간이 생깁니다.
+- Backend를 ProxySQL로 전환하기 전에 정리할 항목 (TODO)
+  - 설정 재적용: 서버·hostgroup·사용자·감지 설정을 기동 시 설정 파일로 생성하고, 계정 정보는 SSM SecureString에서 주입
+  - 고정 주소: ECS Service Connect/Cloud Map DNS(추가 비용 없음) 또는 내부 NLB(주소 고정, 시간당 비용)
+  - Admin 기본 자격 증명 교체
+
+### DB 역할 전환
+
+현재는 **V1이 쓰기 Primary, 이관 DB가 복제 대기**(`super_read_only=ON`)입니다. 역할 전환은 ProxySQL의 쓰기 대상 자동 감지와, DB 쪽 GTID 확인·승격 절차로 나뉩니다. ProxySQL은 DB를 승격하지 않고, DB 승격은 ProxySQL 라우팅을 바꾸지 않습니다.
+
+**ProxySQL 쓰기 대상 자동 감지**
+
+- writer hostgroup 10과 reader hostgroup 20을 `mysql_replication_hostgroups`로 묶고, Monitor가 각 서버의 `read_only` 값을 주기적으로 조회합니다.
+- `read_only=0`인 서버는 hostgroup 10, `read_only=1`인 서버는 hostgroup 20에 둡니다. Backend 쓰기는 hostgroup 10으로 가므로, DB를 승격하면 Backend 주소를 바꾸지 않아도 쓰기 대상이 바뀝니다.
+- ProxySQL은 `read_only`만 봅니다. 복제 지연이나 GTID 적용 여부는 확인하지 않습니다.
+- 두 DB가 동시에 `read_only=0`이면 둘 다 writer로 올라가 양쪽에 쓰기가 들어갈 수 있습니다. 새 DB를 승격하기 전에 반드시 기존 Primary를 읽기 전용으로 바꿉니다.
+
+**GTID 확인과 DB 승격** (DB 담당자 수행, 명령 상세는 [db-migration OPERATIONS](../app-server/db-migration/OPERATIONS.md#7-gtid-replication-연결과-확인))
+
+1. 이관 DB에서 `SHOW REPLICA STATUS\G`: `Replica_IO_Running`·`Replica_SQL_Running=Yes`, 오류 없음, `Seconds_Behind_Source` 확인
+2. V1 쓰기 차단: `SET GLOBAL super_read_only = ON`. ProxySQL이 V1을 hostgroup 20으로 옮기며, 이때부터 승격 완료까지 쓰기가 실패합니다.
+3. V1의 `@@GLOBAL.gtid_executed`를 기록하고, 이관 DB에서 `SELECT WAIT_FOR_EXECUTED_GTID_SET('<기록한 값>', 30);` 결과가 `0`인지 확인
+4. 이관 DB 승격: `STOP REPLICA; RESET REPLICA ALL; SET GLOBAL super_read_only = OFF; SET GLOBAL read_only = OFF;`
+5. ProxySQL에서 이관 DB가 hostgroup 10, V1이 20인지 확인하고, Backend 쓰기 정상화 시각을 기록
+
+승격 후 V1로 되돌리려면 V1을 이관 DB의 replica로 다시 연결해야 하므로, 롤백 방법을 승격 전에 정해 둡니다.
+
+### 연결 확인
+
+**ProxySQL 연결 상태** (ECS Exec로 ProxySQL 컨테이너 접속 후 Admin)
+
+```bash
+aws ecs execute-command --cluster stockspoon-v2-prod-cluster --task <ProxySQL Task ID> \
+  --container proxysql --interactive --command "/bin/sh"
+# 컨테이너 안에서 (Admin 계정은 svc_proxysql.tf 설정)
+mysql -h127.0.0.1 -P6032 -u<admin 계정> -p
+```
+
+```sql
+SELECT hostgroup_id, hostname, port, status FROM runtime_mysql_servers;
+SELECT * FROM runtime_mysql_replication_hostgroups;
+SELECT hostname, port, read_only, error
+  FROM monitor.mysql_server_read_only_log ORDER BY time_start_us DESC LIMIT 6;
+SELECT hostgroup, srv_host, status, ConnUsed, ConnFree, Queries, ConnERR
+  FROM stats_mysql_connection_pool;
+```
+
+기대값: V1 hostgroup 10 ONLINE, 이관 DB hostgroup 20 ONLINE, `read_only` 각각 0과 1, `error` 없음.
+
+**응답한 DB 확인** (`stockspoon` 사용자로 6033 접속)
+
+```bash
+mysql -h127.0.0.1 -P6033 -ustockspoon -p stockspoon
+```
+
+```sql
+SELECT @@hostname, @@server_id, @@server_uuid, @@read_only;
+```
+
+- writer(hostgroup 10) DB의 값이 나와야 합니다. 두 DB는 컨테이너로 실행되므로 `@@hostname`이 컨테이너 ID일 수 있어, DB 구분은 `@@server_id`·`@@server_uuid`로 합니다. 각 DB의 값은 미리 기록해 둡니다.
+- **Backend를 통한 조회**: 현재 BE에는 `@@hostname`·`@@server_id`·`@@read_only`를 반환하는 API가 없습니다. Backend 경로로 확인하려면 BE에 내부 확인용 API 구현이 필요합니다(외부 노출 금지). 구현 전까지는 위 6033 조회와 함께 Backend 로그(Hikari 오류 없음), Target Group healthy, `stats_mysql_connection_pool`의 Queries 증가로 Backend가 ProxySQL을 거쳐 응답하는지 확인합니다.
 
 비용은 NLB 없이 계산합니다. ECS EC2 시작 유형에는 태스크별 ECS 요금이 없으며, ProxySQL 태스크는 기존 `c6i.xlarge` Capacity Provider의 여유 자원을 먼저 사용합니다. 여유 용량에 배치되면 별도 EC2 비용은 없고 로그 사용량에 따른 CloudWatch Logs 비용만 추가될 수 있습니다. 용량 부족으로 ASG가 `c6i.xlarge` 한 대를 더 띄우면 서울 리전 Linux On-Demand 기준 약 `$140.16/월`이며, 30 GiB gp3 볼륨 약 `$2.74/월`을 더해 총 `$142.90/월` 정도입니다(730시간 가정). 이는 공개 지역별 요금표를 이용한 추정치로, 구매 옵션·실제 사용량·세금에 따라 달라집니다. [c6i.xlarge 요금 참고](https://aws-pricing.com/c6i.xlarge.html), [서울 리전 gp3 요금 참고](https://aws-pricing.com/ap-northeast-2.html).
 
