@@ -108,7 +108,8 @@ locals {
     if startswith(role_arn, "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/")
   ]
 
-  backend_rollback_parameter_arn = "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/operations/prod/backend-routing/rollback-latch"
+  backend_rollback_parameter_arn       = "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/operations/prod/backend-routing/rollback-latch"
+  backend_datasource_url_parameter_arn = "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/v2/prod/backend/SPRING_DATASOURCE_URL"
 
   github_actions_terraform_lambda_arns = [
     for prefix in ["stockspoon-v1-app-", "stockspoon-v1-ai-", "stockspoon-v2-dev-", "stockspoon-v2-prod-"] :
@@ -209,6 +210,13 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     effect    = "Allow"
     actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
     resources = [local.backend_rollback_parameter_arn]
+  }
+
+  statement {
+    sid       = "ReadBackendDatasourceUrl"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
+    resources = [local.backend_datasource_url_parameter_arn]
   }
 
   statement {
@@ -385,21 +393,22 @@ module "terraform_ci_policies" {
   source = "../modules/terraform-ci-policies"
 
   resource_arns = {
-    backend_rollback_parameter = local.backend_rollback_parameter_arn
-    alb_logs                   = local.alb_access_log_bucket_arn
-    stock_logos                = local.stock_logo_bucket_arn
-    frontend_assets            = local.frontend_assets_bucket_arn
-    cloudfront_distributions   = "arn:aws:cloudfront::${data.aws_caller_identity.github_actions_terraform.account_id}:distribution/*"
-    lambda                     = local.github_actions_terraform_lambda_arns
-    secrets                    = local.github_actions_terraform_secret_arns
-    queues                     = local.github_actions_terraform_sqs_queue_arns
-    ecr_public                 = local.github_actions_terraform_ecr_public_repository_arns
-    ecr_private                = local.github_actions_terraform_ecr_repository_arns
-    ses                        = local.github_actions_terraform_ses_identity_arns
-    iam_resources              = local.github_actions_terraform_iam_resource_arns
-    iam_accounts               = local.github_actions_terraform_account_iam_arns
-    pass_roles                 = local.github_actions_terraform_pass_role_arns
-    hosted_zone                = "arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"
+    backend_rollback_parameter       = local.backend_rollback_parameter_arn
+    backend_datasource_url_parameter = local.backend_datasource_url_parameter_arn
+    alb_logs                         = local.alb_access_log_bucket_arn
+    stock_logos                      = local.stock_logo_bucket_arn
+    frontend_assets                  = local.frontend_assets_bucket_arn
+    cloudfront_distributions         = "arn:aws:cloudfront::${data.aws_caller_identity.github_actions_terraform.account_id}:distribution/*"
+    lambda                           = local.github_actions_terraform_lambda_arns
+    secrets                          = local.github_actions_terraform_secret_arns
+    queues                           = local.github_actions_terraform_sqs_queue_arns
+    ecr_public                       = local.github_actions_terraform_ecr_public_repository_arns
+    ecr_private                      = local.github_actions_terraform_ecr_repository_arns
+    ses                              = local.github_actions_terraform_ses_identity_arns
+    iam_resources                    = local.github_actions_terraform_iam_resource_arns
+    iam_accounts                     = local.github_actions_terraform_account_iam_arns
+    pass_roles                       = local.github_actions_terraform_pass_role_arns
+    hosted_zone                      = "arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"
   }
 }
 

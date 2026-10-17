@@ -46,6 +46,19 @@ loki.source.file "mysql_slow" {
   forward_to = [loki.write.default.receiver]
 }
 
+local.file_match "mysql_binlog" {
+  path_targets = [{
+    "__path__" = "/var/log/binlog-reader/binlog-decoded.log",
+    "host"     = sys.env("HOST_ROLE"),
+    "job"      = "mysql-binlog",
+  }]
+}
+
+loki.source.file "mysql_binlog" {
+  targets    = local.file_match.mysql_binlog.targets
+  forward_to = [loki.write.default.receiver]
+}
+
 loki.write "default" {
   endpoint {
     url = sys.env("LOKI_PUSH_URL")
