@@ -3,6 +3,7 @@
 
 locals {
   proxysql_subnet_ids = [data.terraform_remote_state.shared.outputs.private_subnet_ids[0]]
+  proxysql_dns_name   = "${var.proxysql_dns_service_name}.${var.proxysql_dns_namespace}"
 
   proxysql_v1_mysql_host        = data.terraform_remote_state.app.outputs.app_private_ip
   proxysql_migration_mysql_host = try(data.terraform_remote_state.app.outputs.db_migration_host.private_ip, "")
@@ -113,6 +114,39 @@ locals {
 resource "aws_cloudwatch_log_group" "proxysql" {
   name              = "/ecs/${var.name_prefix}/proxysql"
   retention_in_days = var.container_log_retention_days
+}
+
+# ECS task private IPs can change on replacement. Cloud Map keeps a stable
+# in-VPC DNS name and updates its A record as the service task is registered.
+resource "aws_service_discovery_private_dns_namespace" "proxysql" {
+  name        = var.proxysql_dns_namespace
+  description = "Private DNS namespace for the V2 migration rehearsal"
+  vpc         = data.terraform_remote_state.shared.outputs.vpc_id
+
+  tags = {
+    Name = "${var.name_prefix}-service-discovery"
+  }
+}
+
+resource "aws_service_discovery_service" "proxysql" {
+  name = var.proxysql_dns_service_name
+
+  # ECS updates the Cloud Map health state from the container health check.
+  health_check_custom_config {}
+
+  dns_config {
+    namespace_id   = aws_service_discovery_private_dns_namespace.proxysql.id
+    routing_policy = "MULTIVALUE"
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+  }
+
+  tags = {
+    Name = "${var.name_prefix}-proxysql"
+  }
 }
 
 resource "aws_iam_role" "proxysql_task" {
@@ -227,7 +261,7 @@ resource "aws_ecs_task_definition" "proxysql" {
         }
         mysql_servers=()
         mysql_users=()
-        CONFIG
+      CONFIG
       cat > /tmp/proxysql-admin.cnf <<'ADMIN'
       [client]
       user=admin
@@ -361,6 +395,10 @@ resource "aws_ecs_service" "proxysql" {
     subnets          = local.proxysql_subnet_ids
     security_groups  = [aws_security_group.proxysql_task.id]
     assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.proxysql.arn
   }
 
   deployment_circuit_breaker {

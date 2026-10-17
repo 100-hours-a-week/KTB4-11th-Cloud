@@ -224,12 +224,17 @@ variable "v1_mysql_port" {
   default     = 3306
 }
 
-# Current private IP of the standalone ProxySQL ECS task used for the migration rehearsal.
-# Update it when the task is replaced; Terraform uses the address for both JDBC and SG lookup.
-variable "proxysql_host" {
-  description = "Private IP address of the current ProxySQL ECS task"
+# Cloud Map private DNS name parts for the ProxySQL ECS service.
+variable "proxysql_dns_namespace" {
+  description = "Private DNS namespace created in the ECS VPC for the ProxySQL service"
   type        = string
-  default     = "10.0.11.19"
+  default     = "stockspoon-v2.internal"
+}
+
+variable "proxysql_dns_service_name" {
+  description = "Cloud Map service name used for the ProxySQL endpoint"
+  type        = string
+  default     = "proxysql"
 }
 
 variable "proxysql_port" {

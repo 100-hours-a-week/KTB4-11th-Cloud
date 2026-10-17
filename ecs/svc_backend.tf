@@ -5,8 +5,8 @@ locals {
   backend_image       = "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_image_tag}"
   backend_valkey_role = "backend"
 
-  # Migration rehearsal: backend tasks connect through the current ProxySQL task.
-  backend_datasource_url = "jdbc:mysql://${var.proxysql_host}:${var.proxysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+  # Backend tasks use Cloud Map's stable private DNS name for the ProxySQL ECS service.
+  backend_datasource_url = "jdbc:mysql://${local.proxysql_dns_name}:${var.proxysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
 
   backend_environment = concat(
     [
