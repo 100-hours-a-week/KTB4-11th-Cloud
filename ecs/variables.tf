@@ -158,14 +158,22 @@ variable "backend_path_patterns" {
   default     = ["/api/*"]
 }
 
-variable "v1_mysql_port" {
-  description = "MySQL port published on the V1 application host"
+# Current private IP of the standalone ProxySQL ECS task used for the migration rehearsal.
+# Update it when the task is replaced; Terraform uses the address for both JDBC and SG lookup.
+variable "proxysql_host" {
+  description = "Private IP address of the current ProxySQL ECS task"
+  type        = string
+  default     = "10.0.11.19"
+}
+
+variable "proxysql_port" {
+  description = "ProxySQL client listener port"
   type        = number
-  default     = 3306
+  default     = 6033
 }
 
 variable "backend_mysql_database" {
-  description = "V1 MySQL database name (MYSQL_DATABASE in the V1 .env)"
+  description = "MySQL database name used by the backend"
   type        = string
   default     = "stockspoon"
 }

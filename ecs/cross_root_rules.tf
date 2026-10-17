@@ -1,4 +1,4 @@
-# 다른 root(app-server)가 소유한 리소스에 ECS가 필요해서 추가하는 규칙
+# 다른 root 또는 기존 ECS 서비스가 소유한 리소스에 ECS가 필요해서 추가하는 규칙
 # TODO: V1 종료 또는 ALB를 edge root로 이전할 때 함께 정리
 
 # ALB → Backend Task (ALB SG의 기존 egress는 V1 EC2의 80/443만 허용)
@@ -104,17 +104,23 @@ resource "aws_vpc_security_group_ingress_rule" "ai_questdb_from_market_http" {
   description                  = "Allow V2 market-http tasks to query QuestDB"
 }
 
-# ---------------------------------------------------------------------------
-# V1 앱 서버 MySQL (app-server 소유 SG)
-# V1 Compose가 MySQL을 호스트에 게시하고, 외부 접근은 이 SG 규칙(ECS Backend Task SG만 허용)으로만 통제한다.
-# TODO: V2 DB로 이전하면 제거
-# ---------------------------------------------------------------------------
+# ProxySQL은 별도 ECS 서비스가 소유한다. 현재 task ENI에 연결된 SG에
+# Backend Task SG만 ProxySQL 클라이언트 포트로 접속하도록 규칙을 추가한다.
 
-resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_backend" {
-  security_group_id            = data.terraform_remote_state.app.outputs.app_security_group_id
+data "aws_network_interface" "proxysql" {
+  filter {
+    name   = "addresses.private-ip-address"
+    values = [var.proxysql_host]
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "proxysql_from_backend" {
+  for_each = toset(data.aws_network_interface.proxysql.security_groups)
+
+  security_group_id            = each.value
   referenced_security_group_id = aws_security_group.backend_task.id
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
+  from_port                    = var.proxysql_port
+  to_port                      = var.proxysql_port
   ip_protocol                  = "tcp"
-  description                  = "Allow V2 backend tasks to use V1 MySQL"
+  description                  = "Allow V2 backend tasks to connect to ProxySQL"
 }

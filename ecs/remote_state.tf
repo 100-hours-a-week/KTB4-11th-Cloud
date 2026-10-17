@@ -12,7 +12,7 @@ data "terraform_remote_state" "shared" {
   }
 }
 
-# ALB 리스너, Blue Target Group, ALB·V1 앱 Security Group
+# ALB 리스너, Blue Target Group, ALB Security Group, ECR·GitHub OIDC outputs
 data "terraform_remote_state" "app" {
   backend = "s3"
 

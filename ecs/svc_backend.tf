@@ -1,21 +1,18 @@
 # Backend 서비스 전용 리소스
-# DB는 V1 EC2의 MySQL을 사용한다. (접근 통제: cross_root_rules.tf의 V1 앱 SG 규칙)
-# TODO: V2 DB로 이전하면 V1 MySQL 참조와 SG 규칙 제거
+# DB 접속은 ProxySQL ECS task를 경유한다.
 
 locals {
   backend_image       = "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_image_tag}"
   backend_valkey_role = "backend"
 
-  # V1 앱 EC2의 MySQL
-  v1_app_private_ip      = data.terraform_remote_state.app.outputs.app_private_ip
-  backend_datasource_url = "jdbc:mysql://${local.v1_app_private_ip}:${var.v1_mysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+  # Migration rehearsal: backend tasks connect through the current ProxySQL task.
+  backend_datasource_url = "jdbc:mysql://${var.proxysql_host}:${var.proxysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
 
   backend_environment = concat(
     [
       { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
       { name = "JAVA_TOOL_OPTIONS", value = "-XX:MaxRAMPercentage=75" },
 
-      { name = "SPRING_DATASOURCE_URL", value = local.backend_datasource_url },
       { name = "SPRING_DATASOURCE_DRIVER_CLASS_NAME", value = "com.mysql.cj.jdbc.Driver" },
       # 스키마 변경·검증 안 함 (DB 이관 중 V1 스키마 고정)
       { name = "JPA_DDL_AUTO", value = "none" },
@@ -42,12 +39,20 @@ locals {
     var.backend_kakao_client_secret_enabled ? [] : [{ name = "KAKAO_CLIENT_SECRET", value = "" }],
   )
 
-  # SSM /stockspoon/v2/prod/backend/<이름> (CLI로 등록)
+  # SSM /stockspoon/v2/prod/backend/<이름> (application secrets)
   backend_secret_names = concat(
     ["MYSQL_USER", "MYSQL_PASSWORD", "JWT_SECRET", "KAKAO_CLIENT_ID", "KAKAO_REDIRECT_URI", "FRONTEND_ORIGIN"],
     var.backend_kakao_client_secret_enabled ? ["KAKAO_CLIENT_SECRET"] : [],
     var.backend_kiwoom_stream_enabled ? ["KIWOOM_APP_KEY", "KIWOOM_APP_SECRET"] : [],
   )
+}
+
+# The JDBC URL is not a credential, so store it as a plain String parameter.
+resource "aws_ssm_parameter" "backend_datasource_url" {
+  name        = "${var.ssm_parameter_path_prefix}/backend/SPRING_DATASOURCE_URL"
+  description = "JDBC URL for the V2 backend through the migration rehearsal ProxySQL task"
+  type        = "String"
+  value       = local.backend_datasource_url
 }
 
 # ---------------------------------------------------------------------------
@@ -171,14 +176,30 @@ resource "aws_ecs_task_definition" "backend" {
         }
       ]
 
-      environment = local.backend_environment
+      # The version marker makes a changed SSM value create a new task definition
+      # revision, so ECS replaces tasks and injects the current URL at startup.
+      environment = concat(
+        local.backend_environment,
+        [{
+          name  = "TF_DATASOURCE_URL_PARAMETER_VERSION"
+          value = tostring(aws_ssm_parameter.backend_datasource_url.version)
+        }]
+      )
 
-      secrets = [
-        for name in local.backend_secret_names : {
-          name      = name
-          valueFrom = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/${name}"
-        }
-      ]
+      secrets = concat(
+        [
+          for name in local.backend_secret_names : {
+            name      = name
+            valueFrom = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/${name}"
+          }
+        ],
+        [
+          {
+            name      = "SPRING_DATASOURCE_URL"
+            valueFrom = aws_ssm_parameter.backend_datasource_url.arn
+          }
+        ]
+      )
 
       logConfiguration = {
         logDriver = "awslogs"
