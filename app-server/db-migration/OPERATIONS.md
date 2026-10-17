@@ -438,6 +438,57 @@ mysql_slave_status_seconds_behind_master
 node_memory_MemAvailable_bytes
 ```
 
+### ROW 바이너리 로그 이벤트를 Loki로 보내기
+
+Alloy는 바이너리 로그 파일을 직접 읽지 않는다. 이관 EC2 호스트에 설치된 `mysqlbinlog`로 V1의
+원격 이벤트를 텍스트로 해독하고, Alloy가 읽는 파일에 기록한다. 이 방법은 V1의 `log_bin=ON`,
+`binlog_format=ROW` 설정을 사용하므로 MySQL 서버 설정을 추가로 바꾸지 않는다.
+
+먼저 로컬에서 갱신된 agent 구성을 이관 EC2로 복사한다.
+
+```bash
+scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/agent ubuntu@<이관DB-공인-IP>:/tmp/
+```
+
+이관 EC2에서 Alloy 구성을 갱신한다. 기존 Loki 주소를 `.env`에서 읽어 사용한다.
+
+```bash
+LOKI_PRIVATE_IP=$(sudo sed -n 's#^LOKI_PUSH_URL=http://\([^:]*\):3100/loki/api/v1/push$#\1#p' \
+  /opt/stockspoon-plg-agent/.env)
+test -n "$LOKI_PRIVATE_IP" && \
+  sudo bash /tmp/agent/install.sh migration-db "$LOKI_PRIVATE_IP" migration-mysql
+```
+
+V1에서 `SHOW BINARY LOG STATUS\G`를 실행해 현재 `File`과 `Position`을 확인한다. 아래 명령의
+`binlog.000007`과 `71292`는 예시이므로, 실행 시점의 결과로 바꾼다. 같은 `mysqlbinlog`가
+포그라운드에서 실행 중이면 먼저 해당 터미널에서 Ctrl+C로 끝낸 뒤 실행한다.
+
+```bash
+sudo sh -c '
+nohup mysqlbinlog \
+  --defaults-extra-file=/etc/mysql/binlog-reader.cnf \
+  --read-from-remote-server \
+  --start-position=71292 \
+  --stop-never \
+  --connection-server-id=103 \
+  --base64-output=DECODE-ROWS -vv \
+  binlog.000007 \
+  >> /opt/stockspoon-plg-agent/binlog-logs/binlog-decoded.log 2>&1 < /dev/null &
+echo $! > /run/stockspoon-mysqlbinlog-reader.pid
+'
+```
+
+이관 EC2의 Alloy가 파일을 Loki로 전송한다. Grafana Explore에서 Loki를 선택하고 조회한다.
+
+```logql
+{host="migration-db", job="mysql-binlog"}
+{host="migration-db", job="mysql-binlog"} |~ "Write_rows|Update_rows|Delete_rows"
+```
+
+이 스트림은 자동으로 재시작 위치를 저장하지 않는다. 중지 후 다시 시작할 때는 V1의 최신 binlog
+파일과 위치를 확인해 명령을 갱신한다. `binlog_row_image=FULL`인 경우 실제 행 값도 Loki에
+들어가므로 접근 권한과 실험 종료 후 수집 프로세스 중지를 관리한다.
+
 백엔드 로그는 API 경로별 상태와 `requestId`를 보여주고, MySQL general log는 DB에 도착한
 SQL을 보여준다. Prometheus MySQL exporter는 현재 이관 DB의 global status 및 replica 지표를
 5초 간격으로 수집한다. V1 MySQL은 현재 Docker 호스트 포트가 공개되지 않아 mysqld exporter를

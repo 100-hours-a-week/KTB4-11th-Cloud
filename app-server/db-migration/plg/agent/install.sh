@@ -39,6 +39,9 @@ fi
 
 install -d -m 0750 "$AGENT_DIRECTORY"
 cp -a "$SCRIPT_DIR/." "$AGENT_DIRECTORY/"
+install -d -m 0750 "$AGENT_DIRECTORY/binlog-logs"
+touch "$AGENT_DIRECTORY/binlog-logs/binlog-decoded.log"
+chmod 0640 "$AGENT_DIRECTORY/binlog-logs/binlog-decoded.log"
 cat > "$AGENT_DIRECTORY/.env" <<EOF
 HOST_ROLE=$HOST_ROLE
 LOKI_PUSH_URL=http://$LOKI_PRIVATE_IP:3100/loki/api/v1/push

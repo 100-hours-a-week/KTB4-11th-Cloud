@@ -7,13 +7,13 @@ V1 EC2에서 실행 중인 Backend를 ECS로 이전하고, 이후 역할별 서�
 
 ```
 ecs ──참조──> shared-infra      (VPC, Private Subnet)
-    ──참조──> app-server        (ALB 리스너, Blue TG, ALB·V1 앱 SG·private IP, Public ECR)
+    ──참조──> app-server        (ALB 리스너, Blue TG, ALB SG, Public ECR, GitHub OIDC)
     ──참조──> redis (prod)      (Valkey 엔드포인트, 서비스별 사용자·Connect Policy)
     ──참조──> ai-server/infra   (V1 AI 운영 서버 private IP·SG)
 ```
 
 - 참조는 `ecs` → 다른 root 방향으로만 합니다. `shared-infra`, `app-server`는 `ecs`를 참조하지 않습니다.
-- 다른 root가 소유한 리소스(ALB 리스너, V1 SG)에 규칙을 추가할 때는 그 규칙을 이 root에서 소유합니다.
+- 다른 root나 별도 ECS 서비스가 소유한 리소스(ALB 리스너, ProxySQL task SG)에 규칙을 추가할 때는 그 규칙을 이 root에서 소유합니다.
 
 ## 파일 구성
 
@@ -36,7 +36,8 @@ Terraform CI 권한이 이 접두사로 제한되어 있습니다.
 
 - 애플리케이션 Secret은 **SSM Parameter Store SecureString**에 저장합니다.
 - 경로: `/stockspoon/v2/prod/<서비스>/<이름>` (예: `/stockspoon/v2/prod/backend/DB_PASSWORD`)
-- 값은 콘솔이나 CLI로 직접 등록하고, Terraform으로 관리하지 않습니다. (값이 state에 남지 않게 하기 위함)
+- 앱 자격 증명 등 Secret 값은 콘솔이나 CLI로 등록하고 Terraform으로 관리하지 않습니다. (값이 state에 남지 않게 하기 위함)
+- `SPRING_DATASOURCE_URL`은 비밀이 아닌 JDBC 주소이므로 Terraform이 SSM `String` 파라미터로 생성·관리합니다.
 - Task Execution Role은 `/stockspoon/v2/prod/*` 경로만 읽을 수 있습니다.
 
 ```bash
@@ -53,7 +54,7 @@ aws ssm put-parameter --type SecureString \
 | 파일 | 리소스 |
 |---|---|
 | `platform_cluster.tf` | ECS Cluster, Service ASG(Launch Template, 인스턴스 SG), Capacity Provider |
-| `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, Task Definition(V1 MySQL 사용), ECS Service |
+| `svc_backend.tf` | Backend 로그 그룹, Task Role(Valkey `backend`), Task SG, Green Target Group, JDBC URL SSM 파라미터, Task Definition, ECS Service |
 | `svc_market_common.tf` | market-http 공통 값 (이미지, V1 AI private IP, Valkey 접속 정보) |
 | `service_scaling.tf` | 서비스별 Task 2~4개, Backend CPU 60%, SSE 연결 400개/Task, 선택적 예약 확장 |
 | `svc_market_http.tf` | market-http(SSE) 로그 그룹, Task Role(Valkey `socket`), Task SG, Target Group, Task Definition, ECS Service |
@@ -186,6 +187,7 @@ BE 레포 `dev` CI가 Public ECR(`stockspoon-v2-backend`)에 push한 이미지�
 
 | 이름 | 비고 |
 |---|---|
+| `SPRING_DATASOURCE_URL` | JDBC 주소. Terraform이 ProxySQL 주소와 포트로 `String` 파라미터를 생성·주입하므로 별도 등록하지 않음 |
 | `MYSQL_USER`, `MYSQL_PASSWORD` | V1 MySQL 계정 |
 | `JWT_SECRET` | V1과 동일 |
 | `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI` | V1 `.env`의 `KAKAO_CLIENT_SECRET`이 비어 있으면 등록하지 않고 `backend_kakao_client_secret_enabled = false` |
