@@ -51,7 +51,7 @@ resource "aws_iam_role_policy" "frontend_publish" {
       },
       {
         Effect   = "Allow"
-        Action   = ["ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
+        Action   = ["ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"]
         Resource = "arn:aws:ecr:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:repository/stockspoon-v2-prod-frontend"
       },
     ]
