@@ -154,13 +154,13 @@ variable "alb_access_log_retention_days" {
 }
 
 variable "app_dns_target" {
-  description = "Entry point for the application DNS record: \"ec2\" (Elastic IP) or \"alb\" (ALB alias). Change only this value for DNS cutover or rollback."
+  description = "Application DNS entry point: ec2, alb, or cloudfront. CloudFront requires completed frontend readiness checks."
   type        = string
   default     = "alb"
 
   validation {
-    condition     = contains(["ec2", "alb"], var.app_dns_target)
-    error_message = "app_dns_target must be either \"ec2\" or \"alb\"."
+    condition     = contains(["ec2", "alb", "cloudfront"], var.app_dns_target)
+    error_message = "app_dns_target must be ec2, alb, or cloudfront."
   }
 }
 

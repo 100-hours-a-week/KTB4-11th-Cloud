@@ -36,7 +36,8 @@ DEPENDENTS = {
     "messaging": {"ai-server/dev-infra"},
     "messaging@prod": {"ai-server/infra"},
     "ai-server/dev-infra": {"redis"},
-    "ecr": {"ecs"},
+    # app-server grants the frontend publisher access to the private production image repository.
+    "ecr": {"app-server", "ecs"},
 }
 
 MODULE_CONSUMERS = {

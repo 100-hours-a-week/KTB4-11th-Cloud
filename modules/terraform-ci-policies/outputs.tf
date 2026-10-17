@@ -5,5 +5,6 @@ output "documents" {
     application   = data.aws_iam_policy_document.terraform_ci_write_application.json
     observability = data.aws_iam_policy_document.terraform_ci_write_observability.json
     identity      = data.aws_iam_policy_document.terraform_ci_write_identity.json
+    edge          = data.aws_iam_policy_document.terraform_ci_write_edge.json
   }
 }
