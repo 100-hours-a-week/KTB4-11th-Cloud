@@ -1,3 +1,6 @@
 aws_region   = "ap-northeast-2"
 environment  = "dev"
 project_name = "stockspoon"
+
+# Enable only after the Backend replay endpoint and bearer token are configured.
+db_write_replay_consumer_enabled = false

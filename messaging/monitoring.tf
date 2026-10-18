@@ -108,6 +108,25 @@ resource "aws_cloudwatch_dashboard" "sqs" {
           ]
         }
       },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 12
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Database write replay Lambda"
+          region = var.aws_region
+          view   = "timeSeries"
+          period = 60
+          stat   = "Sum"
+          metrics = [
+            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.db_write_replay_forwarder.function_name, { label = "Invocations" }],
+            [".", "Errors", ".", ".", { label = "Errors" }],
+            [".", "Throttles", ".", ".", { label = "Throttles" }],
+          ]
+        }
+      },
     ]
   })
 }

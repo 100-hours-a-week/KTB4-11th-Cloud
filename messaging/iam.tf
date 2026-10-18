@@ -115,7 +115,7 @@ data "aws_iam_policy_document" "db_write_replay_consumer" {
 
 resource "aws_iam_policy" "db_write_replay_consumer" {
   name        = "${local.name_prefix}-db-write-replay-consumer"
-  description = "Allows the future database write replay consumer to process queued writes"
+  description = "Allows the DB write replay Lambda to receive and acknowledge queued writes"
   policy      = data.aws_iam_policy_document.db_write_replay_consumer.json
 
   tags = {

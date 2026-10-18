@@ -64,8 +64,23 @@ output "backend_db_write_replay_producer_policy_arn" {
 }
 
 output "db_write_replay_consumer_policy_arn" {
-  description = "ARN of the managed policy for the future database write replay consumer"
+  description = "ARN of the managed policy attached to the database write replay Lambda"
   value       = aws_iam_policy.db_write_replay_consumer.arn
+}
+
+output "db_write_replay_forwarder_lambda_name" {
+  description = "Name of the Lambda that forwards FIFO replay messages to the Backend replay endpoint"
+  value       = aws_lambda_function.db_write_replay_forwarder.function_name
+}
+
+output "db_write_replay_event_source_mapping_uuid" {
+  description = "UUID of the disabled-by-default SQS event source mapping for the replay Lambda"
+  value       = aws_lambda_event_source_mapping.db_write_replay_forwarder.uuid
+}
+
+output "db_write_replay_token_secret_name" {
+  description = "Secrets Manager secret name whose value is shared with the Backend replay endpoint"
+  value       = aws_secretsmanager_secret.db_write_replay_token.name
 }
 
 output "backend_producer_sqs_policy_arn" {
