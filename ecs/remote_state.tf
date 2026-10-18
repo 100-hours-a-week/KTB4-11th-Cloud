@@ -34,6 +34,17 @@ data "terraform_remote_state" "redis" {
   }
 }
 
+# SQS replay queue and the dedicated producer policy for the V2 Backend.
+data "terraform_remote_state" "messaging_prod" {
+  backend = "s3"
+
+  config = {
+    bucket = "stockspoon-terraform-state-sqs"
+    key    = "messaging/prod/terraform.tfstate"
+    region = "ap-northeast-2"
+  }
+}
+
 # V1 AI 운영 서버 (market 서비스가 읽는 QuestDB·PostgreSQL 호스트)
 # TODO: V2 데이터 저장소로 이전하면 이 참조와 cross_root_rules.tf의 AI SG 규칙을 함께 제거
 data "terraform_remote_state" "ai" {

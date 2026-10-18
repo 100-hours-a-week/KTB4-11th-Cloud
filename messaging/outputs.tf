@@ -38,6 +38,36 @@ output "order_dlq_arn" {
   value       = aws_sqs_queue.order_dlq.arn
 }
 
+output "db_write_replay_queue_url" {
+  description = "URL of the FIFO queue for backend database writes rejected during primary switching"
+  value       = aws_sqs_queue.db_write_replay.url
+}
+
+output "db_write_replay_queue_arn" {
+  description = "ARN of the FIFO database write replay queue"
+  value       = aws_sqs_queue.db_write_replay.arn
+}
+
+output "db_write_replay_dlq_url" {
+  description = "URL of the FIFO database write replay dead-letter queue"
+  value       = aws_sqs_queue.db_write_replay_dlq.url
+}
+
+output "db_write_replay_dlq_arn" {
+  description = "ARN of the FIFO database write replay dead-letter queue"
+  value       = aws_sqs_queue.db_write_replay_dlq.arn
+}
+
+output "backend_db_write_replay_producer_policy_arn" {
+  description = "ARN of the managed policy allowing the Backend to enqueue rejected database writes"
+  value       = aws_iam_policy.backend_db_write_replay_producer.arn
+}
+
+output "db_write_replay_consumer_policy_arn" {
+  description = "ARN of the managed policy for the future database write replay consumer"
+  value       = aws_iam_policy.db_write_replay_consumer.arn
+}
+
 output "backend_producer_sqs_policy_arn" {
   description = "ARN of the managed IAM policy for Backend report and order publishing"
   value       = aws_iam_policy.backend_producer_sqs.arn
@@ -66,6 +96,11 @@ output "report_dlq_alarm_name" {
 output "order_dlq_alarm_name" {
   description = "Name of the CloudWatch alarm for visible messages in the order DLQ"
   value       = aws_cloudwatch_metric_alarm.order_dlq_not_empty.alarm_name
+}
+
+output "db_write_replay_dlq_alarm_name" {
+  description = "Name of the CloudWatch alarm for visible messages in the database write replay DLQ"
+  value       = aws_cloudwatch_metric_alarm.db_write_replay_dlq_not_empty.alarm_name
 }
 
 output "sqs_discord_webhook_secret_name" {

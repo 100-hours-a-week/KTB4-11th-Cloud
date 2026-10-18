@@ -75,3 +75,47 @@ resource "aws_sqs_queue_redrive_allow_policy" "order_dlq" {
     sourceQueueArns   = [aws_sqs_queue.order.arn]
   })
 }
+
+# Holds backend database writes rejected during the primary switch. Producers
+# must use one MessageGroupId for strict global order and a unique
+# MessageDeduplicationId for each write attempt.
+resource "aws_sqs_queue" "db_write_replay_dlq" {
+  name                        = "${local.name_prefix}-db-write-replay-dlq.fifo"
+  fifo_queue                  = true
+  content_based_deduplication = false
+  message_retention_seconds   = 1209600
+  receive_wait_time_seconds   = 20
+  sqs_managed_sse_enabled     = true
+
+  tags = {
+    Name = "${local.name_prefix}-db-write-replay-dlq.fifo"
+  }
+}
+
+resource "aws_sqs_queue" "db_write_replay" {
+  name                        = "${local.name_prefix}-db-write-replay.fifo"
+  fifo_queue                  = true
+  content_based_deduplication = false
+  message_retention_seconds   = 1209600
+  receive_wait_time_seconds   = 20
+  visibility_timeout_seconds  = 300
+  sqs_managed_sse_enabled     = true
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.db_write_replay_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-db-write-replay.fifo"
+  }
+}
+
+resource "aws_sqs_queue_redrive_allow_policy" "db_write_replay_dlq" {
+  queue_url = aws_sqs_queue.db_write_replay_dlq.id
+
+  redrive_allow_policy = jsonencode({
+    redrivePermission = "byQueue"
+    sourceQueueArns   = [aws_sqs_queue.db_write_replay.arn]
+  })
+}
