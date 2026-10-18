@@ -103,7 +103,10 @@ resource "aws_sqs_queue" "db_write_replay" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.db_write_replay_dlq.arn
-    maxReceiveCount     = 3
+    # This consumer is invoked manually and stops at the first failed message.
+    # Keep transient ProxySQL/primary-switch failures from quickly moving the
+    # FIFO head to the DLQ and exposing later writes first.
+    maxReceiveCount = 1000
   })
 
   tags = {

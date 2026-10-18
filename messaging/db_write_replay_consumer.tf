@@ -1,15 +1,8 @@
 locals {
-  db_write_replay_consumer_name = "${local.name_prefix}-db-write-replay-forwarder"
-  db_write_replay_token_secret  = "${var.project_name}/v2/${var.environment}/db-write-replay/consumer-token"
-}
-
-resource "aws_secretsmanager_secret" "db_write_replay_token" {
-  name        = local.db_write_replay_token_secret
-  description = "Bearer token shared by the DB write replay Lambda and Backend endpoint"
-
-  tags = {
-    Name = "${local.name_prefix}-db-write-replay-token"
-  }
+  db_write_replay_consumer_name            = "${local.name_prefix}-db-write-replay-forwarder"
+  db_write_replay_proxy_host               = "${var.proxysql_dns_service_name}.${var.proxysql_dns_namespace}"
+  db_write_replay_mysql_user_parameter     = "/${var.project_name}/v2/${var.environment}/backend/MYSQL_USER"
+  db_write_replay_mysql_password_parameter = "/${var.project_name}/v2/${var.environment}/backend/MYSQL_PASSWORD"
 }
 
 data "aws_iam_policy_document" "db_write_replay_forwarder_assume_role" {
@@ -44,10 +37,34 @@ resource "aws_cloudwatch_log_group" "db_write_replay_forwarder" {
 
 data "aws_iam_policy_document" "db_write_replay_forwarder" {
   statement {
-    sid       = "ReadReplayEndpointToken"
+    sid     = "ReadProxySqlCredentials"
+    effect  = "Allow"
+    actions = ["ssm:GetParameter"]
+    resources = [
+      "arn:${data.aws_partition.messaging.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.messaging.account_id}:parameter${local.db_write_replay_mysql_user_parameter}",
+      "arn:${data.aws_partition.messaging.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.messaging.account_id}:parameter${local.db_write_replay_mysql_password_parameter}",
+    ]
+  }
+
+  statement {
+    sid       = "DecryptProxySqlCredentials"
     effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.db_write_replay_token.arn]
+    actions   = ["kms:Decrypt"]
+    resources = [data.aws_kms_alias.ssm.target_key_arn]
+  }
+
+  statement {
+    sid    = "CreateAndManageLambdaVpcNetworkInterfaces"
+    effect = "Allow"
+    actions = [
+      "ec2:CreateNetworkInterface",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeSubnets",
+      "ec2:DeleteNetworkInterface",
+      "ec2:AssignPrivateIpAddresses",
+      "ec2:UnassignPrivateIpAddresses",
+    ]
+    resources = ["*"]
   }
 
   statement {
@@ -74,27 +91,34 @@ resource "aws_iam_role_policy_attachment" "db_write_replay_forwarder_sqs" {
 
 data "archive_file" "db_write_replay_forwarder" {
   type        = "zip"
-  source_file = "${path.module}/lambda/db_write_replay_forwarder.py"
+  source_dir  = "${path.module}/.terraform/db_write_replay_build"
   output_path = "${path.module}/.terraform/db_write_replay_forwarder.zip"
 }
 
 resource "aws_lambda_function" "db_write_replay_forwarder" {
-  function_name                  = local.db_write_replay_consumer_name
-  description                    = "Forwards FIFO DB write replay messages to the authenticated Backend replay endpoint"
-  role                           = aws_iam_role.db_write_replay_forwarder.arn
-  runtime                        = "python3.12"
-  handler                        = "db_write_replay_forwarder.handler"
-  filename                       = data.archive_file.db_write_replay_forwarder.output_path
-  source_code_hash               = data.archive_file.db_write_replay_forwarder.output_base64sha256
-  timeout                        = 30
-  memory_size                    = 128
-  reserved_concurrent_executions = 1
+  function_name    = local.db_write_replay_consumer_name
+  description      = "Manually drains FIFO DB write replay messages through ProxySQL"
+  role             = aws_iam_role.db_write_replay_forwarder.arn
+  runtime          = "python3.12"
+  handler          = "db_write_replay_forwarder.handler"
+  filename         = data.archive_file.db_write_replay_forwarder.output_path
+  source_code_hash = data.archive_file.db_write_replay_forwarder.output_base64sha256
+  timeout          = 900
+  memory_size      = 512
+
+  vpc_config {
+    subnet_ids         = data.terraform_remote_state.shared.outputs.private_subnet_ids
+    security_group_ids = [aws_security_group.db_write_replay_forwarder.id]
+  }
 
   environment {
     variables = {
-      DB_WRITE_REPLAY_ENDPOINT_URL         = var.db_write_replay_endpoint_url
-      DB_WRITE_REPLAY_TOKEN_SECRET_ARN     = aws_secretsmanager_secret.db_write_replay_token.arn
-      DB_WRITE_REPLAY_HTTP_TIMEOUT_SECONDS = "20"
+      DB_WRITE_REPLAY_QUEUE_URL                = aws_sqs_queue.db_write_replay.url
+      DB_WRITE_REPLAY_PROXYSQL_HOST            = local.db_write_replay_proxy_host
+      DB_WRITE_REPLAY_PROXYSQL_PORT            = tostring(var.proxysql_port)
+      DB_WRITE_REPLAY_DATABASE                 = var.db_write_replay_database
+      DB_WRITE_REPLAY_MYSQL_USER_PARAMETER     = local.db_write_replay_mysql_user_parameter
+      DB_WRITE_REPLAY_MYSQL_PASSWORD_PARAMETER = local.db_write_replay_mysql_password_parameter
     }
   }
 
@@ -102,6 +126,8 @@ resource "aws_lambda_function" "db_write_replay_forwarder" {
     aws_iam_role_policy.db_write_replay_forwarder,
     aws_iam_role_policy_attachment.db_write_replay_forwarder_sqs,
     aws_cloudwatch_log_group.db_write_replay_forwarder,
+    aws_vpc_security_group_egress_rule.db_write_replay_to_proxysql,
+    aws_vpc_security_group_egress_rule.db_write_replay_https,
   ]
 
   tags = {
@@ -109,21 +135,30 @@ resource "aws_lambda_function" "db_write_replay_forwarder" {
   }
 }
 
-# Keep the event source mapping disabled until the Backend has deployed an
-# authenticated, idempotent replay endpoint and its HTTPS URL/token are set.
-resource "aws_lambda_event_source_mapping" "db_write_replay_forwarder" {
-  event_source_arn = aws_sqs_queue.db_write_replay.arn
-  function_name    = aws_lambda_function.db_write_replay_forwarder.arn
-  enabled          = var.db_write_replay_consumer_enabled
-  batch_size       = 1
+resource "aws_security_group" "db_write_replay_forwarder" {
+  name        = "${local.db_write_replay_consumer_name}-sg"
+  description = "Allows the manually invoked DB write replay Lambda to reach ProxySQL"
+  vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
 
-  lifecycle {
-    precondition {
-      condition = !var.db_write_replay_consumer_enabled || (
-        length(trimspace(var.db_write_replay_endpoint_url)) > 0 &&
-        can(regex("^https://", var.db_write_replay_endpoint_url))
-      )
-      error_message = "Enable the DB write replay consumer only after setting an HTTPS Backend replay endpoint URL."
-    }
+  tags = {
+    Name = "${local.db_write_replay_consumer_name}-sg"
   }
+}
+
+resource "aws_vpc_security_group_egress_rule" "db_write_replay_to_proxysql" {
+  security_group_id = aws_security_group.db_write_replay_forwarder.id
+  cidr_ipv4         = data.terraform_remote_state.shared.outputs.vpc_cidr_block
+  from_port         = var.proxysql_port
+  to_port           = var.proxysql_port
+  ip_protocol       = "tcp"
+  description       = "Allow the replay Lambda to reach the ProxySQL client port in the VPC"
+}
+
+resource "aws_vpc_security_group_egress_rule" "db_write_replay_https" {
+  security_group_id = aws_security_group.db_write_replay_forwarder.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "Allow the replay Lambda to call SQS, SSM, and CloudWatch APIs through NAT"
 }

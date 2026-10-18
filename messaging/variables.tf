@@ -26,14 +26,26 @@ variable "project_name" {
   }
 }
 
-variable "db_write_replay_consumer_enabled" {
-  description = "Whether Lambda should consume queued DB writes; keep false until the Backend replay endpoint is ready"
-  type        = bool
-  default     = false
+variable "proxysql_dns_namespace" {
+  description = "Cloud Map private DNS namespace used by the ProxySQL ECS service"
+  type        = string
+  default     = "stockspoon-v2.internal"
 }
 
-variable "db_write_replay_endpoint_url" {
-  description = "HTTPS URL of the authenticated Backend endpoint that replays one DB write envelope"
+variable "proxysql_dns_service_name" {
+  description = "Cloud Map service name used by the ProxySQL ECS service"
   type        = string
-  default     = ""
+  default     = "proxysql"
+}
+
+variable "proxysql_port" {
+  description = "ProxySQL client listener port"
+  type        = number
+  default     = 6033
+}
+
+variable "db_write_replay_database" {
+  description = "MySQL schema used by the backend and the DB replay receipt table"
+  type        = string
+  default     = "stockspoon"
 }

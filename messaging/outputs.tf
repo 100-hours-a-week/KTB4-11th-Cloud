@@ -69,18 +69,13 @@ output "db_write_replay_consumer_policy_arn" {
 }
 
 output "db_write_replay_forwarder_lambda_name" {
-  description = "Name of the Lambda that forwards FIFO replay messages to the Backend replay endpoint"
+  description = "Name of the manually invoked Lambda that replays FIFO SQL transactions through ProxySQL"
   value       = aws_lambda_function.db_write_replay_forwarder.function_name
 }
 
-output "db_write_replay_event_source_mapping_uuid" {
-  description = "UUID of the disabled-by-default SQS event source mapping for the replay Lambda"
-  value       = aws_lambda_event_source_mapping.db_write_replay_forwarder.uuid
-}
-
-output "db_write_replay_token_secret_name" {
-  description = "Secrets Manager secret name whose value is shared with the Backend replay endpoint"
-  value       = aws_secretsmanager_secret.db_write_replay_token.name
+output "db_write_replay_lambda_security_group_id" {
+  description = "Security group ID to allow on the ProxySQL ECS listener for the replay Lambda"
+  value       = aws_security_group.db_write_replay_forwarder.id
 }
 
 output "backend_producer_sqs_policy_arn" {
