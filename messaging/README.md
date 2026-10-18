@@ -139,6 +139,12 @@ terraform -chdir=messaging validate
 `validate` works without configuring the S3 backend. Planning and applying
 require the real dev state bucket.
 
+The repository Terraform plan/apply helpers build the DB-write replay Lambda
+package after `terraform init` and before `validate`/`plan`. For a manual plan,
+run `bash messaging/lambda/build_db_write_replay_package.sh` from the repository
+root before planning either environment; the archive source is generated under
+`messaging/.terraform/` and is not committed.
+
 ## Dev plan
 
 The dev state is stored in the pre-created
