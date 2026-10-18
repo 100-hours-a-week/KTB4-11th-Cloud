@@ -79,3 +79,48 @@ resource "aws_iam_policy" "ai_sqs" {
     Name = "${local.name_prefix}-ai-sqs"
   }
 }
+
+data "aws_iam_policy_document" "backend_db_write_replay_producer" {
+  statement {
+    sid       = "SendDatabaseWriteReplayMessages"
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.db_write_replay.arn]
+  }
+}
+
+resource "aws_iam_policy" "backend_db_write_replay_producer" {
+  name        = "${local.name_prefix}-backend-db-write-replay-producer"
+  description = "Allows the V2 ${var.environment} Backend to enqueue failed database writes"
+  policy      = data.aws_iam_policy_document.backend_db_write_replay_producer.json
+
+  tags = {
+    Name = "${local.name_prefix}-backend-db-write-replay-producer"
+  }
+}
+
+data "aws_iam_policy_document" "db_write_replay_consumer" {
+  statement {
+    sid    = "ConsumeDatabaseWriteReplayMessages"
+    effect = "Allow"
+    actions = [
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:ChangeMessageVisibility",
+      "sqs:GetQueueAttributes",
+    ]
+    resources = [aws_sqs_queue.db_write_replay.arn]
+  }
+}
+
+resource "aws_iam_policy" "db_write_replay_consumer" {
+  name = "${local.name_prefix}-db-write-replay-consumer"
+  # Keep the existing immutable description to avoid replacing the managed
+  # policy solely for metadata during this migration rehearsal deployment.
+  description = "Allows the future database write replay consumer to process queued writes"
+  policy      = data.aws_iam_policy_document.db_write_replay_consumer.json
+
+  tags = {
+    Name = "${local.name_prefix}-db-write-replay-consumer"
+  }
+}

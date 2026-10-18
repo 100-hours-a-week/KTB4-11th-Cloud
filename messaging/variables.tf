@@ -25,3 +25,27 @@ variable "project_name" {
     error_message = "project_name must contain only lowercase letters, numbers, and hyphens."
   }
 }
+
+variable "proxysql_dns_namespace" {
+  description = "Cloud Map private DNS namespace used by the ProxySQL ECS service"
+  type        = string
+  default     = "stockspoon-v2.internal"
+}
+
+variable "proxysql_dns_service_name" {
+  description = "Cloud Map service name used by the ProxySQL ECS service"
+  type        = string
+  default     = "proxysql"
+}
+
+variable "proxysql_port" {
+  description = "ProxySQL client listener port"
+  type        = number
+  default     = 6033
+}
+
+variable "db_write_replay_database" {
+  description = "MySQL schema used by the backend and the DB replay receipt table"
+  type        = string
+  default     = "stockspoon"
+}

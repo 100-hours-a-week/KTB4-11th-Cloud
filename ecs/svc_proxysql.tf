@@ -410,6 +410,7 @@ resource "aws_ecs_service" "proxysql" {
     aws_vpc_security_group_egress_rule.proxysql_task_https,
     aws_vpc_security_group_ingress_rule.v1_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
+    aws_vpc_security_group_ingress_rule.proxysql_from_db_write_replay_lambda,
   ]
 
   tags = {

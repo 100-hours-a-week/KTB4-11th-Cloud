@@ -82,6 +82,13 @@ resource "aws_iam_role_policy_attachment" "backend_valkey" {
   policy_arn = local.valkey_policies[local.backend_valkey_role]
 }
 
+# Lets the BE publish failed writes to the queue managed by the messaging root.
+# Apply messaging/prod before this ECS root so the policy output exists.
+resource "aws_iam_role_policy_attachment" "backend_db_write_replay_sqs" {
+  role       = aws_iam_role.backend_task.name
+  policy_arn = data.terraform_remote_state.messaging_prod.outputs.backend_db_write_replay_producer_policy_arn
+}
+
 # ---------------------------------------------------------------------------
 # Security Group
 # ---------------------------------------------------------------------------

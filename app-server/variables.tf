@@ -219,7 +219,7 @@ variable "retain_legacy_terraform_ci_write_policy" {
 variable "db_migration_admin_cidrs" {
   description = "Administrator IPv4 CIDRs allowed to use SSH and the PMM HTTPS UI"
   type        = set(string)
-  default     = ["211.244.225.224/32"]
+  default     = ["211.244.225.224/32", "220.86.114.140/32"]
 
   validation {
     condition     = alltrue([for cidr in var.db_migration_admin_cidrs : can(cidrnetmask(cidr)) && endswith(cidr, "/32")])

@@ -219,6 +219,20 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     resources = [local.backend_datasource_url_parameter_arn]
   }
 
+  # ListAliases does not support resource-level scoping; restrict it to Seoul.
+  statement {
+    sid       = "ListKmsAliasesInSeoul"
+    effect    = "Allow"
+    actions   = ["kms:ListAliases"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
+  }
+
   statement {
     effect = "Allow"
     actions = [
@@ -278,6 +292,35 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
       "sts:GetServiceBearerToken",
     ]
     resources = ["*"]
+  }
+
+  # Terraform refreshes Cloud Map resources while planning the ECS root.
+  # Keep read access separate from the apply-only Cloud Map write policy.
+  statement {
+    sid    = "ReadCloudMapResourcesInSeoul"
+    effect = "Allow"
+    actions = [
+      "servicediscovery:GetNamespace",
+      "servicediscovery:GetService",
+    ]
+    resources = [
+      "arn:${data.aws_partition.github_actions_terraform.partition}:servicediscovery:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:namespace/*",
+      "arn:${data.aws_partition.github_actions_terraform.partition}:servicediscovery:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:service/*",
+    ]
+  }
+
+  # Cloud Map does not support resource-level scoping for ListTagsForResource.
+  statement {
+    sid       = "ReadCloudMapResourceTagsInSeoul"
+    effect    = "Allow"
+    actions   = ["servicediscovery:ListTagsForResource"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
   }
 
   statement {

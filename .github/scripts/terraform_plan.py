@@ -29,6 +29,9 @@ VAR_FILES = {
     "redis@prod": "environments/prod/terraform.tfvars.example",
 }
 
+MESSAGING_ROOTS = {"messaging", "messaging@prod"}
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
 
 def run(root: str, *args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
     command = ["terraform", f"-chdir={root_dir(root)}", *args]
@@ -42,6 +45,25 @@ def run(root: str, *args: str, capture: bool = False) -> subprocess.CompletedPro
     return result
 
 
+def build_local_artifacts(root: str) -> None:
+    if root not in MESSAGING_ROOTS:
+        return
+
+    command = [
+        "bash",
+        str(REPOSITORY_ROOT / "messaging/lambda/build_db_write_replay_package.sh"),
+    ]
+    result = subprocess.run(command, cwd=REPOSITORY_ROOT, text=True, capture_output=True, check=False)
+    output = "\n".join(filter(None, [result.stdout, result.stderr]))
+    if result.returncode != 0:
+        if output:
+            print(f"Command failed while preparing artifacts for {root}: {' '.join(command)}", file=sys.stderr)
+            print("\n".join(output.splitlines()[-40:]), file=sys.stderr)
+        raise subprocess.CalledProcessError(result.returncode, command)
+    if output:
+        print(output, end="" if output.endswith("\n") else "\n")
+
+
 def initialize(root: str) -> None:
     args = ["init", "-input=false", "-lockfile=readonly", "-reconfigure"]
     if root in BACKEND_CONFIGS:
@@ -52,6 +74,7 @@ def initialize(root: str) -> None:
 def prepare(root: str) -> None:
     run(root, "fmt", "-check", "-recursive")
     initialize(root)
+    build_local_artifacts(root)
     run(root, "validate", "-no-color")
 
 

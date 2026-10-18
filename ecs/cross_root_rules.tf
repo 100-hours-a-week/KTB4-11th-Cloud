@@ -94,6 +94,17 @@ resource "aws_vpc_security_group_ingress_rule" "proxysql_from_backend" {
   description                  = "Allow V2 backend tasks to connect to ProxySQL"
 }
 
+# The operator-triggered replay Lambda uses the same private ProxySQL endpoint
+# as Backend tasks after the promoted writer is ready.
+resource "aws_vpc_security_group_ingress_rule" "proxysql_from_db_write_replay_lambda" {
+  security_group_id            = aws_security_group.proxysql_task.id
+  referenced_security_group_id = data.terraform_remote_state.messaging_prod.outputs.db_write_replay_lambda_security_group_id
+  from_port                    = var.proxysql_port
+  to_port                      = var.proxysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow the DB write replay Lambda to execute queued writes through ProxySQL"
+}
+
 # ProxySQL task SG는 V1 MySQL에 접속할 수 있다.
 resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_proxysql" {
   security_group_id            = data.terraform_remote_state.app.outputs.app_security_group_id
