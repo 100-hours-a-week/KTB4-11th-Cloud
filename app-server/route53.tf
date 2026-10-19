@@ -13,6 +13,7 @@ data "aws_route53_zone" "app" {
 # 앱 도메인이 가리킬 진입점
 # - ec2: 기존 EC2 Elastic IP (A 레코드, TTL 60)
 # - alb: ALB Alias 레코드 (TTL은 Route 53이 60초로 고정)
+# - cloudfront: V2 FE의 CloudFront Alias 레코드 (페이지는 ECS, 정적 파일은 S3)
 # DNS 전환과 롤백은 이 값 한 줄만 바꾼다. 같은 이름·타입이므로 레코드 교체 없이 in-place로 변경된다.
 locals {
   app_dns_points_to_alb        = var.app_dns_target == "alb"

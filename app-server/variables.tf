@@ -156,7 +156,7 @@ variable "alb_access_log_retention_days" {
 variable "app_dns_target" {
   description = "Application DNS entry point: ec2, alb, or cloudfront. CloudFront requires completed frontend readiness checks."
   type        = string
-  default     = "alb"
+  default     = "cloudfront"
 
   validation {
     condition     = contains(["ec2", "alb", "cloudfront"], var.app_dns_target)
