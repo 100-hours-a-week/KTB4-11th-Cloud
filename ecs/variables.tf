@@ -183,12 +183,10 @@ variable "backend_stop_timeout_seconds" {
   default     = 30
 }
 
-# Backend에 actuator가 없어 인증 없이 200을 주는 경로를 임시로 사용한다. (Spring Security로 /는 401/403)
-# 이 경로는 DB·Valkey 상태를 반영하지 않는다. TODO: BE에 /actuator/health 추가 후 교체
 variable "backend_health_check_path" {
   description = "ALB health check path for the backend target group"
   type        = string
-  default     = "/api/v1/auth/csrf"
+  default     = "/actuator/health"
 }
 
 variable "backend_health_check_grace_period_seconds" {
@@ -280,7 +278,7 @@ variable "backend_canary_enabled" {
 variable "backend_canary_green_weight" {
   description = "V2 traffic weight from 0 to 100; V1 receives the remaining weight"
   type        = number
-  default     = 0 # 현재 값에 따라 V1만 처리한다. 0이면 V2는 ALB에 등록되지 않는다.
+  default     = 100 # BE Canary 완료 후 운영 기본값. rollback latch가 tripped면 V1 100%로 복귀한다.
 
   validation {
     condition = (
