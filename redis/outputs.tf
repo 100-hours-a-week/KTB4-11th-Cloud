@@ -97,3 +97,8 @@ output "valkey_discord_webhook_secret_name" {
   description = "Secrets Manager secret where the Valkey Discord webhook URL must be stored outside Terraform"
   value       = aws_secretsmanager_secret.discord_webhook.name
 }
+
+output "human_valkey_user_names" {
+  description = "IAM-enabled ElastiCache user name per developer IAM user"
+  value       = { for name, user in aws_elasticache_user.human : name => user.user_name }
+}

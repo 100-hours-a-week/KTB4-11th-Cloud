@@ -18,7 +18,10 @@ resource "aws_elasticache_user" "app" {
 resource "aws_elasticache_user_group" "applications" {
   user_group_id = local.user_group_id
   engine        = "valkey"
-  user_ids      = [for user in aws_elasticache_user.app : user.user_id]
+  user_ids = concat(
+    [for user in aws_elasticache_user.app : user.user_id],
+    [for user in aws_elasticache_user.human : user.user_id],
+  )
 
   tags = {
     Name = local.user_group_id
