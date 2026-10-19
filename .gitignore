@@ -32,3 +32,5 @@ override.tf.json
 
 # Python bytecode from CI helper scripts
 __pycache__/
+
+docs/

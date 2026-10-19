@@ -74,7 +74,7 @@ resource "aws_lb_target_group" "blue" {
   health_check {
     enabled             = true
     protocol            = "HTTPS"
-    path                = "/healthz"
+    path                = "/actuator/health"
     matcher             = "200"
     interval            = 10
     timeout             = 5
