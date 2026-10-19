@@ -126,7 +126,7 @@ variable "ecs_container_stop_timeout_seconds" {
 # ---------------------------------------------------------------------------
 
 # BE 레포 dev CI가 Public ECR(stockspoon-v2-backend)에 push한 이미지 태그(dev 커밋 SHA)
-# Task Definition의 기준 리비전에만 쓰인다. 서비스가 실제로 실행하는 이미지는 BE 레포 cd-ecs-dev.yaml이 배포한다.
+# 서비스 최초 생성용 Task Definition에만 쓰인다. 서비스가 실제로 실행하는 이미지는 BE 레포 cd-ecs-v2.yaml이 배포한다.
 variable "backend_image_tag" {
   description = "Tag (git SHA) of the backend image in the public ECR repository stockspoon-v2-backend"
   type        = string
@@ -352,7 +352,7 @@ variable "market_http_task_memory" {
 variable "market_http_desired_count" {
   description = "Number of market-http tasks"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 # ALB 경로 접두사. 앱은 루트 경로(/prices, /bars, ...)를 제공하므로 ALB가 접두사를 제거해 전달한다.
