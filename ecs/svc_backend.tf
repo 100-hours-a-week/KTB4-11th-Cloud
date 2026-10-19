@@ -5,7 +5,7 @@ locals {
   backend_image       = "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_image_tag}"
   backend_valkey_role = "backend"
 
-  # Backend tasks use Cloud Map's stable private DNS name for the ProxySQL ECS service.
+  # Keep Backend on the stable Fargate ProxySQL Cloud Map endpoint in every Terraform run.
   backend_datasource_url = "jdbc:mysql://${local.backend_proxysql_dns_name}:${var.proxysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
 
   backend_environment = concat(
@@ -56,8 +56,8 @@ resource "aws_ssm_parameter" "backend_datasource_url" {
 
   lifecycle {
     precondition {
-      condition     = var.backend_proxysql_target != "fargate" || var.proxysql_fargate_enabled
-      error_message = "Enable and verify the parallel Fargate ProxySQL before selecting its endpoint."
+      condition     = var.proxysql_fargate_enabled
+      error_message = "The Backend datasource is pinned to Fargate ProxySQL; keep proxysql_fargate_enabled=true."
     }
   }
 }

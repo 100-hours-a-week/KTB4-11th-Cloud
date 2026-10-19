@@ -1,6 +1,6 @@
 # ProxySQL EC2 → Fargate 단계 전환
 
-기존 `stockspoon-v2-prod-proxysql` 서비스를 계속 실행한 채, 동일한 설정으로 `stockspoon-v2-prod-proxysql-fargate`를 추가합니다. DB 계정·복제·데이터는 바꾸지 않습니다. 로그는 기존 CloudWatch 그룹 `/ecs/stockspoon-v2-prod/proxysql`을 공유합니다. 첫 단계에서는 새 Fargate endpoint만 만들고, 검증이 끝난 다음 SSM JDBC 주소와 Backend 태스크를 전환합니다.
+기존 `stockspoon-v2-prod-proxysql` 서비스를 계속 실행한 채, 동일한 설정으로 `stockspoon-v2-prod-proxysql-fargate`를 추가합니다. DB 계정·복제·데이터는 바꾸지 않습니다. 로그는 기존 CloudWatch 그룹 `/ecs/stockspoon-v2-prod/proxysql`을 공유합니다. Backend JDBC 주소는 Terraform 코드에서 Fargate endpoint로 고정되어 있습니다. 기존 ProxySQL은 별도 정리 전까지 계속 실행합니다.
 
 ## 1. Fargate ProxySQL만 추가
 
@@ -9,7 +9,6 @@
 ```bash
 terraform -chdir=ecs plan \
   -target='aws_ecs_service.proxysql_fargate[0]' \
-  -var='proxysql_fargate_enabled=true' \
   -out=/tmp/proxysql-fargate-create.tfplan
 
 terraform -chdir=ecs show -no-color /tmp/proxysql-fargate-create.tfplan
@@ -59,13 +58,11 @@ SELECT hostname, port, read_only, error
 
 ## 2. Backend 연결 주소 전환
 
-검증이 끝나면 SSM 파라미터만 Fargate DNS로 바꾸는 별도 계획을 만듭니다. 평소 쓰는 로컬 변수 파일은 앞 단계와 동일하게 지정합니다.
+Fargate 검증이 끝난 뒤 Backend JDBC 주소 변경 계획을 확인합니다. endpoint는 코드에서 Fargate DNS로 고정되어 있으므로 별도 `backend_proxysql_target` 변수를 지정하지 않습니다. 평소 쓰는 로컬 변수 파일이 있으면 지정합니다.
 
 ```bash
 terraform -chdir=ecs plan \
   -target=aws_ssm_parameter.backend_datasource_url \
-  -var='proxysql_fargate_enabled=true' \
-  -var='backend_proxysql_target=fargate' \
   -out=/tmp/proxysql-fargate-cutover.tfplan
 
 terraform -chdir=ecs show -no-color /tmp/proxysql-fargate-cutover.tfplan
