@@ -117,6 +117,7 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
+      - --innodb-buffer-pool-size=${MYSQL_INNODB_BUFFER_POOL_SIZE:-768M}
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
       MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
@@ -135,8 +136,8 @@ services:
       timeout: 3s
       retries: 20
       start_period: 30s
-    cpus: ${MYSQL_CPUS:-0.75}
-    mem_limit: ${MYSQL_MEMORY_LIMIT:-1024m}
+    cpus: ${MYSQL_CPUS:-1.0}
+    mem_limit: ${MYSQL_MEMORY_LIMIT:-1536m}
     logging:
       driver: awslogs
       options:

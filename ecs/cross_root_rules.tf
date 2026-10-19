@@ -105,6 +105,31 @@ resource "aws_vpc_security_group_ingress_rule" "proxysql_from_db_write_replay_la
   description                  = "Allow the DB write replay Lambda to execute queued writes through ProxySQL"
 }
 
+# Allow only the rehearsal Prometheus host to scrape Fargate ProxySQL metrics.
+resource "aws_vpc_security_group_ingress_rule" "proxysql_metrics_from_pmm" {
+  count = var.proxysql_fargate_enabled && local.proxysql_pmm_security_group_id != "" ? 1 : 0
+
+  security_group_id            = aws_security_group.proxysql_task.id
+  referenced_security_group_id = local.proxysql_pmm_security_group_id
+  from_port                    = 6070
+  to_port                      = 6070
+  ip_protocol                  = "tcp"
+  description                  = "Allow the rehearsal Prometheus host to scrape Fargate ProxySQL metrics"
+}
+
+# The PMM/PLG host uses restrictive egress rules, so allow its Prometheus
+# container to reach only the ProxySQL task security group on the metrics port.
+resource "aws_vpc_security_group_egress_rule" "pmm_to_proxysql_metrics" {
+  count = var.proxysql_fargate_enabled && local.proxysql_pmm_security_group_id != "" ? 1 : 0
+
+  security_group_id            = local.proxysql_pmm_security_group_id
+  referenced_security_group_id = aws_security_group.proxysql_task.id
+  from_port                    = 6070
+  to_port                      = 6070
+  ip_protocol                  = "tcp"
+  description                  = "Allow Prometheus to scrape Fargate ProxySQL metrics"
+}
+
 # ProxySQL task SG는 V1 MySQL에 접속할 수 있다.
 resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_proxysql" {
   security_group_id            = data.terraform_remote_state.app.outputs.app_security_group_id

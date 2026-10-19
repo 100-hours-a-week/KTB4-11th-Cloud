@@ -5,10 +5,11 @@ locals {
   proxysql_subnet_ids = [data.terraform_remote_state.shared.outputs.private_subnet_ids[0]]
   proxysql_dns_name   = "${var.proxysql_dns_service_name}.${var.proxysql_dns_namespace}"
 
-  proxysql_v1_mysql_host        = data.terraform_remote_state.app.outputs.app_private_ip
-  proxysql_migration_mysql_host = try(data.terraform_remote_state.app.outputs.db_migration_host.private_ip, "")
-  proxysql_migration_mysql_sg   = try(data.terraform_remote_state.app.outputs.db_migration_host.security_group_id, "")
-  proxysql_monitor_password_arn = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/PROXYSQL_MONITOR_PASSWORD"
+  proxysql_v1_mysql_host         = data.terraform_remote_state.app.outputs.app_private_ip
+  proxysql_migration_mysql_host  = try(data.terraform_remote_state.app.outputs.db_migration_host.private_ip, "")
+  proxysql_migration_mysql_sg    = try(data.terraform_remote_state.app.outputs.db_migration_host.security_group_id, "")
+  proxysql_pmm_security_group_id = try(data.terraform_remote_state.app.outputs.db_migration_support_hosts["pmm"].security_group_id, "")
+  proxysql_monitor_password_arn  = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/PROXYSQL_MONITOR_PASSWORD"
 
   # ProxySQL starts with an empty config database, then this sidecar sets the
   # servers, app user, read_only monitoring, and writer/reader hostgroups.

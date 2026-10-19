@@ -19,7 +19,7 @@ variable "ec2_key_name" {
 variable "ec2_root_volume_size_gib" {
   description = "Size in GiB of the encrypted gp3 root EBS volume"
   type        = number
-  default     = 30
+  default     = 60
 
   validation {
     condition     = var.ec2_root_volume_size_gib >= 8
