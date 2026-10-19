@@ -1,3 +1,10 @@
+# Preserve the existing market-http scalable target when moving from the
+# singleton resource to the keyed resource map.
+moved {
+  from = aws_appautoscaling_target.market_http[0]
+  to   = aws_appautoscaling_target.service["market-http"]
+}
+
 locals {
   sse_metrics_namespace = "StockSpoon/ECS"
   scaling_services = merge(

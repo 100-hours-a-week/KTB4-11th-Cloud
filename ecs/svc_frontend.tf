@@ -1,14 +1,14 @@
-# The existing standalone image needs Node.js. S3 stores only /_next/static/*.
-# Disabled until a production-configured immutable image is supplied.
+# The production frontend service is already running in ECS.
+# Pin the deployed image digest so a plain Terraform plan preserves it.
 variable "frontend_enabled" {
   type        = bool
-  default     = false
+  default     = true
   description = "Run V2 frontend tasks without changing the public DNS or ALB default action"
 }
 
 variable "frontend_image" {
   type        = string
-  default     = ""
+  default     = "250832562715.dkr.ecr.ap-northeast-2.amazonaws.com/stockspoon-v2-prod-frontend@sha256:2d955cddd25e70e496e4e17fc0fff32a457b3b83d56be69596a915c9d4739a6d"
   description = "Production FE image URI pinned by sha256 digest; must match the assets uploaded to S3"
   validation {
     condition     = !var.frontend_enabled || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.ap-northeast-2\\.amazonaws\\.com/stockspoon-v2-prod-frontend@sha256:[0-9a-f]{64}$", var.frontend_image))
@@ -114,7 +114,16 @@ resource "aws_lb_listener_rule" "frontend" {
 }
 
 resource "aws_ecs_task_definition" "frontend" {
-  count                    = var.frontend_enabled ? 1 : 0
+  count        = var.frontend_enabled ? 1 : 0
+  skip_destroy = true
+
+  # Frontend releases are owned by the frontend CD pipeline after bootstrap.
+  # Keep Terraform from replacing its seed task definition when CD registers
+  # newer immutable image revisions.
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
+
   family                   = "${var.name_prefix}-frontend"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]

@@ -3,7 +3,7 @@
 variable "proxysql_fargate_enabled" {
   description = "Run an additional ProxySQL on Fargate for staged migration"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "backend_proxysql_target" {
@@ -42,7 +42,6 @@ resource "aws_service_discovery_service" "proxysql_fargate" {
   count = var.proxysql_fargate_enabled ? 1 : 0
 
   name = local.proxysql_fargate_service_name
-  health_check_custom_config {}
 
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.proxysql.id

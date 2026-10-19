@@ -131,9 +131,6 @@ resource "aws_service_discovery_private_dns_namespace" "proxysql" {
 resource "aws_service_discovery_service" "proxysql" {
   name = var.proxysql_dns_service_name
 
-  # ECS updates the Cloud Map health state from the container health check.
-  health_check_custom_config {}
-
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.proxysql.id
     routing_policy = "MULTIVALUE"
