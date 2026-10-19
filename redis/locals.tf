@@ -18,7 +18,9 @@ locals {
 
   # dev: Backend·AI가 공용 사용자 하나(backend)를 사용합니다. 기존 연결을 끊지 않도록 이름을 유지합니다.
   # prod: ECS 서비스마다 사용자와 Connect Policy를 분리해 서비스별로 자기 사용자로만 접속하게 합니다.
-  app_services = local.is_dev ? ["backend"] : ["backend", "socket", "market-data", "match-engine"]
+  #       ai는 V1 AI 운영 EC2(market-collector·market-streamer 등)용 사용자이며,
+  #       SG ingress와 Role 연결은 ai-server/infra root가 이 root의 Output을 참조해 관리합니다.
+  app_services = local.is_dev ? ["backend"] : ["backend", "socket", "market-data", "match-engine", "ai"]
 
   app_users = {
     for service in local.app_services : service => {
