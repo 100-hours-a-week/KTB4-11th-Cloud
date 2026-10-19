@@ -350,7 +350,7 @@ variable "market_http_task_memory" {
 variable "market_http_desired_count" {
   description = "Number of market-http tasks"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 # ALB 경로 접두사. 앱은 루트 경로(/prices, /bars, ...)를 제공하므로 ALB가 접두사를 제거해 전달한다.
