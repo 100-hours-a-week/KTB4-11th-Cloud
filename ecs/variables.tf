@@ -278,7 +278,7 @@ variable "backend_canary_enabled" {
 variable "backend_canary_green_weight" {
   description = "V2 traffic weight from 0 to 100; V1 receives the remaining weight"
   type        = number
-  default     = 0 # 현재 값에 따라 V1만 처리한다. 0이면 V2는 ALB에 등록되지 않는다.
+  default     = 100 # BE Canary 완료 후 운영 기본값. rollback latch가 tripped면 V1 100%로 복귀한다.
 
   validation {
     condition = (
