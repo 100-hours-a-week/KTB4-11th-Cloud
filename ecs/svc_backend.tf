@@ -199,8 +199,9 @@ resource "aws_ecs_task_definition" "backend" {
         }
       ]
 
-      # The version marker makes a changed SSM value create a new task definition
-      # revision, so ECS replaces tasks and injects the current URL at startup.
+      # 최초 생성 시점의 SSM 버전 기록용이다. container_definitions는 ignore_changes 대상이라
+      # SSM 값이 바뀌어도 Terraform은 새 리비전을 만들지 않는다. SSM 값은 Task 시작 시에만 읽으므로
+      # 변경 후에는 BE CD 재배포 또는 aws ecs update-service --force-new-deployment로 Task를 교체한다.
       environment = concat(
         local.backend_environment,
         [{

@@ -1,10 +1,3 @@
-# Preserve the existing market-http scalable target when moving from the
-# singleton resource to the keyed resource map.
-moved {
-  from = aws_appautoscaling_target.market_http[0]
-  to   = aws_appautoscaling_target.service["market-http"]
-}
-
 locals {
   sse_metrics_namespace = "StockSpoon/ECS"
   scaling_services = merge(
@@ -14,7 +7,7 @@ locals {
 }
 
 resource "aws_appautoscaling_target" "service" {
-  for_each = local.scaling_services
+  for_each = { backend = local.scaling_services.backend }
 
   service_namespace  = "ecs"
   resource_id        = "service/${aws_ecs_cluster.main.name}/${each.value}"
@@ -26,6 +19,30 @@ resource "aws_appautoscaling_target" "service" {
   lifecycle {
     ignore_changes = [min_capacity]
   }
+}
+
+# market-http는 부하 측정을 위해 Terraform이 최소/최대 Task 수를 직접 관리한다.
+# 기존 리소스 주소를 이동해 확장 대상의 삭제/재생성을 방지한다.
+moved {
+  from = aws_appautoscaling_target.service["market-http"]
+  to   = aws_appautoscaling_target.market_http[0]
+}
+
+resource "aws_appautoscaling_target" "market_http" {
+  count = local.ai_market_enabled ? 1 : 0
+
+  service_namespace  = "ecs"
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.market_http[0].name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = 1
+  max_capacity       = 1
+}
+
+locals {
+  service_scaling_targets = merge(
+    { backend = aws_appautoscaling_target.service["backend"] },
+    local.ai_market_enabled ? { market-http = aws_appautoscaling_target.market_http[0] } : {},
+  )
 }
 
 resource "aws_appautoscaling_policy" "backend_cpu" {
@@ -51,9 +68,9 @@ resource "aws_appautoscaling_policy" "market_http_connections" {
 
   name               = "${var.name_prefix}-market-http-sse-connections"
   policy_type        = "TargetTrackingScaling"
-  service_namespace  = aws_appautoscaling_target.service["market-http"].service_namespace
-  resource_id        = aws_appautoscaling_target.service["market-http"].resource_id
-  scalable_dimension = aws_appautoscaling_target.service["market-http"].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.market_http[0].service_namespace
+  resource_id        = aws_appautoscaling_target.market_http[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.market_http[0].scalable_dimension
 
   target_tracking_scaling_policy_configuration {
     target_value       = 400
@@ -87,15 +104,15 @@ resource "aws_appautoscaling_scheduled_action" "preopen" {
   }
 
   name               = "${var.name_prefix}-${each.key}-preopen"
-  service_namespace  = aws_appautoscaling_target.service[each.key].service_namespace
-  resource_id        = aws_appautoscaling_target.service[each.key].resource_id
-  scalable_dimension = aws_appautoscaling_target.service[each.key].scalable_dimension
+  service_namespace  = local.service_scaling_targets[each.key].service_namespace
+  resource_id        = local.service_scaling_targets[each.key].resource_id
+  scalable_dimension = local.service_scaling_targets[each.key].scalable_dimension
   schedule           = each.value.preopen_schedule
   timezone           = "Asia/Seoul"
 
   scalable_target_action {
-    min_capacity = each.value.min_capacity
-    max_capacity = 4
+    min_capacity = each.key == "market-http" ? 1 : each.value.min_capacity
+    max_capacity = each.key == "market-http" ? 1 : 4
   }
 }
 
@@ -110,7 +127,7 @@ resource "aws_appautoscaling_scheduled_action" "restore" {
   timezone           = "Asia/Seoul"
 
   scalable_target_action {
-    min_capacity = 2
-    max_capacity = 4
+    min_capacity = each.key == "market-http" ? 1 : 2
+    max_capacity = each.key == "market-http" ? 1 : 4
   }
 }

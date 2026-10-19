@@ -225,7 +225,7 @@ resource "aws_ecs_service" "market_http" {
   enable_ecs_managed_tags = true
 
   lifecycle {
-    ignore_changes = [task_definition, desired_count]
+    ignore_changes = [task_definition]
   }
 
   depends_on = [
