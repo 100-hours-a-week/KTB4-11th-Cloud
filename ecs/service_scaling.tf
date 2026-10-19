@@ -21,8 +21,7 @@ resource "aws_appautoscaling_target" "service" {
   }
 }
 
-# market-http는 부하 측정을 위해 Terraform이 최소/최대 Task 수를 직접 관리한다.
-# 기존 리소스 주소를 이동해 확장 대상의 삭제/재생성을 방지한다.
+# 부하 테스트 때 분리한 리소스 주소를 유지해 확장 대상의 삭제/재생성을 방지한다.
 moved {
   from = aws_appautoscaling_target.service["market-http"]
   to   = aws_appautoscaling_target.market_http[0]
@@ -34,8 +33,13 @@ resource "aws_appautoscaling_target" "market_http" {
   service_namespace  = "ecs"
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.market_http[0].name}"
   scalable_dimension = "ecs:service:DesiredCount"
-  min_capacity       = 1
-  max_capacity       = 1
+  min_capacity       = 2
+  max_capacity       = 4
+
+  # 예약 확장이 바꾼 최소치를 일반 apply가 개장 중에 되돌리지 않는다.
+  lifecycle {
+    ignore_changes = [min_capacity]
+  }
 }
 
 locals {
@@ -111,8 +115,8 @@ resource "aws_appautoscaling_scheduled_action" "preopen" {
   timezone           = "Asia/Seoul"
 
   scalable_target_action {
-    min_capacity = each.key == "market-http" ? 1 : each.value.min_capacity
-    max_capacity = each.key == "market-http" ? 1 : 4
+    min_capacity = each.value.min_capacity
+    max_capacity = 4
   }
 }
 
@@ -127,7 +131,7 @@ resource "aws_appautoscaling_scheduled_action" "restore" {
   timezone           = "Asia/Seoul"
 
   scalable_target_action {
-    min_capacity = each.key == "market-http" ? 1 : 2
-    max_capacity = each.key == "market-http" ? 1 : 4
+    min_capacity = 2
+    max_capacity = 4
   }
 }
