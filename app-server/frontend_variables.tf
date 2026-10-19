@@ -1,13 +1,13 @@
 variable "frontend_edge_enabled" {
   description = "Create the V2 CloudFront/S3 infrastructure before a separate DNS cutover"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "frontend_assets_ready" {
   description = "Route /_next/static/* to S3 only after uploading assets from the production image"
   type        = bool
-  default     = false
+  default     = true
 
   validation {
     condition     = !var.frontend_assets_ready || var.frontend_edge_enabled
@@ -18,7 +18,7 @@ variable "frontend_assets_ready" {
 variable "frontend_v2_origin_ready" {
   description = "Send page requests to the V2 ECS listener rule after verifying healthy frontend tasks"
   type        = bool
-  default     = false
+  default     = true
 
   validation {
     condition     = !var.frontend_v2_origin_ready || var.frontend_edge_enabled

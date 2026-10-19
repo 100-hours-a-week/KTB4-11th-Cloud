@@ -35,6 +35,16 @@ locals {
     MONITOR_SQL
 
     echo "Fargate ProxySQL monitor settings matched: interval=1000ms timeout=800ms"
+
+    # Expose ProxySQL's built-in Prometheus metrics endpoint on every new task.
+    mysql --defaults-extra-file=/tmp/proxysql-admin.cnf <<'RESTAPI_SQL'
+    SET admin-restapi_enabled = 'true';
+    SET admin-restapi_port = '6070';
+    LOAD ADMIN VARIABLES TO RUNTIME;
+    SAVE ADMIN VARIABLES TO DISK;
+    RESTAPI_SQL
+
+    echo "Fargate ProxySQL Prometheus endpoint enabled on port 6070"
   EOT
 }
 
@@ -145,6 +155,8 @@ resource "aws_ecs_service" "proxysql_fargate" {
     aws_vpc_security_group_ingress_rule.v1_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.proxysql_from_db_write_replay_lambda,
+    aws_vpc_security_group_ingress_rule.proxysql_metrics_from_pmm,
+    aws_vpc_security_group_egress_rule.pmm_to_proxysql_metrics,
   ]
 
   tags = { Name = "${var.name_prefix}-proxysql-fargate" }

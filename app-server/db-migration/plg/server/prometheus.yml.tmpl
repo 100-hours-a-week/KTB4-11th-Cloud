@@ -21,3 +21,9 @@ scrape_configs:
       - targets: ["mysqld-exporter:9104"]
         labels:
           db_role: migration-replica
+
+  - job_name: proxysql-fargate
+    static_configs:
+      - targets: ["proxysql-fargate.stockspoon-v2.internal:6070"]
+        labels:
+          proxy_role: v2-fargate
