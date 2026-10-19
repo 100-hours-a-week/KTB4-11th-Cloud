@@ -19,6 +19,14 @@ variable "backend_auto_rollback_enabled" {
   default     = true
 }
 
+# 자동 롤백은 임시 중지 상태
+# `backend_auto_rollback_paused=true`로 EventBridge 규칙 두 개를 비활성화
+variable "backend_auto_rollback_paused" {
+  description = "Temporarily disable rollback EventBridge triggers without deleting the controller. Resume also requires explicitly arming the SSM latch."
+  type        = bool
+  default     = true
+}
+
 resource "aws_ssm_parameter" "backend_rollback" {
   count = local.backend_rollback_enabled ? 1 : 0
   name  = local.backend_rollback_path
@@ -90,6 +98,7 @@ resource "aws_cloudwatch_metric_alarm" "backend_rollback_errors" {
 resource "aws_cloudwatch_event_rule" "backend_rollback_alarm" {
   count = local.backend_rollback_enabled ? 1 : 0
   name  = "${local.backend_rollback_name}-alarm"
+  state = var.backend_auto_rollback_paused ? "DISABLED" : "ENABLED"
   event_pattern = jsonencode({
     source        = ["aws.cloudwatch"]
     "detail-type" = ["CloudWatch Alarm State Change"]
@@ -102,6 +111,7 @@ resource "aws_cloudwatch_event_rule" "backend_rollback_alarm" {
 resource "aws_cloudwatch_event_rule" "backend_rollback_reconcile" {
   count               = local.backend_rollback_enabled ? 1 : 0
   name                = "${local.backend_rollback_name}-reconcile"
+  state               = var.backend_auto_rollback_paused ? "DISABLED" : "ENABLED"
   schedule_expression = "rate(1 minute)"
 }
 
@@ -250,6 +260,7 @@ resource "aws_cloudwatch_metric_alarm" "backend_rollback_controller_errors" {
 output "backend_auto_rollback" {
   value = local.backend_rollback_enabled ? {
     function_name   = aws_lambda_function.backend_rollback[0].function_name
+    events_paused   = var.backend_auto_rollback_paused
     latch_parameter = aws_ssm_parameter.backend_rollback[0].name
     latch_state     = nonsensitive(aws_ssm_parameter.backend_rollback[0].value)
     alarms          = local.backend_rollback_alarms
