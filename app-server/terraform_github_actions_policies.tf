@@ -233,6 +233,23 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     }
   }
 
+  # The KMS alias data source follows ListAliases with DescribeKey by alias.
+  # Limit key metadata reads to the AWS-managed SSM alias in Seoul.
+  statement {
+    sid     = "DescribeSsmKmsKeyInSeoul"
+    effect  = "Allow"
+    actions = ["kms:DescribeKey"]
+    resources = [
+      "arn:${data.aws_partition.github_actions_terraform.partition}:kms:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:key/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:RequestAlias"
+      values   = ["alias/aws/ssm"]
+    }
+  }
+
   statement {
     effect = "Allow"
     actions = [

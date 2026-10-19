@@ -6,7 +6,7 @@ locals {
   backend_valkey_role = "backend"
 
   # Backend tasks use Cloud Map's stable private DNS name for the ProxySQL ECS service.
-  backend_datasource_url = "jdbc:mysql://${local.proxysql_dns_name}:${var.proxysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+  backend_datasource_url = "jdbc:mysql://${local.backend_proxysql_dns_name}:${var.proxysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
 
   backend_environment = concat(
     [
@@ -53,6 +53,13 @@ resource "aws_ssm_parameter" "backend_datasource_url" {
   description = "JDBC URL for the V2 backend through the migration rehearsal ProxySQL task"
   type        = "String"
   value       = local.backend_datasource_url
+
+  lifecycle {
+    precondition {
+      condition     = var.backend_proxysql_target != "fargate" || var.proxysql_fargate_enabled
+      error_message = "Enable and verify the parallel Fargate ProxySQL before selecting its endpoint."
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------
