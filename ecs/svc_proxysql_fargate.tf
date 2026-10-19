@@ -1,26 +1,15 @@
-# Parallel migration: leave the EC2 ProxySQL service and its DNS untouched.
-# Enable this service first; switch the BE parameter only after verification.
+# Keep the EC2 ProxySQL service and its DNS untouched while it is still needed.
+# The Backend datasource is pinned to the Fargate ProxySQL endpoint.
 variable "proxysql_fargate_enabled" {
-  description = "Run an additional ProxySQL on Fargate for staged migration"
+  description = "Keep the Fargate ProxySQL service required by the Backend datasource enabled"
   type        = bool
   default     = true
-}
-
-variable "backend_proxysql_target" {
-  description = "ProxySQL endpoint written to the BE SSM parameter: ec2 or fargate"
-  type        = string
-  default     = "ec2"
-
-  validation {
-    condition     = contains(["ec2", "fargate"], var.backend_proxysql_target)
-    error_message = "backend_proxysql_target must be ec2 or fargate."
-  }
 }
 
 locals {
   proxysql_fargate_service_name      = "${var.proxysql_dns_service_name}-fargate"
   proxysql_fargate_dns_name          = "${local.proxysql_fargate_service_name}.${var.proxysql_dns_namespace}"
-  backend_proxysql_dns_name          = var.backend_proxysql_target == "fargate" ? local.proxysql_fargate_dns_name : local.proxysql_dns_name
+  backend_proxysql_dns_name          = local.proxysql_fargate_dns_name
   proxysql_fargate_bootstrap_command = <<-EOT
     ${local.proxysql_bootstrap_command}
 
