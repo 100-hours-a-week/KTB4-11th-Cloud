@@ -32,7 +32,7 @@ locals {
       # 키움 시세 스트림: V1과 별도 키(SSM KIWOOM_APP_KEY·KIWOOM_APP_SECRET)를 써서 세션 충돌은 없다.
       # V1과 같은 PENDING 지정가 주문을 함께 체결하려 해도 executeLimit이 계좌 행 FOR UPDATE 후 PENDING을 재확인하므로 한쪽만 체결된다.
       { name = "KIWOOM_STREAM_ENABLED", value = tostring(var.backend_kiwoom_stream_enabled) },
-      # collector는 V1 운영 서버가 담당한다.
+      # REST 담당은 별도 내부 ECS 서비스로 운영한다.
       { name = "KIWOOM_COLLECTOR_ENABLED", value = "false" },
     ],
     # SSM에는 빈 값을 저장할 수 없음
@@ -44,6 +44,7 @@ locals {
     ["MYSQL_USER", "MYSQL_PASSWORD", "JWT_SECRET", "KAKAO_CLIENT_ID", "KAKAO_REDIRECT_URI", "FRONTEND_ORIGIN"],
     var.backend_kakao_client_secret_enabled ? ["KAKAO_CLIENT_SECRET"] : [],
     var.backend_kiwoom_stream_enabled ? ["KIWOOM_APP_KEY", "KIWOOM_APP_SECRET"] : [],
+    var.backend_collector_enabled ? ["KIWOOM_COLLECTOR_URL", "KIWOOM_COLLECTOR_SECRET"] : [],
   )
 }
 
