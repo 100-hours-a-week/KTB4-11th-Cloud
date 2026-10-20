@@ -226,3 +226,14 @@ variable "db_migration_admin_cidrs" {
     error_message = "db_migration_admin_cidrs must contain individual IPv4 /32 addresses."
   }
 }
+
+variable "db_migration_pmm_ssh_cidrs" {
+  description = "Additional administrator IPv4 CIDRs allowed to SSH to the monitoring host only"
+  type        = set(string)
+  default     = ["211.244.225.211/32"]
+
+  validation {
+    condition     = alltrue([for cidr in var.db_migration_pmm_ssh_cidrs : can(cidrnetmask(cidr)) && endswith(cidr, "/32")])
+    error_message = "db_migration_pmm_ssh_cidrs must contain individual IPv4 /32 addresses."
+  }
+}

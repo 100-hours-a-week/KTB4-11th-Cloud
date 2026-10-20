@@ -10,13 +10,22 @@ locals {
     }
   } : {}
 
-  db_migration_support_admin_rules = {
-    for entry in setproduct(keys(local.db_migration_support_hosts), var.db_migration_admin_cidrs) :
-    "${entry[0]}:${entry[1]}" => {
-      host = entry[0]
-      cidr = entry[1]
+  db_migration_support_admin_rules = merge(
+    {
+      for entry in setproduct(keys(local.db_migration_support_hosts), var.db_migration_admin_cidrs) :
+      "${entry[0]}:${entry[1]}" => {
+        host = entry[0]
+        cidr = entry[1]
+      }
+    },
+    {
+      for cidr in var.db_migration_pmm_ssh_cidrs :
+      "pmm:${cidr}" => {
+        host = "pmm"
+        cidr = cidr
+      }
     }
-  }
+  )
 
   db_migration_support_web_egress = {
     for entry in setproduct(keys(local.db_migration_support_hosts), [80, 443]) :
