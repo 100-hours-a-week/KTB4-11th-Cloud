@@ -30,16 +30,12 @@ moved {
 resource "aws_appautoscaling_target" "market_http" {
   count = local.ai_market_enabled ? 1 : 0
 
+  # 단일 Task 처리 용량을 측정하는 동안 자동 확장을 제한한다.
   service_namespace  = "ecs"
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.market_http[0].name}"
   scalable_dimension = "ecs:service:DesiredCount"
-  min_capacity       = 2
-  max_capacity       = 4
-
-  # 예약 확장이 바꾼 최소치를 일반 apply가 개장 중에 되돌리지 않는다.
-  lifecycle {
-    ignore_changes = [min_capacity]
-  }
+  min_capacity       = 1
+  max_capacity       = 1
 }
 
 locals {

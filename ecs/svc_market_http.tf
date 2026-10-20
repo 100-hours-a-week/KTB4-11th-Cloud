@@ -225,7 +225,8 @@ resource "aws_ecs_service" "market_http" {
   enable_ecs_managed_tags = true
 
   lifecycle {
-    ignore_changes = [task_definition, desired_count]
+    # 부하 테스트용 desired_count=1을 기존 서비스에도 반영한다.
+    ignore_changes = [task_definition]
   }
 
   depends_on = [

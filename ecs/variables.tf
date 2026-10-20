@@ -40,9 +40,10 @@ variable "observability_alarm_actions" {
   default     = []
 }
 
-# 두 서비스 모두 평일 08:40~15:40에는 최소 3개, 그 외에는 최소 2개를 유지한다.
+# Backend는 평일 08:40~15:40 최소 3개, 그 외 최소 2개를 유지한다.
+# market-http는 단일 Task 부하 테스트 동안 예약 확장 대상에서 제외한다.
 variable "service_preopen_scaling" {
-  description = "Paired schedules in Asia/Seoul; both services default to minimum 3 at 08:40 and minimum 2 at 15:40 on weekdays"
+  description = "Paired schedules in Asia/Seoul; backend defaults to minimum 3 at 08:40 and minimum 2 at 15:40 on weekdays; market-http is excluded during single-task load testing"
   type = map(object({
     min_capacity     = number
     preopen_schedule = string
@@ -50,11 +51,6 @@ variable "service_preopen_scaling" {
   }))
   default = {
     backend = {
-      min_capacity     = 3
-      preopen_schedule = "cron(40 8 ? * MON-FRI *)"
-      restore_schedule = "cron(40 15 ? * MON-FRI *)"
-    }
-    market-http = {
       min_capacity     = 3
       preopen_schedule = "cron(40 8 ? * MON-FRI *)"
       restore_schedule = "cron(40 15 ? * MON-FRI *)"
@@ -348,9 +344,9 @@ variable "market_http_task_memory" {
 }
 
 variable "market_http_desired_count" {
-  description = "Number of market-http tasks"
+  description = "Number of market-http tasks (fixed to one during single-task load testing)"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 # ALB 경로 접두사. 앱은 루트 경로(/prices, /bars, ...)를 제공하므로 ALB가 접두사를 제거해 전달한다.
