@@ -38,7 +38,7 @@ variable "docker_compose_version" {
 variable "ai_ec2_instance_type" {
   description = "EC2 instance type for the V1 AI host"
   type        = string
-  default     = "t3a.medium"
+  default     = "t3a.xlarge"
 }
 
 variable "ai_ec2_ami_id" {
@@ -50,7 +50,7 @@ variable "ai_ec2_ami_id" {
 variable "ai_ec2_root_volume_size_gib" {
   description = "Encrypted gp3 root EBS volume size for the AI EC2 host"
   type        = number
-  default     = 30
+  default     = 60
 
   validation {
     condition     = var.ai_ec2_root_volume_size_gib >= 8
