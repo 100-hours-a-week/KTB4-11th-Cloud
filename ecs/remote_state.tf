@@ -1,4 +1,4 @@
-# 참조 방향은 ecs → shared-infra / app-server 단방향으로만 유지한다.
+# 참조 방향은 ecs → monitoring / shared-infra / app-server 단방향으로만 유지한다.
 # shared-infra, app-server는 ecs를 참조하지 않는다.
 
 # VPC, Private Subnet
