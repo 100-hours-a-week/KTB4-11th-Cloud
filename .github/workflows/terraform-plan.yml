@@ -64,6 +64,10 @@ jobs:
           ROOT_DIR: ${{ matrix.dir }}
         run: terraform -chdir="$ROOT_DIR" validate -no-color
 
+      - name: Test monitoring stack without AWS access
+        if: matrix.root == 'monitoring'
+        run: terraform -chdir=monitoring test -no-color
+
   validate-workflow-scripts:
     name: Validate workflow helper scripts
     runs-on: ubuntu-24.04
@@ -73,6 +77,9 @@ jobs:
 
       - name: Test backend rollback controller
         run: python3 -m unittest discover -s ecs/tests -v
+
+      - name: Test Terraform root dependency selection
+        run: python3 -m unittest discover -s scripts/tests -p test_terraform_roots.py -v
 
       - name: Compile Python helper scripts
         run: python3 -m py_compile .github/scripts/terraform_*.py

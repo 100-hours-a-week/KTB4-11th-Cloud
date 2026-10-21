@@ -23,14 +23,15 @@ ROOT_ORDER = [
     "storage",
     "iam",
     "ecr",
+    "monitoring",
     "ecs",
     "ai-server/infra",
     "ai-server/dashboard",
 ]
 
 DEPENDENTS = {
-    "shared-infra": {"app-server", "ai-server/infra", "ecs", "redis@prod"},
-    "app-server": {"ai-server/infra", "ecs"},
+    "shared-infra": {"app-server", "ai-server/infra", "monitoring", "ecs", "redis@prod"},
+    "app-server": {"ai-server/infra", "monitoring", "ecs"},
     "storage": {"iam"},
     "test-infra": {"redis", "ai-server/dev-infra"},
     "messaging": {"ai-server/dev-infra"},
@@ -39,6 +40,7 @@ DEPENDENTS = {
     "redis@prod": {"ai-server/infra", "ecs"},
     # app-server grants the frontend publisher access to the private production image repository.
     "ecr": {"app-server", "ecs"},
+    "monitoring": {"ecs"},
 }
 
 MODULE_CONSUMERS = {
