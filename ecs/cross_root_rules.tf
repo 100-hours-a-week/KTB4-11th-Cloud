@@ -73,6 +73,15 @@ resource "aws_vpc_security_group_ingress_rule" "ai_questdb_from_market_http" {
   description                  = "Allow V2 market-http tasks to query QuestDB"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "ai_postgres_from_market_http" {
+  security_group_id            = data.terraform_remote_state.ai.outputs.ai_security_group_id
+  referenced_security_group_id = aws_security_group.market_http_task.id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+  description                  = "Allow V2 market-http tasks to query the AI PostgreSQL database"
+}
+
 
 # V1 Backend가 아직 V1 MySQL을 직접 사용하므로 기존 경로를 유지한다.
 resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_backend" {

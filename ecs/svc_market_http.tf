@@ -139,7 +139,7 @@ resource "aws_ecs_task_definition" "market_http" {
         }
       ]
 
-      # 비밀값이 없으므로 모두 environment로 주입한다. (QuestDB는 SG로만 접근 통제, 인증 도입 시 secrets로 이동)
+      # 비밀값이 없는 설정은 environment로 주입한다.
       environment = [
         { name = "MARKET_HTTP_HOST", value = "0.0.0.0" },
         { name = "MARKET_HTTP_PORT", value = tostring(var.market_http_container_port) },
@@ -159,6 +159,13 @@ resource "aws_ecs_task_definition" "market_http" {
         { name = "MARKET_HTTP_METRICS_NAMESPACE", value = local.sse_metrics_namespace },
         { name = "MARKET_HTTP_METRICS_CLUSTER_NAME", value = aws_ecs_cluster.main.name },
         { name = "MARKET_HTTP_METRICS_SERVICE_NAME", value = "${var.name_prefix}-market-http" },
+      ]
+
+      secrets = [
+        {
+          name      = "MARKET_HTTP_POSTGRES_DSN"
+          valueFrom = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/market-http/MARKET_HTTP_POSTGRES_DSN"
+        },
       ]
 
       logConfiguration = {
