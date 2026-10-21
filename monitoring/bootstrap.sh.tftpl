@@ -1,0 +1,107 @@
+#!/bin/bash
+set -euo pipefail
+umask 027
+
+dnf install -y docker openssl xfsprogs
+systemctl enable --now docker
+
+# Pinned Compose plugin; verify the upstream checksum before installing.
+compose_version=v2.40.3
+plugin_dir=/usr/local/lib/docker/cli-plugins
+mkdir -p "$plugin_dir"
+work_dir=$(mktemp -d)
+curl -fsSL --retry 5 "https://github.com/docker/compose/releases/download/$compose_version/docker-compose-linux-x86_64" -o "$work_dir/docker-compose-linux-x86_64"
+curl -fsSL --retry 5 "https://github.com/docker/compose/releases/download/$compose_version/checksums.txt" -o "$work_dir/checksums.txt"
+(cd "$work_dir" && sha256sum --check --ignore-missing checksums.txt)
+install -m 0755 "$work_dir/docker-compose-linux-x86_64" "$plugin_dir/docker-compose"
+rm -rf "$work_dir"
+
+# Terraform attaches the separate EBS after instance creation. Identify it by
+# volume serial, never by NVMe enumeration order, and never format an existing FS.
+expected_serial=$(printf '%s' '${volume_id}' | tr -d '-')
+data_device=""
+for attempt in $(seq 1 120); do
+  for serial_file in /sys/block/nvme*n1/device/serial; do
+    [ -f "$serial_file" ] || continue
+    if [ "$(tr -d '[:space:]' < "$serial_file")" = "$expected_serial" ]; then
+      block_dir=$(dirname "$(dirname "$serial_file")")
+      data_device="/dev/$(basename "$block_dir")"
+      break
+    fi
+  done
+  [ -n "$data_device" ] && break
+  sleep 5
+done
+[ -b "$data_device" ] || { echo 'Persistent telemetry EBS not attached' >&2; exit 1; }
+fs_type=$(blkid -s TYPE -o value "$data_device" || true)
+if [ -z "$fs_type" ]; then
+  # Refuse partition tables or any unknown signatures instead of erasing them.
+  [ -z "$(wipefs --no-act --noheadings "$data_device")" ] || exit 1
+  mkfs.xfs "$data_device"
+elif [ "$fs_type" != xfs ]; then
+  echo "Unexpected data filesystem: $fs_type" >&2
+  exit 1
+fi
+mkdir -p /srv/stockspoon-telemetry
+data_uuid=$(blkid -s UUID -o value "$data_device")
+if ! grep -q "UUID=$data_uuid " /etc/fstab; then
+  printf 'UUID=%s /srv/stockspoon-telemetry xfs defaults 0 2\n' "$data_uuid" >> /etc/fstab
+fi
+mountpoint -q /srv/stockspoon-telemetry || mount /srv/stockspoon-telemetry
+
+mkdir -p /opt/stockspoon-telemetry
+%{ for name, content in files ~}
+mkdir -p "/opt/stockspoon-telemetry/$(dirname '${name}')"
+printf '%s' '${base64encode(content)}' | base64 -d > '/opt/stockspoon-telemetry/${name}'
+%{ endfor ~}
+chmod -R a+rX /opt/stockspoon-telemetry
+
+for entry in prometheus:65534 loki:10001 tempo:10001 grafana:472; do
+  dir_name=$${entry%:*}
+  dir_uid=$${entry#*:}
+  mkdir -p "/srv/stockspoon-telemetry/$dir_name"
+  chown "$dir_uid:$dir_uid" "/srv/stockspoon-telemetry/$dir_name"
+  chmod 750 "/srv/stockspoon-telemetry/$dir_name"
+done
+mkdir -p /srv/stockspoon-telemetry/secrets
+chmod 700 /srv/stockspoon-telemetry/secrets
+password_file=/srv/stockspoon-telemetry/secrets/grafana_admin_password
+if [ ! -s "$password_file" ]; then
+  openssl rand -hex 32 > "$password_file"
+fi
+chown 472:472 "$password_file"
+chmod 400 "$password_file"
+
+imds_token=$(curl -fsS --retry 5 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token)
+private_ip=$(curl -fsS --retry 5 -H "X-aws-ec2-metadata-token: $imds_token" http://169.254.169.254/latest/meta-data/local-ipv4)
+cat > /opt/stockspoon-telemetry/.env <<ENV
+COMPOSE_PROJECT_NAME=${compose_name}
+MONITORING_PRIVATE_IP=$private_ip
+AWS_REGION=${aws_region}
+LOKI_BUCKET=${loki_bucket}
+TEMPO_BUCKET=${tempo_bucket}
+ENV
+chmod 600 /opt/stockspoon-telemetry/.env
+
+cat > /etc/systemd/system/stockspoon-telemetry.service <<'UNIT'
+[Unit]
+Description=Stockspoon V2 PLG and Tempo
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/stockspoon-telemetry
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/stockspoon-telemetry
+ExecStartPre=/usr/bin/mountpoint -q /srv/stockspoon-telemetry
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose stop
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now stockspoon-telemetry
