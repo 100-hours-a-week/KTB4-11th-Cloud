@@ -13,6 +13,7 @@
 #       - "redis/**"
 #       - "ecr/**"
 #       - "ecs/**"
+#       - "monitoring/**"
 #       - "ai-server/infra/**"
 #       - "ai-server/dev-infra/**"
 #       - "ai-server/dashboard/**"

@@ -11,6 +11,20 @@ spec.loader.exec_module(roots)
 
 
 class ModuleConsumersTest(unittest.TestCase):
+    def test_monitoring_changes_select_server_before_ecs_consumer(self):
+        self.assertEqual(
+            roots.affected_roots(["monitoring/config/compose.yaml"]),
+            ["monitoring", "ecs"],
+        )
+
+    def test_ecs_does_not_trigger_its_monitoring_dependency(self):
+        self.assertEqual(roots.affected_roots(["ecs/monitoring.tf"]), ["ecs"])
+
+    def test_shared_network_changes_include_monitoring_before_ecs(self):
+        selected = roots.affected_roots(["shared-infra/network.tf"])
+        self.assertLess(selected.index("shared-infra"), selected.index("monitoring"))
+        self.assertLess(selected.index("monitoring"), selected.index("ecs"))
+
     def test_policy_module_triggers_owner_and_remote_state_consumers(self):
         self.assertEqual(
             roots.affected_roots(["modules/terraform-ci-policies/compute.tf"]),

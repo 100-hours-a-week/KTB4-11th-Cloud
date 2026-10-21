@@ -59,6 +59,10 @@ locals {
       bucket = "stockspoon-terraform-state-v2"
       key    = "ecs/terraform.tfstate"
     },
+    {
+      bucket = "stockspoon-terraform-state-v2"
+      key    = "monitoring/terraform.tfstate"
+    },
   ]
 
   github_actions_terraform_state_object_arns = [
@@ -346,11 +350,14 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
       "s3:Get*",
       "s3:ListBucket",
     ]
-    resources = [
+    resources = concat([
       local.alb_access_log_bucket_arn,
       local.stock_logo_bucket_arn,
       local.frontend_assets_bucket_arn,
-    ]
+      ], [
+      for kind in ["loki", "tempo"] :
+      "arn:aws:s3:::stockspoon-v2-prod-telemetry-${kind}-${data.aws_caller_identity.github_actions_terraform.account_id}-ap-northeast-2"
+    ])
   }
 
   statement {
