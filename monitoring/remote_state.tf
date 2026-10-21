@@ -1,4 +1,5 @@
-# Monitoring depends only on shared networking, never on ECS or DB migration.
+# Base monitoring uses shared networking. Optional Grafana HTTPS reads only
+# application edge outputs in grafana_https.tf; it never depends on ECS state.
 data "terraform_remote_state" "shared" {
   backend = "s3"
 

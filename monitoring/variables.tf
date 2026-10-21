@@ -32,3 +32,31 @@ variable "name_prefix" {
   type        = string
   default     = "stockspoon-v2-prod"
 }
+
+variable "grafana_domain_name" {
+  description = "Optional public Grafana hostname, e.g. monitoring.stock-spoon.com; empty keeps SSM-only access"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.grafana_domain_name == "" || can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\\.[a-z]{2,}$", var.grafana_domain_name))
+    error_message = "Use a lowercase DNS hostname without a scheme, port or trailing dot."
+  }
+}
+
+variable "grafana_route53_zone_name" {
+  description = "Existing public Route 53 hosted zone containing the Grafana hostname"
+  type        = string
+  default     = "stock-spoon.com"
+}
+
+variable "grafana_listener_rule_priority" {
+  description = "Host rule priority on the existing HTTPS listener; precedes API path rules at 100/200"
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.grafana_listener_rule_priority >= 1 && var.grafana_listener_rule_priority < 100 && floor(var.grafana_listener_rule_priority) == var.grafana_listener_rule_priority
+    error_message = "Choose an unused integer priority from 1 to 99, before the application path rules."
+  }
+}

@@ -33,12 +33,14 @@ resource "aws_instance" "telemetry" {
 
   # gzip keeps the bundled Compose/config files below the EC2 user-data limit.
   user_data_base64 = base64gzip(templatefile("${path.module}/bootstrap.sh.tftpl", {
-    files        = local.telemetry_files
-    volume_id    = aws_ebs_volume.telemetry[0].id
-    aws_region   = var.aws_region
-    loki_bucket  = aws_s3_bucket.telemetry["loki"].id
-    tempo_bucket = aws_s3_bucket.telemetry["tempo"].id
-    compose_name = local.telemetry_name
+    files                 = local.telemetry_files
+    volume_id             = aws_ebs_volume.telemetry[0].id
+    aws_region            = var.aws_region
+    loki_bucket           = aws_s3_bucket.telemetry["loki"].id
+    tempo_bucket          = aws_s3_bucket.telemetry["tempo"].id
+    compose_name          = local.telemetry_name
+    grafana_root_url      = local.grafana_root_url
+    grafana_cookie_secure = local.grafana_public_enabled
   }))
 
   metadata_options {
