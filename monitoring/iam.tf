@@ -46,3 +46,22 @@ resource "aws_iam_instance_profile" "telemetry" {
   name  = local.telemetry_name
   role  = aws_iam_role.telemetry[0].name
 }
+
+data "aws_secretsmanager_secret" "discord" {
+  count = var.plg_tempo_enabled ? 1 : 0
+  name  = "stockspoon/v1/app/discord-webhook"
+}
+
+resource "aws_iam_role_policy" "telemetry_discord" {
+  count = var.plg_tempo_enabled ? 1 : 0
+  name  = "telemetry-discord-webhook-read"
+  role  = aws_iam_role.telemetry[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = data.aws_secretsmanager_secret.discord[0].arn
+    }]
+  })
+}

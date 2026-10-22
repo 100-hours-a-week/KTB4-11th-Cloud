@@ -47,9 +47,11 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
     if target == "server":
         files = {
             "config/" + path.relative_to(ROOT / "config").as_posix(): path.read_bytes()
-            for path in (ROOT / "config").rglob("*") if path.is_file()
+            for path in (ROOT / "config").rglob("*")
+            if path.is_file() and not path.name.endswith(".local.json")
         }
         files["smoke.py"] = (ROOT / "scripts" / "smoke.py").read_bytes()
+        files["configure-alerting.py"] = (ROOT / "scripts" / "configure-alerting.py").read_bytes()
         address = ipaddress.IPv4Address(destination["private_ip"])
         root_url = destination.get("grafana_url") or "http://localhost:13000/"
         parsed_root = urlsplit(root_url)
