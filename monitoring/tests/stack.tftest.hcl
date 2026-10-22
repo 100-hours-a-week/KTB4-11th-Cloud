@@ -1,4 +1,11 @@
 # Offline contract checks: no AWS calls and no real state access.
+# Explicit values keep local *.auto.tfvars from changing test scenarios.
+variables {
+  plg_tempo_enabled     = false
+  dev_telemetry_enabled = false
+  grafana_domain_name   = ""
+}
+
 mock_provider "aws" {
   mock_data "aws_caller_identity" {
     defaults = { account_id = "123456789012" }
@@ -23,6 +30,16 @@ mock_provider "aws" {
   mock_resource "aws_iam_role" {
     defaults = { arn = "arn:aws:iam::123456789012:role/test-monitoring" }
   }
+  mock_resource "aws_instance" {
+    defaults = { private_ip = "10.0.11.236" }
+  }
+  mock_data "aws_vpc_peering_connection" {
+    defaults = {
+      status      = "active"
+      vpc_id      = "vpc-0123456789abcdef0"
+      peer_vpc_id = "vpc-0fedcba9876543210"
+    }
+  }
   mock_data "aws_route53_zone" {
     defaults = { zone_id = "Z1234567890ABCDE" }
   }
@@ -35,6 +52,19 @@ mock_provider "aws" {
         resource_record_type  = "CNAME"
         resource_record_value = "_validation.acm-validations.aws."
       }]
+    }
+  }
+}
+
+override_data {
+  target = data.terraform_remote_state.development
+  values = {
+    outputs = {
+      vpc_id                    = "vpc-0fedcba9876543210"
+      public_subnet_id          = "subnet-0fedcba9876543210"
+      dev_app_instance_id       = "i-0fedcba9876543210"
+      dev_app_private_ip        = "10.20.1.42"
+      dev_app_security_group_id = "sg-0fedcba9876543210"
     }
   }
 }
@@ -70,6 +100,10 @@ run "disabled_by_default" {
   assert {
     condition     = output.plg_tempo == null
     error_message = "A disabled stack must not advertise an available monitoring server."
+  }
+  assert {
+    condition     = length(aws_vpc_peering_connection.development) == 0 && length(aws_route.development_to_telemetry) == 0 && output.development_telemetry == null
+    error_message = "Development networking must remain opt-in."
   }
 }
 
@@ -109,5 +143,42 @@ run "grafana_hostname" {
   assert {
     condition     = !aws_instance.telemetry[0].associate_public_ip_address && aws_vpc_security_group_ingress_rule.grafana_from_alb[0].referenced_security_group_id == "sg-0123456789abcdef0"
     error_message = "Grafana stays private and accepts port 3000 only from the ALB security group."
+  }
+}
+
+run "development_private_collection" {
+  command = plan
+  variables {
+    plg_tempo_enabled     = true
+    dev_telemetry_enabled = true
+  }
+  assert {
+    condition     = length(aws_vpc_peering_connection.development) == 1 && aws_vpc_peering_connection.development[0].auto_accept
+    error_message = "Development collection requires a same-account private peering connection."
+  }
+  assert {
+    condition     = aws_route.telemetry_to_development[0].destination_cidr_block == "10.20.1.42/32"
+    error_message = "Return routing must be limited to the dedicated development application host."
+  }
+  assert {
+    condition     = toset([for rule in aws_vpc_security_group_ingress_rule.development_telemetry : rule.from_port]) == toset([3100, 9090, 4318]) && alltrue([for rule in aws_vpc_security_group_ingress_rule.development_telemetry : rule.referenced_security_group_id == "sg-0fedcba9876543210"])
+    error_message = "Only the development app SG may access logs, metrics and OTLP/HTTP."
+  }
+  assert {
+    condition     = output.development_telemetry.environment == "dev" && output.development_telemetry.instance_id == "i-0fedcba9876543210"
+    error_message = "The deployment target must be the development host, never the load-test host."
+  }
+}
+
+run "reuse_development_peering" {
+  command = plan
+  variables {
+    plg_tempo_enabled             = true
+    dev_telemetry_enabled         = true
+    dev_vpc_peering_connection_id = "pcx-0123456789abcdef0"
+  }
+  assert {
+    condition     = length(aws_vpc_peering_connection.development) == 0 && aws_route.development_to_telemetry[0].vpc_peering_connection_id == "pcx-0123456789abcdef0"
+    error_message = "A supplied peering connection must be reused without creating a duplicate."
   }
 }
