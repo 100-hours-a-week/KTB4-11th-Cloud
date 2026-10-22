@@ -16,9 +16,9 @@ variable "backend_collector_image_tag" {
 }
 
 variable "backend_collector_instrumented_image" {
-  description = "Optional collector image derived from the running application with the OTel Java agent installed"
+  description = "Pinned collector image with the OTel Java agent; set null explicitly to use backend_collector_image_tag without instrumentation"
   type        = string
-  default     = null
+  default     = "public.ecr.aws/g8x9p1p0/stockspoon-v2-backend:tempo-7557c5aaccd6983b"
 
   validation {
     condition     = var.backend_collector_instrumented_image == null || can(regex("^public\\.ecr\\.aws/[^[:space:]]+(:[^/:]+|@sha256:[0-9a-f]{64})$", var.backend_collector_instrumented_image))
