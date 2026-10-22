@@ -43,7 +43,7 @@ resource "aws_vpc_security_group_egress_rule" "ecs_instance_all" {
 
 resource "aws_launch_template" "service" {
   name                   = "${var.name_prefix}-ecs-service"
-  image_id               = data.aws_ssm_parameter.ecs_ami.value
+  image_id               = var.service_ami_id != null ? var.service_ami_id : data.aws_ssm_parameter.ecs_ami.value
   instance_type          = var.service_instance_type
   vpc_security_group_ids = [aws_security_group.ecs_instance.id]
 
