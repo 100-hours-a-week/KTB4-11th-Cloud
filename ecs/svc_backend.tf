@@ -37,6 +37,8 @@ locals {
     ],
     # SSM에는 빈 값을 저장할 수 없음
     var.backend_kakao_client_secret_enabled ? [] : [{ name = "KAKAO_CLIENT_SECRET", value = "" }],
+    local.telemetry_otlp_environment,
+    var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "backend" }] : [],
   )
 
   # SSM /stockspoon/v2/prod/backend/<이름> (application secrets)

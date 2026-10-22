@@ -8,11 +8,22 @@ variable "plg_tempo_enabled" {
 locals {
   telemetry_name   = "${var.name_prefix}-telemetry"
   telemetry_server = var.plg_tempo_enabled ? data.terraform_remote_state.monitoring[0].outputs.plg_tempo : null
+  # Export traces only: this endpoint is Tempo, not an OTLP metrics/logs backend.
+  telemetry_otlp_environment = var.plg_tempo_enabled ? [
+    { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = local.telemetry_server.otlp_http_endpoint },
+    { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
+    { name = "OTEL_RESOURCE_ATTRIBUTES", value = "deployment.environment.name=prod" },
+    { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
+    { name = "OTEL_METRICS_EXPORTER", value = "none" },
+    { name = "OTEL_LOGS_EXPORTER", value = "none" },
+  ] : []
   telemetry_trace_sources = var.plg_tempo_enabled ? merge({
     backend     = aws_security_group.backend_task.id
     market_http = aws_security_group.market_http_task.id
     }, var.frontend_enabled ? {
     frontend = aws_security_group.frontend_task[0].id
+    } : {}, var.backend_collector_enabled ? {
+    backend_collector = aws_security_group.backend_collector[0].id
   } : {}) : {}
 }
 
@@ -109,6 +120,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     environment = [
       { name = "ALLOY_CONFIG", value = file("${path.module}/alloy/config.alloy") },
       { name = "ECS_CLUSTER", value = aws_ecs_cluster.main.name },
+      { name = "DEPLOYMENT_ENVIRONMENT", value = "prod" },
       { name = "TASK_FAMILY_REGEX", value = "${var.name_prefix}-(backend|backend-collector|market-http|frontend)" },
       { name = "LOKI_PUSH_URL", value = local.telemetry_server.loki_push_url },
       { name = "PROMETHEUS_WRITE_URL", value = local.telemetry_server.prometheus_write_url },

@@ -140,7 +140,7 @@ resource "aws_ecs_task_definition" "market_http" {
       ]
 
       # 비밀값이 없는 설정은 environment로 주입한다.
-      environment = [
+      environment = concat([
         { name = "MARKET_HTTP_HOST", value = "0.0.0.0" },
         { name = "MARKET_HTTP_PORT", value = tostring(var.market_http_container_port) },
         { name = "MARKET_HTTP_QUESTDB_CONF", value = "ws::addr=${local.ai_private_ip}:${var.ai_questdb_http_port};" },
@@ -159,7 +159,8 @@ resource "aws_ecs_task_definition" "market_http" {
         { name = "MARKET_HTTP_METRICS_NAMESPACE", value = local.sse_metrics_namespace },
         { name = "MARKET_HTTP_METRICS_CLUSTER_NAME", value = aws_ecs_cluster.main.name },
         { name = "MARKET_HTTP_METRICS_SERVICE_NAME", value = "${var.name_prefix}-market-http" },
-      ]
+        ], local.telemetry_otlp_environment,
+      var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "market-http" }] : [])
 
       secrets = [
         {

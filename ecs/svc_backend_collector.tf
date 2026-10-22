@@ -115,7 +115,8 @@ resource "aws_ecs_task_definition" "backend_collector" {
       protocol      = "tcp"
     }]
     environment = concat(
-      [for item in local.backend_environment : item if !contains(["KIWOOM_COLLECTOR_ENABLED", "KIWOOM_STREAM_ENABLED"], item.name)],
+      [for item in local.backend_environment : item if !contains(["KIWOOM_COLLECTOR_ENABLED", "KIWOOM_STREAM_ENABLED", "OTEL_SERVICE_NAME"], item.name)],
+      var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "backend-collector" }] : [],
       [
         { name = "KIWOOM_COLLECTOR_ENABLED", value = "true" },
         { name = "KIWOOM_STREAM_ENABLED", value = "false" },
@@ -188,6 +189,7 @@ resource "aws_ecs_service" "backend_collector" {
     aws_vpc_security_group_ingress_rule.backend_collector_from_backend,
     aws_vpc_security_group_ingress_rule.proxysql_from_backend_collector,
     aws_vpc_security_group_egress_rule.backend_collector,
+    aws_vpc_security_group_ingress_rule.telemetry_traces,
     aws_ssm_parameter.backend_collector_url,
   ]
 }

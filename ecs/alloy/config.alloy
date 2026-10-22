@@ -34,7 +34,11 @@ discovery.relabel "apps" {
 loki.source.docker "apps" {
   host = "unix:///var/run/docker.sock"
   targets = discovery.relabel.apps.output
-  labels = { cluster = sys.env("ECS_CLUSTER"), host = constants.hostname }
+  labels = {
+    cluster = sys.env("ECS_CLUSTER"),
+    host = constants.hostname,
+    environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+  }
   forward_to = [loki.write.server.receiver]
 }
 
@@ -64,7 +68,10 @@ prometheus.scrape "host" {
 }
 
 prometheus.remote_write "server" {
-  external_labels = { cluster = sys.env("ECS_CLUSTER") }
+  external_labels = {
+    cluster = sys.env("ECS_CLUSTER"),
+    environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+  }
   endpoint {
     url = sys.env("PROMETHEUS_WRITE_URL")
   }
