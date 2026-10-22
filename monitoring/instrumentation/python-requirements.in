@@ -1,0 +1,10 @@
+# Match the application's existing opentelemetry-api 1.45.0.
+opentelemetry-api==1.45.0
+opentelemetry-sdk==1.45.0
+opentelemetry-distro==0.66b0
+opentelemetry-exporter-otlp-proto-http==1.45.0
+opentelemetry-instrumentation-fastapi==0.66b0
+opentelemetry-instrumentation-redis==0.66b0
+opentelemetry-instrumentation-sqlalchemy==0.66b0
+opentelemetry-instrumentation-psycopg==0.66b0
+opentelemetry-instrumentation-requests==0.66b0

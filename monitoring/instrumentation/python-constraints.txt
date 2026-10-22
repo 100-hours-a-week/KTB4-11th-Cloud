@@ -1,0 +1,6 @@
+# Shared application dependency versions; the image build also constrains every installed package.
+opentelemetry-api==1.45.0
+packaging==26.3
+requests==2.34.2
+typing-extensions==4.16.0
+urllib3==2.8.0
