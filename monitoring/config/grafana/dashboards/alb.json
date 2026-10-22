@@ -1,0 +1,722 @@
+{
+  "uid": "stockspoon-alb",
+  "title": "Stockspoon 운영 ALB",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "aws",
+    "prod"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "stockspoon"
+      ],
+      "asDropdown": true,
+      "title": "Stockspoon 대시보드"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "load_balancer",
+        "label": "ALB",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "cloudwatch"
+        },
+        "query": "dimension_values(ap-northeast-2,AWS/ApplicationELB,RequestCount,LoadBalancer)",
+        "definition": "dimension_values(ap-northeast-2,AWS/ApplicationELB,RequestCount,LoadBalancer)",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {
+          "text": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+          "value": "app/stockspoon-v1-alb/ebcc17bb6129bafc"
+        }
+      },
+      {
+        "name": "target_group",
+        "label": "Target Group",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "cloudwatch"
+        },
+        "query": "dimension_values(ap-northeast-2,AWS/ApplicationELB,HealthyHostCount,TargetGroup,{\"LoadBalancer\":\"$load_balancer\"})",
+        "definition": "dimension_values(ap-northeast-2,AWS/ApplicationELB,HealthyHostCount,TargetGroup,{\"LoadBalancer\":\"$load_balancer\"})",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Target Group · 요청 수 (분당)",
+      "description": "60초 구간의 요청 합계입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RequestCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "요청",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Target Group · HTTP 4xx·5xx (분당)",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_Target_4XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Target 4xx",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_Target_5XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Target 5xx",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Target Group · HTTP 응답 지연",
+      "description": "HTTP 응답 시작 지연입니다. SSE 연결 후 이벤트 전송 지연과 다릅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p50",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "p50",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p95",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "p95",
+          "hide": false
+        },
+        {
+          "refId": "C",
+          "id": "c",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p99",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "p99",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Target Group · 정상·비정상 타깃 수",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HealthyHostCount",
+          "statistic": "Minimum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "정상 최소",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "UnHealthyHostCount",
+          "statistic": "Maximum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "비정상 최대",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Target Group · HTTP 5xx 비율",
+      "description": "요청 수가 0이거나 누락되면 비율도 표시하지 않습니다. 요청이 있는 구간의 누락된 5xx만 0으로 처리합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RequestCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "RequestCount",
+          "hide": true
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_Target_5XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "HTTPCode_Target_5XX_Count",
+          "hide": true
+        },
+        {
+          "refId": "C",
+          "id": "c",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "expression": "IF(a>0,100*FILL(b,0)/a)",
+          "metricEditorMode": 1,
+          "metricQueryType": 0,
+          "period": "60",
+          "label": "Target 5xx (%)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Target Group · 타깃 연결 오류 (분당)",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetConnectionErrorCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer",
+            "TargetGroup": "$target_group"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "연결 오류",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "ALB 전체 · LB 5xx·연결 거절 (분당)",
+      "description": "선택한 ALB 전체의 지표이며 Target Group 선택과 무관합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_ELB_5XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "ALB 5xx",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RejectedConnectionCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "연결 거절",
+          "hide": false
+        },
+        {
+          "refId": "C",
+          "id": "c",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "ClientTLSNegotiationErrorCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "$load_balancer"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "TLS 오류",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ],
+  "description": "CloudWatch ALB 지표입니다. HTTP 응답 지연은 SSE 이벤트 도착 간격을 의미하지 않습니다. 요청이 없으면 일부 지표가 없을 수 있습니다."
+}
