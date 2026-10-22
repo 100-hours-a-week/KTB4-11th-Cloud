@@ -83,6 +83,123 @@ resource "aws_iam_role_policy_attachment" "db_migration_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Keep the switchover control-plane permissions on the database host only.
+# The existing migration profile is also used by the load generator and PMM.
+resource "aws_iam_role" "db_migration_switchover_runner" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  name               = "stockspoon-v1-app-db-migration-runner-role"
+  assume_role_policy = data.aws_iam_policy_document.app_cloudwatch_agent_assume_role.json
+
+  tags = merge(local.db_migration_tags, {
+    Name = "stockspoon-v1-app-db-migration-runner-role"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "db_migration_switchover_runner_ssm" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  role       = aws_iam_role.db_migration_switchover_runner[0].name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "db_migration_switchover_runner_monitoring_credentials" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  name = "stockspoon-v1-app-db-migration-runner-monitoring"
+  role = aws_iam_role.db_migration_switchover_runner[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter", "ssm:PutParameter"]
+      Resource = "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v1/db-migration/mysql-monitoring"
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "db_migration_switchover_runner" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  name = "stockspoon-v1-app-db-migration-runner-profile"
+  role = aws_iam_role.db_migration_switchover_runner[0].name
+
+  tags = merge(local.db_migration_tags, {
+    Name = "stockspoon-v1-app-db-migration-runner-profile"
+  })
+}
+
+data "aws_iam_policy_document" "db_migration_switchover_runner" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  statement {
+    sid       = "DescribeProductionProxySQLService"
+    effect    = "Allow"
+    actions   = ["ecs:DescribeServices"]
+    resources = ["arn:${data.aws_partition.monitoring.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/stockspoon-v2-prod-cluster/stockspoon-v2-prod-proxysql-fargate"]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = ["arn:${data.aws_partition.monitoring.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/stockspoon-v2-prod-cluster"]
+    }
+  }
+
+  statement {
+    sid       = "ListProductionProxySQLTasks"
+    effect    = "Allow"
+    actions   = ["ecs:ListTasks"]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = ["arn:${data.aws_partition.monitoring.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/stockspoon-v2-prod-cluster"]
+    }
+  }
+
+  statement {
+    sid       = "DescribeProductionProxySQLTasks"
+    effect    = "Allow"
+    actions   = ["ecs:DescribeTasks"]
+    resources = ["arn:${data.aws_partition.monitoring.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/stockspoon-v2-prod-cluster/*"]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = ["arn:${data.aws_partition.monitoring.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/stockspoon-v2-prod-cluster"]
+    }
+  }
+
+  statement {
+    sid     = "OpenProxySQLTaskPortForwards"
+    effect  = "Allow"
+    actions = ["ssm:StartSession"]
+    resources = [
+      "arn:${data.aws_partition.monitoring.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/stockspoon-v2-prod-cluster/*",
+      "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}::document/AWS-StartPortForwardingSession",
+      "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:session/*",
+    ]
+  }
+
+  statement {
+    sid     = "CloseProxySQLPortForwardSessions"
+    effect  = "Allow"
+    actions = ["ssm:TerminateSession"]
+    resources = [
+      "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:session/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "db_migration_switchover_runner" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  name   = "stockspoon-v1-app-db-migration-switchover-runner"
+  role   = aws_iam_role.db_migration_switchover_runner[0].id
+  policy = data.aws_iam_policy_document.db_migration_switchover_runner[0].json
+}
+
 resource "aws_iam_instance_profile" "db_migration" {
   count = var.db_migration_enabled ? 1 : 0
 
@@ -103,7 +220,7 @@ resource "aws_instance" "db_migration" {
   subnet_id                   = data.terraform_remote_state.shared.outputs.public_subnet_id
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.db_migration[0].id]
-  iam_instance_profile        = aws_iam_instance_profile.db_migration[0].name
+  iam_instance_profile        = aws_iam_instance_profile.db_migration_switchover_runner[0].name
 
   user_data = templatefile("${path.module}/db-migration/user_data.sh", {
     docker_compose_version = var.docker_compose_version
@@ -128,6 +245,9 @@ resource "aws_instance" "db_migration" {
 
   depends_on = [
     aws_iam_role_policy_attachment.db_migration_ssm,
+    aws_iam_role_policy_attachment.db_migration_switchover_runner_ssm,
+    aws_iam_role_policy.db_migration_switchover_runner,
+    aws_iam_role_policy.db_migration_switchover_runner_monitoring_credentials,
     aws_vpc_security_group_egress_rule.db_migration_outbound,
   ]
 
