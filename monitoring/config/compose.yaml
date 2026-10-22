@@ -78,5 +78,6 @@ services:
       - /srv/stockspoon-telemetry/grafana:/var/lib/grafana
       - /srv/stockspoon-telemetry/secrets/grafana_admin_password:/run/secrets/grafana_admin_password:ro
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
     mem_limit: 1g
     logging: *logging

@@ -57,6 +57,11 @@ resource "aws_instance" "telemetry" {
   }
 
   tags = { Name = local.telemetry_name }
+  # User-data bootstraps new hosts. Update an existing host with the reviewed
+  # SSM payload from render-deploy.py; config edits must not replace its EC2.
+  lifecycle {
+    ignore_changes = [user_data_base64]
+  }
   depends_on = [
     aws_iam_role_policy.telemetry_storage,
     aws_iam_role_policy_attachment.telemetry_ssm,
