@@ -17,7 +17,7 @@ import tarfile
 from urllib.parse import urlsplit
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def checked_endpoint(value: str, port: int, path: str = "") -> str:
@@ -49,7 +49,7 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
             "config/" + path.relative_to(ROOT / "config").as_posix(): path.read_bytes()
             for path in (ROOT / "config").rglob("*") if path.is_file()
         }
-        files["smoke.py"] = (ROOT / "smoke.py").read_bytes()
+        files["smoke.py"] = (ROOT / "scripts" / "smoke.py").read_bytes()
         address = ipaddress.IPv4Address(destination["private_ip"])
         root_url = destination.get("grafana_url") or "http://localhost:13000/"
         parsed_root = urlsplit(root_url)
@@ -81,7 +81,7 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
             files[f"{service}.otel.env"] = otel_environment(
                 destination["otlp_http_endpoint"], service, "dev"
             ).encode()
-    files["install.sh"] = (ROOT / "deploy" / f"{target}.sh").read_bytes()
+    files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{target}.sh").read_bytes()
     return files
 
 

@@ -11,7 +11,7 @@ import shlex
 import subprocess
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SERVICES = {"backend": "backend", "backend-collector": "backend", "market-http": "market-http"}
 READ_ONLY = {
     "taskDefinitionArn", "revision", "status", "requiresAttributes", "compatibilities",

@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 
 
-spec = importlib.util.spec_from_file_location("prepare_tracing", Path(__file__).resolve().parents[1] / "prepare-tracing.py")
+spec = importlib.util.spec_from_file_location("prepare_tracing", Path(__file__).resolve().parents[1] / "scripts" / "prepare-tracing.py")
 prepare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prepare)
 

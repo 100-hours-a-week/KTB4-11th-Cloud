@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("telemetry_deploy", ROOT / "render-deploy.py")
+spec = importlib.util.spec_from_file_location("telemetry_deploy", ROOT / "scripts" / "render-deploy.py")
 deploy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
 
@@ -80,7 +80,7 @@ class DeploymentTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source, destination = Path(directory) / "state.json", Path(directory) / "payload.json"
             source.write_text(json.dumps(outputs()))
-            with patch("sys.argv", ["render-deploy.py", "dev-agent", "--state-json", str(source), "--output", str(destination)]), patch.object(deploy.subprocess, "run") as run, redirect_stdout(io.StringIO()):
+            with patch("sys.argv", [str(ROOT / "scripts" / "render-deploy.py"), "dev-agent", "--state-json", str(source), "--output", str(destination)]), patch.object(deploy.subprocess, "run") as run, redirect_stdout(io.StringIO()):
                 deploy.main()
             run.assert_not_called()
             self.assertEqual(json.loads(destination.read_text())["InstanceIds"], ["i-0fedcba9876543210"])
