@@ -1,0 +1,262 @@
+{
+  "uid": "stockspoon-task-resources",
+  "title": "Stockspoon 운영 Task별 자원",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "aws",
+    "prod"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "refresh": "",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "stockspoon"
+      ],
+      "asDropdown": true,
+      "title": "Stockspoon 대시보드"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "ECS 서비스",
+        "type": "custom",
+        "query": "stockspoon-v2-prod-market-http,stockspoon-v2-prod-backend,stockspoon-v2-prod-backend-collector,stockspoon-v2-prod-frontend",
+        "multi": false,
+        "includeAll": false,
+        "options": [
+          {
+            "text": "stockspoon-v2-prod-market-http",
+            "value": "stockspoon-v2-prod-market-http",
+            "selected": true
+          },
+          {
+            "text": "stockspoon-v2-prod-backend",
+            "value": "stockspoon-v2-prod-backend",
+            "selected": false
+          },
+          {
+            "text": "stockspoon-v2-prod-backend-collector",
+            "value": "stockspoon-v2-prod-backend-collector",
+            "selected": false
+          },
+          {
+            "text": "stockspoon-v2-prod-frontend",
+            "value": "stockspoon-v2-prod-frontend",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "stockspoon-v2-prod-market-http",
+          "value": "stockspoon-v2-prod-market-http"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Task별 CPU 사용률",
+      "description": "동일 Task의 CpuUtilized / CpuReserved × 100",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "logsMode": "LogsInsights",
+          "queryLanguage": "CWLI",
+          "region": "ap-northeast-2",
+          "expression": "filter Type = \"Task\" and ServiceName = \"${service}\" and CpuReserved > 0 | stats avg(100 * CpuUtilized / CpuReserved) as CPUPercent by bin(1m), TaskId",
+          "statsGroups": [
+            "TaskId"
+          ],
+          "logGroups": [
+            {
+              "name": "/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
+              "arn": "arn:aws:logs:ap-northeast-2:250832562715:log-group:/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
+              "accountId": "250832562715"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Task별 메모리 사용률",
+      "description": "동일 Task의 MemoryUtilized / MemoryReserved × 100",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "logsMode": "LogsInsights",
+          "queryLanguage": "CWLI",
+          "region": "ap-northeast-2",
+          "expression": "filter Type = \"Task\" and ServiceName = \"${service}\" and MemoryReserved > 0 | stats avg(100 * MemoryUtilized / MemoryReserved) as MemoryPercent by bin(1m), TaskId",
+          "statsGroups": [
+            "TaskId"
+          ],
+          "logGroups": [
+            {
+              "name": "/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
+              "arn": "arn:aws:logs:ap-northeast-2:250832562715:log-group:/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
+              "accountId": "250832562715"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Task별 자원 사용·예약량",
+      "description": "현재 조회 기간의 평균·최대와 마지막 관측값입니다. 실행 중인 Task 목록은 아닙니다.",
+      "type": "table",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "logsMode": "LogsInsights",
+          "queryLanguage": "CWLI",
+          "region": "ap-northeast-2",
+          "expression": "filter Type = \"Task\" and ServiceName = \"${service}\" | stats avg(MemoryUtilized) as MemoryUsedMB, max(MemoryUtilized) as MemoryPeakMB, latest(MemoryReserved) as MemoryReservedMB, avg(CpuUtilized) as CPUUsedUnits, latest(CpuReserved) as CPUReservedUnits, latest(@timestamp) as LastSeen by TaskId | sort MemoryPeakMB desc | limit 100",
+          "statsGroups": [],
+          "logGroups": [
+            {
+              "name": "/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
+              "arn": "arn:aws:logs:ap-northeast-2:250832562715:log-group:/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
+              "accountId": "250832562715"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ],
+  "description": "기존 Container Insights 성능 로그를 Logs Insights로 조회합니다. 로그 스캔 요금이 발생할 수 있어 자동 새로고침은 꺼져 있습니다. 조회 기간에 실행된 Task가 포함되며 종료한 Task도 표시됩니다."
+}
