@@ -113,9 +113,14 @@ output "github_actions_backend_deploy_role_arn" {
 output "telemetry_application_environments" {
   description = "Non-secret OTLP settings for application CD (existing task definitions are owned by CD)"
   value = var.plg_tempo_enabled ? {
-    for service in ["backend", "frontend"] : service => concat(
+    for service, enabled in {
+      backend             = true
+      frontend            = var.frontend_enabled
+      "market-http"       = local.ai_market_enabled
+      "backend-collector" = var.backend_collector_enabled
+      } : service => concat(
       local.telemetry_otlp_environment,
       [{ name = "OTEL_SERVICE_NAME", value = service }],
-    ) if service != "frontend" || var.frontend_enabled
+    ) if enabled
   } : {}
 }
