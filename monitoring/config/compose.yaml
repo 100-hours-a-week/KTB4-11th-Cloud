@@ -67,6 +67,7 @@ services:
       - "${MONITORING_PRIVATE_IP}:3000:3000"
     environment:
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:13000/}
+      AWS_REGION: ${AWS_REGION:?set AWS_REGION}
       GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false}
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
