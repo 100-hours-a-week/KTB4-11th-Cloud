@@ -15,6 +15,17 @@ variable "backend_collector_image_tag" {
   }
 }
 
+variable "backend_collector_instrumented_image" {
+  description = "Optional collector image derived from the running application with the OTel Java agent installed"
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.backend_collector_instrumented_image == null || can(regex("^public\\.ecr\\.aws/[^[:space:]]+(:[^/:]+|@sha256:[0-9a-f]{64})$", var.backend_collector_instrumented_image))
+    error_message = "Use a tagged or digest-pinned public ECR image containing /opt/otel/opentelemetry-javaagent.jar."
+  }
+}
+
 locals {
   backend_collector_name       = "${var.name_prefix}-backend-collector"
   backend_collector_url        = "http://backend-collector.${var.proxysql_dns_namespace}:${var.backend_container_port}"
@@ -107,7 +118,7 @@ resource "aws_ecs_task_definition" "backend_collector" {
 
   container_definitions = jsonencode([{
     name        = "backend"
-    image       = "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_collector_image_tag}"
+    image       = coalesce(var.backend_collector_instrumented_image, "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_collector_image_tag}")
     essential   = true
     stopTimeout = var.backend_stop_timeout_seconds
     portMappings = [{
@@ -115,15 +126,15 @@ resource "aws_ecs_task_definition" "backend_collector" {
       protocol      = "tcp"
     }]
     environment = concat(
-      # Defer collector instrumentation during the load test. In particular,
-      # do not inherit the ordinary backend's OTLP settings and trigger a rollout.
-      [for item in local.backend_environment : item if !contains(["KIWOOM_COLLECTOR_ENABLED", "KIWOOM_STREAM_ENABLED"], item.name) && !startswith(item.name, "OTEL_")],
+      # Share the backend exporter settings, but identify this singleton separately.
+      [for item in local.backend_environment : item if !contains(["KIWOOM_COLLECTOR_ENABLED", "KIWOOM_STREAM_ENABLED", "OTEL_SERVICE_NAME"], item.name)],
       [
         { name = "KIWOOM_COLLECTOR_ENABLED", value = "true" },
         { name = "KIWOOM_STREAM_ENABLED", value = "false" },
         { name = "COMPETITION_START_ENABLED", value = "false" },
         { name = "COMPETITION_COMPLETION_ENABLED", value = "false" },
-      ]
+      ],
+      var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "backend-collector" }] : [],
     )
     secrets = concat(
       [for name in distinct(concat(local.backend_secret_names, ["KIWOOM_APP_KEY", "KIWOOM_APP_SECRET"])) : {
@@ -191,6 +202,7 @@ resource "aws_ecs_service" "backend_collector" {
     aws_vpc_security_group_ingress_rule.proxysql_from_backend_collector,
     aws_vpc_security_group_egress_rule.backend_collector,
     aws_ssm_parameter.backend_collector_url,
+    aws_vpc_security_group_ingress_rule.telemetry_traces,
   ]
 }
 

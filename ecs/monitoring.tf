@@ -5,6 +5,17 @@ variable "plg_tempo_enabled" {
   default     = true
 }
 
+variable "telemetry_trace_sample_ratio" {
+  description = "Fraction of new root traces to sample; use 1 temporarily for a controlled diagnostic test"
+  type        = number
+  default     = 0.1
+
+  validation {
+    condition     = var.telemetry_trace_sample_ratio >= 0 && var.telemetry_trace_sample_ratio <= 1
+    error_message = "telemetry_trace_sample_ratio must be between 0 and 1."
+  }
+}
+
 locals {
   telemetry_name   = "${var.name_prefix}-telemetry"
   telemetry_server = var.plg_tempo_enabled ? data.terraform_remote_state.monitoring[0].outputs.plg_tempo : null
@@ -14,6 +25,8 @@ locals {
     { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
     { name = "OTEL_RESOURCE_ATTRIBUTES", value = "deployment.environment.name=prod" },
     { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
+    { name = "OTEL_TRACES_SAMPLER", value = "parentbased_traceidratio" },
+    { name = "OTEL_TRACES_SAMPLER_ARG", value = tostring(var.telemetry_trace_sample_ratio) },
     { name = "OTEL_METRICS_EXPORTER", value = "none" },
     { name = "OTEL_LOGS_EXPORTER", value = "none" },
   ] : []
