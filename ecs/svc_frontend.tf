@@ -100,9 +100,8 @@ resource "aws_lb_listener_rule" "frontend" {
     target_group_arn = aws_lb_target_group.frontend[0].arn
   }
   condition {
-    http_header {
-      http_header_name = "X-Stockspoon-Frontend"
-      values           = ["v2"]
+    path_pattern {
+      values = ["/*"]
     }
   }
   lifecycle {
