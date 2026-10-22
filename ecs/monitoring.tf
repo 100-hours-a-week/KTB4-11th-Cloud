@@ -2,7 +2,7 @@
 variable "plg_tempo_enabled" {
   description = "Connect ECS to an already-applied monitoring root and create its Alloy daemon"
   type        = bool
-  default     = false
+  default     = true
 }
 
 locals {
