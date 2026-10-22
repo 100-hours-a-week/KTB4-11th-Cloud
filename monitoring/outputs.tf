@@ -5,6 +5,8 @@ output "plg_tempo" {
     loki_push_url        = "http://${aws_instance.telemetry[0].private_ip}:3100/loki/api/v1/push"
     prometheus_write_url = "http://${aws_instance.telemetry[0].private_ip}:9090/api/v1/write"
     instance_id          = aws_instance.telemetry[0].id
+    aws_region           = var.aws_region
+    compose_project_name = local.telemetry_name
     grafana_url          = local.grafana_public_enabled ? local.grafana_root_url : null
     private_ip           = aws_instance.telemetry[0].private_ip
     data_volume_id       = aws_ebs_volume.telemetry[0].id

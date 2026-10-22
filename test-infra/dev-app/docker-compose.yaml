@@ -35,6 +35,9 @@ services:
     image: ${ECR_REGISTRY:-public.ecr.aws/g8x9p1p0}/stockspoon-v2-frontend:${FE_TAG:?FE_TAG is required}
     container_name: stockspoon-v2-dev-frontend
     restart: unless-stopped
+    env_file:
+      - path: /opt/stockspoon-telemetry-agent/frontend.otel.env
+        required: false
     expose:
       - "3000"
     networks:
@@ -61,6 +64,9 @@ services:
     image: ${ECR_REGISTRY:-public.ecr.aws/g8x9p1p0}/stockspoon-v2-backend:${BE_TAG:?BE_TAG is required}
     container_name: stockspoon-v2-dev-backend
     restart: unless-stopped
+    env_file:
+      - path: /opt/stockspoon-telemetry-agent/backend.otel.env
+        required: false
     expose:
       - "8080"
     environment:

@@ -115,7 +115,9 @@ resource "aws_ecs_task_definition" "backend_collector" {
       protocol      = "tcp"
     }]
     environment = concat(
-      [for item in local.backend_environment : item if !contains(["KIWOOM_COLLECTOR_ENABLED", "KIWOOM_STREAM_ENABLED"], item.name)],
+      # Defer collector instrumentation during the load test. In particular,
+      # do not inherit the ordinary backend's OTLP settings and trigger a rollout.
+      [for item in local.backend_environment : item if !contains(["KIWOOM_COLLECTOR_ENABLED", "KIWOOM_STREAM_ENABLED"], item.name) && !startswith(item.name, "OTEL_")],
       [
         { name = "KIWOOM_COLLECTOR_ENABLED", value = "true" },
         { name = "KIWOOM_STREAM_ENABLED", value = "false" },

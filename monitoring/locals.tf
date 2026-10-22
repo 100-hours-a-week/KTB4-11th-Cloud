@@ -8,9 +8,6 @@ locals {
   grafana_public_enabled = var.plg_tempo_enabled && var.grafana_domain_name != ""
   grafana_root_url       = local.grafana_public_enabled ? "https://${var.grafana_domain_name}/" : "http://localhost:13000/"
   telemetry_files = {
-    for name in [
-      "compose.yaml", "loki.yaml", "tempo.yaml", "prometheus.yaml",
-      "grafana/provisioning/datasources/main.yaml",
-    ] : name => file("${path.module}/config/${name}")
+    for name in fileset("${path.module}/config", "**") : name => file("${path.module}/config/${name}")
   }
 }

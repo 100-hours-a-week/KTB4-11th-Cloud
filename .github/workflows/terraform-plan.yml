@@ -81,6 +81,9 @@ jobs:
       - name: Test Terraform root dependency selection
         run: python3 -m unittest discover -s scripts/tests -p test_terraform_roots.py -v
 
+      - name: Test telemetry deployment payloads without AWS access
+        run: python3 -m unittest discover -s monitoring/tests -p 'test_*.py' -v
+
       - name: Compile Python helper scripts
         run: python3 -m py_compile .github/scripts/terraform_*.py
 

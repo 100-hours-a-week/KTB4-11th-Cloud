@@ -1,0 +1,33 @@
+name: stockspoon-v2-dev-telemetry
+
+services:
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: stockspoon-v2-dev-alloy
+    restart: unless-stopped
+    user: "0:0"
+    network_mode: host
+    pid: host
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    environment:
+      TELEMETRY_HOST: ${TELEMETRY_HOST:?set TELEMETRY_HOST}
+      DEPLOYMENT_ENVIRONMENT: dev
+      TELEMETRY_CLUSTER: stockspoon-v2-dev
+      LOKI_PUSH_URL: ${LOKI_PUSH_URL:?set LOKI_PUSH_URL}
+      PROMETHEUS_WRITE_URL: ${PROMETHEUS_WRITE_URL:?set PROMETHEUS_WRITE_URL}
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro,rslave
+      - /var/lib/stockspoon-v2-dev-alloy:/var/lib/alloy
+    mem_limit: 512m
+    cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"

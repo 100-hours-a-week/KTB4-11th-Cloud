@@ -141,11 +141,12 @@ resource "aws_ecs_task_definition" "frontend" {
     essential = true
     cpu       = 256
     memory    = 512
-    environment = [
+    environment = concat([
       { name = "NODE_ENV", value = "production" },
       { name = "HOSTNAME", value = "0.0.0.0" },
       { name = "PORT", value = "3000" },
-    ]
+      ], local.telemetry_otlp_environment,
+    var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "frontend" }] : [])
     portMappings = [{ containerPort = 3000, protocol = "tcp" }]
     stopTimeout  = 30
     logConfiguration = {

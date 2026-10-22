@@ -1,0 +1,79 @@
+logging {
+  level = "info"
+}
+
+discovery.docker "apps" {
+  host = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "apps" {
+  targets = discovery.docker.apps.targets
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex = "stockspoon-v2-dev"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex = "nginx|frontend|backend"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label = "service_name"
+  }
+}
+
+loki.source.docker "apps" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.apps.output
+  labels = {
+    cluster = sys.env("TELEMETRY_CLUSTER"),
+    host = sys.env("TELEMETRY_HOST"),
+    environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+  }
+  forward_to = [loki.write.server.receiver]
+}
+
+loki.write "server" {
+  endpoint {
+    url = sys.env("LOKI_PUSH_URL")
+    max_backoff_retries = 0
+  }
+  wal {
+    enabled = true
+    max_segment_age = "1h"
+  }
+}
+
+prometheus.exporter.unix "host" {
+  rootfs_path = "/host"
+  procfs_path = "/host/proc"
+  sysfs_path = "/host/sys"
+  disable_collectors = ["systemd"]
+}
+
+discovery.relabel "host" {
+  targets = prometheus.exporter.unix.host.targets
+  rule {
+    target_label = "instance"
+    replacement = sys.env("TELEMETRY_HOST")
+  }
+}
+
+prometheus.scrape "host" {
+  targets = discovery.relabel.host.output
+  scrape_interval = "30s"
+  forward_to = [prometheus.remote_write.server.receiver]
+}
+
+prometheus.remote_write "server" {
+  external_labels = {
+    cluster = sys.env("TELEMETRY_CLUSTER"),
+    environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+  }
+  endpoint {
+    url = sys.env("PROMETHEUS_WRITE_URL")
+  }
+}

@@ -79,6 +79,17 @@ variable "service_preopen_scaling" {
 
 # 인스턴스당 Backend 1 vCPU/2 GiB + SSE 2 vCPU/4 GiB를 기본 조합으로 배치한다.
 # c6i.xlarge(4 vCPU/8 GiB)의 남은 자원은 OS·ECS Agent와 추가 Task에 사용한다.
+variable "service_ami_id" {
+  description = "Optional pinned ECS-optimized AMI; null uses the AWS recommended image"
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.service_ami_id == null || can(regex("^ami-[0-9a-f]{8}([0-9a-f]{9})?$", var.service_ami_id))
+    error_message = "Use an AMI ID such as ami-0123456789abcdef0, or null."
+  }
+}
+
 variable "service_instance_type" {
   description = "Instance type for the service ASG (must support ENI trunking)"
   type        = string

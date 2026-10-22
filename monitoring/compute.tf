@@ -57,6 +57,12 @@ resource "aws_instance" "telemetry" {
   }
 
   tags = { Name = local.telemetry_name }
+  # Latest AMI and user-data bootstrap new hosts. Neither an upstream AMI
+  # release nor a config edit should replace the running monitoring server.
+  # Update its config with the reviewed SSM payload from render-deploy.py.
+  lifecycle {
+    ignore_changes = [ami, user_data_base64]
+  }
   depends_on = [
     aws_iam_role_policy.telemetry_storage,
     aws_iam_role_policy_attachment.telemetry_ssm,

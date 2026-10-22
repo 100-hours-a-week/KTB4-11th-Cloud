@@ -110,3 +110,12 @@ output "github_actions_backend_deploy_role_arn" {
   description = "Role ARN for the BE repository AWS_V2_ECS_DEPLOY_ROLE_ARN secret (cd-ecs-v2.yaml)"
   value       = aws_iam_role.github_actions_backend_deploy.arn
 }
+output "telemetry_application_environments" {
+  description = "Non-secret OTLP settings for application CD (existing task definitions are owned by CD)"
+  value = var.plg_tempo_enabled ? {
+    for service in ["backend", "frontend"] : service => concat(
+      local.telemetry_otlp_environment,
+      [{ name = "OTEL_SERVICE_NAME", value = service }],
+    ) if service != "frontend" || var.frontend_enabled
+  } : {}
+}

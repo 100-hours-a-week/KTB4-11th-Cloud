@@ -22,14 +22,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--otlp", default="http://127.0.0.1:4318")
     parser.add_argument("--query", default="http://127.0.0.1:3200")
+    parser.add_argument("--environment", choices=["dev", "prod"], default="prod")
     args = parser.parse_args()
     trace_id, span_id = secrets.token_hex(16), secrets.token_hex(8)
     now = time.time_ns()
     payload = {
         "resourceSpans": [{
-            "resource": {"attributes": [{
-                "key": "service.name", "value": {"stringValue": "telemetry-smoke"}
-            }]},
+            "resource": {"attributes": [
+                {"key": "service.name", "value": {"stringValue": "telemetry-smoke"}},
+                {"key": "deployment.environment.name", "value": {"stringValue": args.environment}},
+            ]},
             "scopeSpans": [{
                 "scope": {"name": "stockspoon-telemetry-smoke"},
                 "spans": [{

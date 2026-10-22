@@ -11,6 +11,11 @@ spec.loader.exec_module(roots)
 
 
 class ModuleConsumersTest(unittest.TestCase):
+    def test_development_network_selects_monitoring_before_ecs(self):
+        selected = roots.affected_roots(["test-infra/network.tf"])
+        self.assertLess(selected.index("test-infra"), selected.index("monitoring"))
+        self.assertLess(selected.index("monitoring"), selected.index("ecs"))
+
     def test_application_edge_changes_include_monitoring_consumer(self):
         selected = roots.affected_roots(["app-server/alb.tf"])
         self.assertLess(selected.index("app-server"), selected.index("monitoring"))

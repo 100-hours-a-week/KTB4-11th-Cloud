@@ -25,3 +25,15 @@ datasources:
     access: proxy
     url: http://tempo:3200
     editable: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-1m'
+        spanEndTimeShift: '1m'
+        tags:
+          - key: service.name
+            value: service_name
+          - key: deployment.environment.name
+            value: environment
+        filterByTraceID: true
+        filterBySpanID: false
