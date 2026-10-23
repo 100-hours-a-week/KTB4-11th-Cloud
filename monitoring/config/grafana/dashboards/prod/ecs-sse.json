@@ -24,6 +24,13 @@
       ],
       "asDropdown": true,
       "title": "Stockspoon 대시보드"
+    },
+    {
+      "type": "link",
+      "title": "market-http 상세 로그",
+      "url": "/d/stockspoon-service-logs?var-cluster=stockspoon-v2-prod-cluster&var-service=market-http",
+      "keepTime": true,
+      "targetBlank": false
     }
   ],
   "templating": {
@@ -633,7 +640,299 @@
           "sort": "desc"
         }
       }
+    },
+    {
+      "id": 20,
+      "title": "market-http · Task별 CPU 사용 코어",
+      "description": "1은 CPU 코어 1개 사용량입니다. Task 예약 CPU 대비 백분율이 아닙니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,service_name) (rate(container_cpu_usage_seconds_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=\"stockspoon-v2-prod-market-http\",task_id!=\"\"}[2m]))",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:cores",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "market-http · Task별 메모리 Working Set",
+      "description": "캐시 중 비활성 페이지를 제외한 앱 컨테이너 Working Set의 Task별 합계입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,service_name) (container_memory_working_set_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=\"stockspoon-v2-prod-market-http\",task_id!=\"\"}) / 1024 / 1024",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "market-http · 오류·예외 로그 (5분)",
+      "description": "로그 문자열 기준 집계입니다. 요청 오류율·연결 단절 수와 다르며, 로그가 없으면 데이터 없음으로 표시합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+          "queryType": "range",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "market-http · 오류·예외 로그 (5분)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "market-http · 경고 로그 (5분)",
+      "description": "로그 문자열 기준 집계입니다. 요청 오류율·연결 단절 수와 다르며, 로그가 없으면 데이터 없음으로 표시합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"} |~ \"(?i)warn\" [5m]))",
+          "queryType": "range",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "market-http · 경고 로그 (5분)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "title": "market-http · 오류·예외 로그",
+      "type": "logs",
+      "description": "운영 ECS market-http 로그만 표시합니다.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"} |~ \"(?i)error|exception|fatal\"",
+          "queryType": "range",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 25,
+      "title": "market-http · 전체 로그",
+      "type": "logs",
+      "description": "운영 ECS market-http 로그만 표시합니다.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}",
+          "queryType": "range",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      }
     }
   ],
-  "description": "CloudWatch 기존 지표를 조회합니다. SSE는 market-http의 Task당 평균·최대 연결 수이며 전체 연결 합계가 아닙니다. 누락 데이터는 0으로 보정하지 않습니다."
+  "description": "CloudWatch 기존 지표를 조회합니다. SSE는 market-http의 Task당 평균·최대 연결 수이며 전체 연결 합계가 아닙니다. 누락 데이터는 0으로 보정하지 않습니다. 아래 market-http 전용 자원·로그 패널은 상단 서비스 선택과 무관합니다. 오류 로그 수는 HTTP 오류율이나 SSE 단절 수를 의미하지 않습니다."
 }
