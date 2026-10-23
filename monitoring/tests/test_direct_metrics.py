@@ -76,6 +76,23 @@ class DirectMetricsTest(unittest.TestCase):
                 self.assertFalse(a['x'] < b['x'] + b['w'] and b['x'] < a['x'] + a['w']
                                  and a['y'] < b['y'] + b['h'] and b['y'] < a['y'] + a['h'])
 
+    def test_market_task_filter_matches_resource_logs_and_optional_sse(self):
+        dashboard = json.loads((ROOT / 'config/grafana/dashboards/prod/ecs-sse.json').read_text())
+        variable = next(v for v in dashboard['templating']['list'] if v['name'] == 'task')
+        self.assertEqual(variable['allValue'], '.*')
+        self.assertIn('ecs_service="stockspoon-v2-prod-market-http"', variable['query'])
+        for panel in dashboard['panels']:
+            if panel['id'] >= 20:
+                for target in panel['targets']:
+                    self.assertIn('task_id=~"${task:regex}"', target['expr'])
+                    self.assertNotIn('or vector(0)', target['expr'])
+        override = json.loads((ROOT / 'overrides/sse-prometheus.json').read_text())
+        for panel in override['panels']:
+            self.assertIn('task_id=~"${task:regex}"', panel['targets'][0]['expr'])
+        source = (ROOT.parent / 'ecs/alloy/config.alloy').read_text().split('loki.source.docker')[0]
+        self.assertIn('__meta_docker_container_label_com_amazonaws_ecs_task_arn', source)
+        self.assertIn('target_label = "task_id"', source)
+
     def test_ai_scraping_stays_off_until_explicitly_requested(self):
         destination = {
             'environment': 'dev', 'cluster': 'stockspoon-v2-dev',
