@@ -138,6 +138,63 @@ prometheus.relabel "task_resources" {
   }
 }
 
+// Docker discovery follows the awsvpc pause container's shared network.
+discovery.relabel "market_metrics" {
+  targets = discovery.relabel.apps.output
+  rule {
+    source_labels = ["service_name"]
+    regex = "market-http"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_network_ip"]
+    regex = "([0-9.]+)"
+    replacement = "$1:9108"
+    target_label = "__address__"
+  }
+  rule {
+    source_labels = ["__address__"]
+    regex = "[0-9.]+:9108"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_task_arn"]
+    regex = ".*/([^/]+)"
+    replacement = "$1"
+    target_label = "task_id"
+  }
+  rule {
+    source_labels = ["task_id"]
+    regex = ".+"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_task_definition_family"]
+    target_label = "ecs_service"
+  }
+}
+
+prometheus.scrape "market_metrics" {
+  targets = discovery.relabel.market_metrics.output
+  scrape_interval = "15s"
+  scrape_timeout = "5s"
+  metrics_path = "/metrics"
+  forward_to = [prometheus.relabel.market_metrics.receiver]
+}
+
+prometheus.relabel "market_metrics" {
+  forward_to = [prometheus.remote_write.server.receiver]
+  rule {
+    source_labels = ["__name__"]
+    regex = "market_http_sse_active_connections|up"
+    action = "keep"
+  }
+  rule {
+    target_label = "job"
+    replacement = "market-http-metrics"
+  }
+}
+
 prometheus.remote_write "server" {
   external_labels = {
     cluster = sys.env("ECS_CLUSTER"),

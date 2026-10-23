@@ -25,6 +25,7 @@ AI_SERVICES = [
 ]
 AI_TRACING_TARGETS = ["dev-ai-tracing", "prod-ai-tracing"]
 MARKET_TRACING_TARGET = "prod-market-http-tracing"
+METRICS_TARGETS = ["dev-ai-metrics", "prod-market-http-metrics"]
 
 
 def checked_endpoint(value: str, port: int, path: str = "") -> str:
@@ -93,6 +94,14 @@ def market_http_tracing_environment(outputs: dict) -> dict[str, str]:
         "MARKET_HTTP_TRACE_SPANS_PER_SECOND": "100",
     })
     return settings
+
+
+def market_http_metrics_environment() -> dict[str, str]:
+    return {
+        "MARKET_HTTP_PROMETHEUS_ENABLED": "true",
+        "MARKET_HTTP_PROMETHEUS_HOST": "0.0.0.0",
+        "MARKET_HTTP_PROMETHEUS_PORT": "9108",
+    }
 
 
 def config_bytes(path: Path) -> bytes:
@@ -202,10 +211,22 @@ def make_payload(target: str, outputs: dict) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET])
+    parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET, *METRICS_TARGETS])
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.target in METRICS_TARGETS:
+        settings = market_http_metrics_environment()
+        content = (json.dumps(settings, indent=2) + "\n" if args.target.startswith("prod")
+                   else "".join(f"{key}={value}\n" for key, value in settings.items()))
+        args.output.write_text(content)
+        args.output.chmod(0o600)
+        variable = "MARKET_HTTP_ENV_JSON" if args.target.startswith("prod") else "DEV_AI_ENV"
+        print(f"Prepared metrics fragment: {args.output}")
+        print(f"Merge into existing {variable}; preserve CloudWatch metrics and other settings.")
+        print("Requires the AI image with the separate Prometheus listener; application rollout is separate.")
+        print("No AWS command was submitted. No Terraform apply was executed.")
+        return
     if args.state_json:
         outputs = json.loads(args.state_json.read_text())
     else:
