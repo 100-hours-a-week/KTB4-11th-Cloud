@@ -31,6 +31,11 @@ class MarketContractTest(unittest.TestCase):
                 self.assertIsNotNone(re.fullmatch(pattern, name), name)
             self.assertIsNone(re.fullmatch(pattern, 'market_http_private_unapproved_metric'))
 
+    def test_ecs_log_task_label_is_preserved(self):
+        source = (ROOT.parent / 'ecs/alloy/config.alloy').read_text().split('loki.source.docker')[0]
+        self.assertIn('__meta_docker_container_label_com_amazonaws_ecs_task_arn', source)
+        self.assertIn('target_label = "task_id"', source)
+
     def test_streamer_scrape_requires_an_explicit_private_port(self):
         for environment in ['dev', 'prod']:
             target = environment + '-ai-agent'
