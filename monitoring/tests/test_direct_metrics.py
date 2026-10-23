@@ -58,12 +58,12 @@ class DirectMetricsTest(unittest.TestCase):
             self.assertNotIn(panel['id'], ids)
             ids.add(panel['id'])
             self.assertEqual(panel['datasource']['uid'],
-                             'prometheus' if panel['id'] in [1, 7, 8, 20, 21] else
+                             'prometheus' if (panel['id'] in [1, 7, 8, 20, 21] or panel['id'] >= 30) else
                              'loki' if panel['id'] >= 22 else 'cloudwatch')
-        self.assertEqual(ids, set(range(1, 9)) | set(range(20, 26)))
+        self.assertEqual(ids, set(range(1, 9)) | set(range(20, 26)) | set(range(30, 41)))
         baseline = {p['id']: p for p in json.loads(default[name])['panels']}
         for panel in dashboard['panels']:
-            if panel['id'] >= 20:
+            if 20 <= panel['id'] <= 25:
                 self.assertEqual(panel['targets'], baseline[panel['id']]['targets'])
                 for target in panel['targets']:
                     self.assertIn('environment="prod"', target['expr'])
