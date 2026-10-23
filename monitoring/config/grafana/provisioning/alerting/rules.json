@@ -409,7 +409,7 @@
         },
         {
           "uid": "stockspoon-error-logs",
-          "title": "운영 서비스 오류 로그 급증",
+          "title": "운영 AI EC2 오류 로그 급증",
           "condition": "B",
           "data": [
             {
@@ -425,7 +425,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",service_name=~\"backend|backend-collector|market-http|frontend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",host_role=\"ai\"} |~ \"(?i)error|exception|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
@@ -483,7 +483,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "운영 서비스 오류 로그 급증",
+            "summary": "운영 AI EC2 오류 로그 급증",
             "description": "최근 5분 error/exception/fatal 일치 로그가 20건을 초과한 상태가 5분 지속됩니다. HTTP 오류율이 아니며 같은 예외가 여러 줄로 집계될 수 있습니다."
           }
         }

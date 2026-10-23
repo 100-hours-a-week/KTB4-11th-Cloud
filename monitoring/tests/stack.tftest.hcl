@@ -3,7 +3,51 @@
 variables {
   plg_tempo_enabled     = false
   dev_telemetry_enabled = false
+  dev_ai_telemetry_enabled  = false
+  prod_ai_telemetry_enabled = false
   grafana_domain_name   = ""
+}
+
+override_data {
+  target = data.terraform_remote_state.development_ai
+  values = {
+    outputs = {
+      ai_instance_id       = "i-01111111111111111"
+      ai_private_ip        = "10.20.1.61"
+      ai_security_group_id = "sg-01111111111111111"
+    }
+  }
+}
+
+override_data {
+  target = data.terraform_remote_state.production_ai
+  values = {
+    outputs = {
+      ai_instance_id       = "i-02222222222222222"
+      ai_private_ip        = "10.0.1.50"
+      ai_security_group_id = "sg-02222222222222222"
+    }
+  }
+}
+
+override_data {
+  target = data.aws_instance.ai["dev"]
+  values = { private_ip = "10.20.1.61", subnet_id = "subnet-0fedcba9876543210" }
+}
+
+override_data {
+  target = data.aws_instance.ai["prod"]
+  values = { private_ip = "10.0.1.50", subnet_id = "subnet-0123456789abcdef0" }
+}
+
+override_data {
+  target = data.aws_subnet.ai["dev"]
+  values = { id = "subnet-0fedcba9876543210", vpc_id = "vpc-0fedcba9876543210" }
+}
+
+override_data {
+  target = data.aws_subnet.ai["prod"]
+  values = { id = "subnet-0123456789abcdef0", vpc_id = "vpc-0123456789abcdef0" }
 }
 
 mock_provider "aws" {
@@ -113,6 +157,14 @@ run "independent_server" {
     plg_tempo_enabled = true
   }
   assert {
+    condition     = aws_ssm_parameter.development_discord_webhook["app"].type == "SecureString" && output.development_discord_webhook_parameters.app == "/stockspoon/monitoring/dev/app/discord-webhook" && output.development_discord_webhook_parameters.ai == "/stockspoon/monitoring/dev/ai/discord-webhook"
+    error_message = "Development Discord must have its own encrypted parameter, with only its name exposed as an output."
+  }
+  assert {
+    condition     = length(aws_ssm_parameter.production_discord_webhook) == 4 && output.production_discord_webhook_parameters.be == "/stockspoon/monitoring/prod/be/discord-webhook"
+    error_message = "Production services and ALB must use four independent encrypted webhook slots."
+  }
+  assert {
     condition     = length(aws_instance.telemetry) == 1 && length(aws_ebs_volume.telemetry) == 1 && length(aws_s3_bucket.telemetry) == 2
     error_message = "The independent root must plan one server, one persistent disk and separate log/trace buckets."
   }
@@ -180,5 +232,40 @@ run "reuse_development_peering" {
   assert {
     condition     = length(aws_vpc_peering_connection.development) == 0 && aws_route.development_to_telemetry[0].vpc_peering_connection_id == "pcx-0123456789abcdef0"
     error_message = "A supplied peering connection must be reused without creating a duplicate."
+  }
+}
+
+run "collect_existing_ai_hosts" {
+  command = plan
+  override_resource {
+    target          = aws_instance.telemetry[0]
+    override_during = plan
+    values          = { private_ip = "10.0.11.236" }
+  }
+  variables {
+    plg_tempo_enabled        = true
+    dev_telemetry_enabled    = true
+    dev_ai_telemetry_enabled = true
+    prod_ai_telemetry_enabled = true
+  }
+  assert {
+    condition     = length(aws_instance.telemetry) == 1 && length(data.aws_instance.ai) == 2 && length(aws_vpc_security_group_ingress_rule.ai_telemetry) == 6
+    error_message = "AI collection must reuse both existing hosts and open only log, metric and OTLP/HTTP ports per host."
+  }
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.ai_telemetry["dev-traces"].from_port == 4318 && aws_vpc_security_group_ingress_rule.ai_telemetry["prod-traces"].to_port == 4318 && aws_vpc_security_group_ingress_rule.ai_telemetry["dev-traces"].referenced_security_group_id != aws_vpc_security_group_ingress_rule.ai_telemetry["prod-traces"].referenced_security_group_id
+    error_message = "OTLP/HTTP ingress must be scoped to each existing AI security group."
+  }
+  assert {
+    condition     = output.ai_telemetry.dev.otlp_http_endpoint == "http://10.0.11.236:4318" && output.ai_telemetry.prod.otlp_http_endpoint == output.ai_telemetry.dev.otlp_http_endpoint
+    error_message = "Both AI environments must use the private central Tempo OTLP/HTTP endpoint."
+  }
+  assert {
+    condition     = aws_route.telemetry_to_development_ai[0].destination_cidr_block == "10.20.1.61/32"
+    error_message = "The development AI return route must be limited to its single private address."
+  }
+  assert {
+    condition     = output.ai_telemetry.dev.environment == "dev" && output.ai_telemetry.prod.environment == "prod" && output.ai_telemetry.prod.cluster == "stockspoon-v1-ai"
+    error_message = "The existing V1 AI host remains production, separate from development AI."
   }
 }

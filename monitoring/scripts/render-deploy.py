@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a reviewable SSM SendCommand JSON payload; never deploy or apply."""
+"""Render telemetry SSM payloads or AI tracing env fragments; never deploy or apply."""
 
 from __future__ import annotations
 
@@ -18,6 +18,13 @@ from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
+AI_SERVICES = [
+    "news-http", "portfolio-rebalancer", "report-builder", "news-preprocessor",
+    "news-clusterer", "market-syncer", "news-graph-builder", "market-collector",
+    "market-streamer", "portfolio-builder",
+]
+AI_TRACING_TARGETS = ["dev-ai-tracing", "prod-ai-tracing"]
+MARKET_TRACING_TARGET = "prod-market-http-tracing"
 
 
 def checked_endpoint(value: str, port: int, path: str = "") -> str:
@@ -43,10 +50,62 @@ def otel_environment(endpoint: str, service: str, environment: str) -> str:
     ])
 
 
+def ai_tracing_endpoint(environment: str, outputs: dict) -> str:
+    if environment not in ["dev", "prod"]:
+        raise ValueError("Unknown AI environment")
+    destination = (outputs.get("ai_telemetry", {}).get("value") or {}).get(environment)
+    expected_cluster = "stockspoon-v2-dev" if environment == "dev" else "stockspoon-v1-ai"
+    if not destination or destination.get("environment") != environment or destination.get("cluster") != expected_cluster:
+        raise ValueError("AI tracing must use its own applied environment output")
+    endpoint = destination.get("otlp_http_endpoint")
+    if not endpoint:
+        raise ValueError("Apply the monitoring AI Tempo output before preparing its environment")
+    return checked_endpoint(endpoint, 4318)
+
+
+def ai_tracing_environment(target: str, outputs: dict) -> str:
+    if target not in AI_TRACING_TARGETS:
+        raise ValueError("Select a development or production AI tracing target")
+    environment = target.split("-", 1)[0]
+    endpoint = ai_tracing_endpoint(environment, outputs)
+    settings = {}
+    for service in ["MARKET_STREAMER"] + (["MARKET_HTTP"] if environment == "dev" else []):
+        settings.update({
+            f"{service}_OTEL_SDK_DISABLED": "false",
+            f"{service}_OTEL_EXPORTER_OTLP_ENDPOINT": endpoint,
+            f"{service}_OTEL_TRACES_SAMPLER_ARG": "0.1" if service == "MARKET_STREAMER" else "0.01",
+            f"{service}_OTEL_RESOURCE_ATTRIBUTES": f"deployment.environment.name={environment}",
+        })
+    if environment == "dev":
+        settings["MARKET_HTTP_TRACE_SPANS_PER_SECOND"] = "100"
+    return "".join(f"{key}={value}\n" for key, value in settings.items())
+
+
+def market_http_tracing_environment(outputs: dict) -> dict[str, str]:
+    settings = dict(line.split("=", 1) for line in otel_environment(
+        ai_tracing_endpoint("prod", outputs), "market-http", "prod"
+    ).splitlines())
+    settings.update({
+        "OTEL_SDK_DISABLED": "false",
+        "OTEL_TRACES_SAMPLER": "parentbased_traceidratio",
+        "OTEL_TRACES_SAMPLER_ARG": "0.01",
+        "OTEL_PROPAGATORS": "none",
+        "MARKET_HTTP_TRACE_SPANS_PER_SECOND": "100",
+    })
+    return settings
+
+
+def config_bytes(path: Path) -> bytes:
+    content = path.read_bytes()
+    if path.suffix == ".json":
+        return json.dumps(json.loads(content), ensure_ascii=False, separators=(",", ":")).encode()
+    return content
+
+
 def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
     if target == "server":
         files = {
-            "config/" + path.relative_to(ROOT / "config").as_posix(): path.read_bytes()
+            "config/" + path.relative_to(ROOT / "config").as_posix(): config_bytes(path)
             for path in (ROOT / "config").rglob("*")
             if path.is_file() and not path.name.endswith(".local.json")
         }
@@ -69,6 +128,20 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
         if any(not re.fullmatch(r"[a-zA-Z0-9.:/_-]+", value) for value in values.values()):
             raise ValueError("Unexpected characters in the server environment")
         files["server.env"] = "".join(f"{key}={value}\n" for key, value in values.items()).encode()
+    elif target in ["dev-ai-agent", "prod-ai-agent"]:
+        environment = "dev" if target == "dev-ai-agent" else "prod"
+        expected_cluster = "stockspoon-v2-dev" if environment == "dev" else "stockspoon-v1-ai"
+        if destination.get("environment") != environment or destination.get("cluster") != expected_cluster:
+            raise ValueError("AI agent environment and target must match")
+        files = {"ai-agent/" + name: (ROOT / "ai-agent" / name).read_bytes()
+                 for name in ["compose.yaml", "config.alloy"]}
+        services = AI_SERVICES + (["market-http"] if environment == "dev" else [])
+        files["agent.env"] = (
+            "LOKI_PUSH_URL=" + checked_endpoint(destination["loki_push_url"], 3100, "/loki/api/v1/push")
+            + "\nPROMETHEUS_WRITE_URL=" + checked_endpoint(destination["prometheus_write_url"], 9090, "/api/v1/write")
+            + f"\nDEPLOYMENT_ENVIRONMENT={environment}\nTELEMETRY_CLUSTER={expected_cluster}\n"
+            + "AI_SERVICE_REGEX=" + "|".join(services) + "\n"
+        ).encode()
     else:
         if destination.get("environment") != "dev" or destination.get("cluster") != "stockspoon-v2-dev":
             raise ValueError("The development payload must target the development stack")
@@ -83,13 +156,19 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
             files[f"{service}.otel.env"] = otel_environment(
                 destination["otlp_http_endpoint"], service, "dev"
             ).encode()
-    files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{target}.sh").read_bytes()
+    installer = "ai-agent" if target in ["dev-ai-agent", "prod-ai-agent"] else target
+    files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{installer}.sh").read_bytes()
     return files
 
 
 def make_payload(target: str, outputs: dict) -> dict:
     output_name = "plg_tempo" if target == "server" else "development_telemetry"
-    destination = outputs.get(output_name, {}).get("value")
+    if target in ["dev-ai-agent", "prod-ai-agent"]:
+        output_name = "ai_telemetry"
+        environment = "dev" if target == "dev-ai-agent" else "prod"
+        destination = (outputs.get(output_name, {}).get("value") or {}).get(environment)
+    else:
+        destination = outputs.get(output_name, {}).get("value")
     if not destination:
         raise ValueError(f"Enable and apply {output_name} before preparing this deployment")
     instance_id = destination["instance_id"]
@@ -121,7 +200,7 @@ def make_payload(target: str, outputs: dict) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=["server", "dev-agent"])
+    parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET])
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -133,10 +212,22 @@ def main() -> None:
             check=True, text=True, capture_output=True,
         )
         outputs = json.loads(result.stdout)
-    payload = make_payload(args.target, outputs)
-    args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+    if args.target in AI_TRACING_TARGETS:
+        args.output.write_text(ai_tracing_environment(args.target, outputs))
+        variable = "DEV_AI_ENV" if args.target == "dev-ai-tracing" else "PROD_AI_ENV"
+        print(f"Prepared AI tracing fragment: {args.output}")
+        print(f"Merge these keys into the existing {variable} GitHub Variable; do not replace its other settings.")
+        print("Requires the AI image containing PR #380 and the Tempo network rules. Application rollout is separate.")
+    elif args.target == MARKET_TRACING_TARGET:
+        args.output.write_text(json.dumps(market_http_tracing_environment(outputs), indent=2) + "\n")
+        print(f"Prepared market-http tracing JSON patch: {args.output}")
+        print("Merge these keys into the existing MARKET_HTTP_ENV_JSON GitHub Variable; do not replace its other settings.")
+        print("Requires the AI image containing PR #380; ECS application rollout is separate.")
+    else:
+        payload = make_payload(args.target, outputs)
+        args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+        print(f"Prepared {args.target} payload for {payload['InstanceIds'][0]}: {args.output}")
     args.output.chmod(0o600)
-    print(f"Prepared {args.target} payload for {payload['InstanceIds'][0]}: {args.output}")
     print("No AWS command was submitted. No Terraform apply was executed.")
 
 

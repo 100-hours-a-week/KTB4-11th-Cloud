@@ -58,10 +58,20 @@ resource "aws_iam_role_policy" "telemetry_discord" {
   role  = aws_iam_role.telemetry[0].id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = data.aws_secretsmanager_secret.discord[0].arn
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = data.aws_secretsmanager_secret.discord[0].arn
+      },
+      {
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = concat(
+          [for parameter in aws_ssm_parameter.development_discord_webhook : parameter.arn],
+          [for parameter in aws_ssm_parameter.production_discord_webhook : parameter.arn],
+        )
+      }
+    ]
   })
 }
