@@ -1,0 +1,493 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "stockspoon-dev-hosts",
+      "folder": "Stockspoon 개발",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "stockspoon-dev-host-cpu",
+          "title": "호스트 CPU 85% 초과",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "100 * (1 - avg by(environment,cluster,instance) (rate(node_cpu_seconds_total{environment=\"dev\",mode=\"idle\"}[5m])))",
+                "instant": true,
+                "range": false,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                },
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        85
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "호스트 CPU 85% 초과",
+            "description": "개발 환경의 호스트 지표·서비스 로그입니다. 개발 서버와 Alloy 상태를 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-dev-host-memory",
+          "title": "호스트 메모리 90% 초과",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "100 * (1 - node_memory_MemAvailable_bytes{environment=\"dev\"} / node_memory_MemTotal_bytes{environment=\"dev\"})",
+                "instant": true,
+                "range": false,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                },
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        90
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "호스트 메모리 90% 초과",
+            "description": "개발 환경의 호스트 지표·서비스 로그입니다. 개발 서버와 Alloy 상태를 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-dev-host-disk",
+          "title": "호스트 디스크 85% 초과",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "100 * (1 - node_filesystem_avail_bytes{environment=\"dev\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/docker.*\"} / node_filesystem_size_bytes{environment=\"dev\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/docker.*\"})",
+                "instant": true,
+                "range": false,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                },
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        85
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "호스트 디스크 85% 초과",
+            "description": "개발 환경의 호스트 지표·서비스 로그입니다. 개발 서버와 Alloy 상태를 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-dev-host-scrape",
+          "title": "개발 호스트 수집 실패",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "1 - up{environment=\"dev\",job=\"integrations/unix\"}",
+                "instant": true,
+                "range": false,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                },
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "개발 호스트 수집 실패",
+            "description": "개발 환경의 호스트 지표·서비스 로그입니다. 개발 서버와 Alloy 상태를 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-dev-metrics-missing",
+          "title": "개발 호스트 지표 전체 유실",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "absent_over_time(node_uname_info{environment=\"dev\",cluster=\"stockspoon-v2-dev\"}[5m]) or vector(0)",
+                "instant": true,
+                "range": false,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                },
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "1m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "개발 호스트 지표 전체 유실",
+            "description": "개발 환경의 호스트 지표·서비스 로그입니다. 개발 서버와 Alloy 상태를 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-dev-error-logs",
+          "title": "개발 서비스 오류 로그 급증",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "loki",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",service_name=~\"backend|frontend|nginx|market-http|news-http|portfolio-rebalancer|report-builder|news-preprocessor|news-clusterer|market-syncer|news-graph-builder|market-collector|market-streamer|portfolio-builder\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "queryType": "instant",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        20
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "개발 서비스 오류 로그 급증",
+            "description": "개발 환경의 호스트 지표·서비스 로그입니다. 개발 서버와 Alloy 상태를 확인하세요."
+          }
+        }
+      ]
+    }
+  ]
+}

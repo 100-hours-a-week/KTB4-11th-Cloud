@@ -157,6 +157,10 @@ run "independent_server" {
     plg_tempo_enabled = true
   }
   assert {
+    condition     = aws_ssm_parameter.development_discord_webhook[0].type == "SecureString" && output.development_discord_webhook_parameter == "/stockspoon/monitoring/dev/discord-webhook"
+    error_message = "Development Discord must have its own encrypted parameter, with only its name exposed as an output."
+  }
+  assert {
     condition     = length(aws_instance.telemetry) == 1 && length(aws_ebs_volume.telemetry) == 1 && length(aws_s3_bucket.telemetry) == 2
     error_message = "The independent root must plan one server, one persistent disk and separate log/trace buckets."
   }
