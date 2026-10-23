@@ -29,6 +29,12 @@ discovery.relabel "apps" {
     replacement = "$1"
     target_label = "service_name"
   }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_task_arn"]
+    regex = ".*/([^/]+)$"
+    replacement = "$1"
+    target_label = "task_id"
+  }
 }
 
 loki.source.docker "apps" {
