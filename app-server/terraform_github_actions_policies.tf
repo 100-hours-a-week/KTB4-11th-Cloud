@@ -402,9 +402,12 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
   }
 
   statement {
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter"]
-    resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id"]
+    effect  = "Allow"
+    actions = ["ssm:GetParameter"]
+    resources = [
+      "arn:aws:ssm:ap-northeast-2::parameter/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id",
+      "arn:aws:ssm:ap-northeast-2::parameter/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+    ]
   }
 
   statement {
