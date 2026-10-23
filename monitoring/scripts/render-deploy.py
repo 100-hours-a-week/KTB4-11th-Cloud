@@ -204,11 +204,12 @@ def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False) ->
         raise ValueError("Invalid target instance ID")
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as tar:
-        for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus).items()):
+        for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus).items(),
+                                    key=lambda item: (item[0].endswith(".py"), len(item[1]), item[0])):
             info = tarfile.TarInfo(name)
             info.size, info.mode = len(content), 0o644
             tar.addfile(info, io.BytesIO(content))
-    encoded = base64.b64encode(gzip.compress(archive.getvalue(), mtime=0)).decode()
+    encoded = base64.b64encode(gzip.compress(archive.getvalue(), compresslevel=9, mtime=0)).decode()
     command = "\n".join([
         "#!/bin/bash", "set -Eeuo pipefail", "umask 077",
         "work_dir=$(mktemp -d)", "trap 'rm -rf \"$work_dir\"' EXIT",
