@@ -28,6 +28,7 @@ def outputs():
                 "instance_id": instance, "environment": environment, "cluster": cluster,
                 "loki_push_url": "http://10.0.11.236:3100/loki/api/v1/push",
                 "prometheus_write_url": "http://10.0.11.236:9090/api/v1/write",
+                "otlp_http_endpoint": "http://10.0.11.236:4318",
             } for environment, instance, cluster in [
                 ("dev", "i-01111111111111111", "stockspoon-v2-dev"),
                 ("prod", "i-02222222222222222", "stockspoon-v1-ai"),
@@ -80,6 +81,67 @@ class DeploymentTest(unittest.TestCase):
             deploy.make_payload("dev-ai-agent", state)
         with self.assertRaises(ValueError):
             deploy.deployment_files("prod-ai-agent", outputs()["ai_telemetry"]["value"]["dev"])
+
+    def test_ai_tracing_uses_compose_settings_and_keeps_production_http_on_ecs(self):
+        for environment in ["dev", "prod"]:
+            settings = dict(line.split("=", 1) for line in deploy.ai_tracing_environment(environment + "-ai-tracing", outputs()).splitlines())
+            services = ["MARKET_STREAMER", "MARKET_HTTP"] if environment == "dev" else ["MARKET_STREAMER"]
+            for service in services:
+                self.assertEqual(settings[service + "_OTEL_SDK_DISABLED"], "false")
+                self.assertEqual(settings[service + "_OTEL_EXPORTER_OTLP_ENDPOINT"], "http://10.0.11.236:4318")
+                self.assertEqual(settings[service + "_OTEL_RESOURCE_ATTRIBUTES"], "deployment.environment.name=" + environment)
+                self.assertGreater(float(settings[service + "_OTEL_TRACES_SAMPLER_ARG"]), 0)
+                self.assertLess(float(settings[service + "_OTEL_TRACES_SAMPLER_ARG"]), 1)
+            if environment == "prod":
+                self.assertFalse(any(name.startswith("MARKET_HTTP_") for name in settings))
+            else:
+                self.assertEqual(settings["MARKET_HTTP_TRACE_SPANS_PER_SECOND"], "100")
+            self.assertFalse(any(name.startswith("OTEL_") for name in settings))
+
+    def test_ai_tracing_rejects_cross_environment_and_public_destinations(self):
+        state = outputs()
+        state['ai_telemetry']['value']['dev'] = state['ai_telemetry']['value']['prod']
+        with self.assertRaises(ValueError):
+            deploy.ai_tracing_environment('dev-ai-tracing', state)
+        state = outputs()
+        state['ai_telemetry']['value']['dev']['otlp_http_endpoint'] = 'http://8.8.8.8:4318'
+        with self.assertRaises(ValueError):
+            deploy.ai_tracing_environment('dev-ai-tracing', state)
+        del state['ai_telemetry']['value']['dev']
+        with self.assertRaises(ValueError):
+            deploy.ai_tracing_environment('dev-ai-tracing', state)
+
+    def test_ai_tracing_cli_prepares_a_fragment_without_deploying(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, destination = Path(directory) / 'state.json', Path(directory) / 'ai-tracing.env'
+            source.write_text(json.dumps(outputs()))
+            for environment in ['dev', 'prod']:
+                output = io.StringIO()
+                with patch('sys.argv', ['render-deploy.py', environment + '-ai-tracing', '--state-json', str(source), '--output', str(destination)]), patch.object(deploy.subprocess, 'run') as run, redirect_stdout(output):
+                    deploy.main()
+                run.assert_not_called()
+                self.assertEqual(destination.read_text(), deploy.ai_tracing_environment(environment + '-ai-tracing', outputs()))
+                self.assertIn(environment.upper() + '_AI_ENV', output.getvalue())
+                self.assertEqual(destination.stat().st_mode & 0o777, 0o600)
+
+    def test_production_market_http_patch_uses_ecs_keys_and_parent_sampling(self):
+        settings = deploy.market_http_tracing_environment(outputs())
+        self.assertEqual(settings['OTEL_SERVICE_NAME'], 'market-http')
+        self.assertEqual(settings['OTEL_SDK_DISABLED'], 'false')
+        self.assertEqual(settings['OTEL_EXPORTER_OTLP_ENDPOINT'], 'http://10.0.11.236:4318')
+        self.assertEqual(settings['OTEL_RESOURCE_ATTRIBUTES'], 'deployment.environment.name=prod')
+        self.assertEqual(settings['OTEL_TRACES_SAMPLER'], 'parentbased_traceidratio')
+        self.assertEqual(settings['OTEL_METRICS_EXPORTER'], 'none')
+        self.assertEqual(settings['OTEL_LOGS_EXPORTER'], 'none')
+        self.assertEqual(settings['MARKET_HTTP_TRACE_SPANS_PER_SECOND'], '100')
+        self.assertFalse(any(name.startswith('MARKET_STREAMER_') for name in settings))
+        with tempfile.TemporaryDirectory() as directory:
+            source, destination = Path(directory) / 'state.json', Path(directory) / 'market-http-tracing.patch.json'
+            source.write_text(json.dumps(outputs()))
+            with patch('sys.argv', ['render-deploy.py', 'prod-market-http-tracing', '--state-json', str(source), '--output', str(destination)]), patch.object(deploy.subprocess, 'run') as run, redirect_stdout(io.StringIO()):
+                deploy.main()
+            run.assert_not_called()
+            self.assertEqual(json.loads(destination.read_text()), settings)
 
     def test_missing_development_state_cannot_fall_back_to_production(self):
         state = outputs()
