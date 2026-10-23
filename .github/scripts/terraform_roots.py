@@ -15,7 +15,7 @@ from pathlib import PurePosixPath
 ROOT_DEPENDENCIES = {
     "shared-infra": set(),
     "test-infra": set(),
-    "test-infra/sse-k6": {"test-infra"},
+    "test-infra/sse-k6": {"test-infra", "shared-infra", "ecs"},
     "storage": set(),
     "ecr": set(),
     "ai-server/dashboard": set(),
