@@ -48,10 +48,17 @@ def otel_environment(endpoint: str, service: str, environment: str) -> str:
     ])
 
 
+def config_bytes(path: Path) -> bytes:
+    content = path.read_bytes()
+    if path.suffix == ".json":
+        return json.dumps(json.loads(content), ensure_ascii=False, separators=(",", ":")).encode()
+    return content
+
+
 def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
     if target == "server":
         files = {
-            "config/" + path.relative_to(ROOT / "config").as_posix(): path.read_bytes()
+            "config/" + path.relative_to(ROOT / "config").as_posix(): config_bytes(path)
             for path in (ROOT / "config").rglob("*")
             if path.is_file() and not path.name.endswith(".local.json")
         }
