@@ -112,6 +112,15 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     host_path = "/"
   }
   volume {
+    name      = "host-sys"
+    host_path = "/sys"
+  }
+  volume {
+    name      = "docker-data"
+    host_path = "/var/lib/docker"
+  }
+
+  volume {
     name      = "alloy-data"
     host_path = "/var/lib/stockspoon-v2-alloy"
   }
@@ -124,6 +133,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     memoryReservation = 256
     memory            = 512
     user              = "0:0"
+    privileged        = true
     entryPoint        = ["/bin/sh", "-ec"]
     command = [join(" ", [
       "printf '%s' \"$ALLOY_CONFIG\" > /tmp/config.alloy;",
@@ -141,6 +151,9 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     mountPoints = [
       { sourceVolume = "docker-socket", containerPath = "/var/run/docker.sock", readOnly = true },
       { sourceVolume = "host-root", containerPath = "/host", readOnly = true },
+      { sourceVolume = "host-root", containerPath = "/rootfs", readOnly = true },
+      { sourceVolume = "host-sys", containerPath = "/sys", readOnly = true },
+      { sourceVolume = "docker-data", containerPath = "/var/lib/docker", readOnly = true },
       { sourceVolume = "alloy-data", containerPath = "/var/lib/alloy", readOnly = false },
     ]
     logConfiguration = {
