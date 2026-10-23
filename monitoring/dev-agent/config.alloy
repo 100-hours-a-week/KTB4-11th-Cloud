@@ -32,6 +32,7 @@ loki.source.docker "apps" {
     cluster = sys.env("TELEMETRY_CLUSTER"),
     host = sys.env("TELEMETRY_HOST"),
     environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+    host_role = "app",
   }
   forward_to = [loki.write.server.receiver]
 }
@@ -72,6 +73,7 @@ prometheus.remote_write "server" {
   external_labels = {
     cluster = sys.env("TELEMETRY_CLUSTER"),
     environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+    host_role = "app",
   }
   endpoint {
     url = sys.env("PROMETHEUS_WRITE_URL")

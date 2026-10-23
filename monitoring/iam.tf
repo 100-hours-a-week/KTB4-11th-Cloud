@@ -67,7 +67,7 @@ resource "aws_iam_role_policy" "telemetry_discord" {
       {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]
-        Resource = aws_ssm_parameter.development_discord_webhook[0].arn
+        Resource = [for parameter in aws_ssm_parameter.development_discord_webhook : parameter.arn]
       }
     ]
   })
