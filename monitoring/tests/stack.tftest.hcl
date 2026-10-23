@@ -161,6 +161,10 @@ run "independent_server" {
     error_message = "Development Discord must have its own encrypted parameter, with only its name exposed as an output."
   }
   assert {
+    condition     = length(aws_ssm_parameter.production_discord_webhook) == 4 && output.production_discord_webhook_parameters.be == "/stockspoon/monitoring/prod/be/discord-webhook"
+    error_message = "Production services and ALB must use four independent encrypted webhook slots."
+  }
+  assert {
     condition     = length(aws_instance.telemetry) == 1 && length(aws_ebs_volume.telemetry) == 1 && length(aws_s3_bucket.telemetry) == 2
     error_message = "The independent root must plan one server, one persistent disk and separate log/trace buckets."
   }

@@ -1,0 +1,2296 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "stockspoon-prod-market-http",
+      "folder": "Stockspoon",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "stockspoon-prod-market-http-cpu",
+          "title": "운영 market-http cpu 85% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "CPUUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-market-http"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        85
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "market-http",
+            "severity": "warning",
+            "service_name": "market-http"
+          },
+          "annotations": {
+            "summary": "운영 market-http cpu 85% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-market-http-memory",
+          "title": "운영 market-http memory 90% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "MemoryUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-market-http"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        90
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "market-http",
+            "severity": "warning",
+            "service_name": "market-http"
+          },
+          "annotations": {
+            "summary": "운영 market-http memory 90% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-market-http-tasks",
+          "title": "운영 market-http 실행 Task 없음",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "ECS/ContainerInsights",
+                "metricName": "RunningTaskCount",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-market-http"
+                },
+                "statistic": "Maximum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "for": "2m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "market-http",
+            "severity": "warning",
+            "service_name": "market-http"
+          },
+          "annotations": {
+            "summary": "운영 market-http 실행 Task 없음",
+            "description": "실행 Task가 1개 미만이거나 최근 10분간 Task 수 지표가 수신되지 않는 경우입니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-market-http-logs",
+          "title": "운영 market-http 오류 로그 급증",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "loki",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=~\"market-http\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "queryType": "instant",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        20
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "severity": "warning",
+            "component": "market-http"
+          },
+          "annotations": {
+            "summary": "운영 market-http 오류 로그 급증",
+            "description": "최근 5분 error/exception/fatal 일치 로그가 20건을 초과한 상태가 5분 지속됩니다. HTTP 오류율이 아니며 같은 예외가 여러 줄로 집계될 수 있습니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-market-http-sse",
+          "title": "운영 market-http Task당 평균 SSE 400 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "StockSpoon/ECS",
+                "metricName": "ActiveSSEConnections",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-market-http"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        400
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "market-http",
+            "severity": "warning",
+            "service_name": "market-http"
+          },
+          "annotations": {
+            "summary": "운영 market-http Task당 평균 SSE 400 초과",
+            "description": "Task당 평균 연결 수의 용량 경고입니다. 전체 동시 연결 합계가 아니며 부하테스트 중에는 의도적으로 초과할 수 있습니다."
+          }
+        }
+      ]
+    },
+    {
+      "orgId": 1,
+      "name": "stockspoon-prod-be",
+      "folder": "Stockspoon",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "stockspoon-prod-backend-cpu",
+          "title": "운영 backend cpu 85% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "CPUUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-backend"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        85
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "be",
+            "severity": "warning",
+            "service_name": "backend"
+          },
+          "annotations": {
+            "summary": "운영 backend cpu 85% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-backend-memory",
+          "title": "운영 backend memory 90% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "MemoryUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-backend"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        90
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "be",
+            "severity": "warning",
+            "service_name": "backend"
+          },
+          "annotations": {
+            "summary": "운영 backend memory 90% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-backend-tasks",
+          "title": "운영 backend 실행 Task 없음",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "ECS/ContainerInsights",
+                "metricName": "RunningTaskCount",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-backend"
+                },
+                "statistic": "Maximum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "for": "2m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "be",
+            "severity": "warning",
+            "service_name": "backend"
+          },
+          "annotations": {
+            "summary": "운영 backend 실행 Task 없음",
+            "description": "실행 Task가 1개 미만이거나 최근 10분간 Task 수 지표가 수신되지 않는 경우입니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-backend-collector-cpu",
+          "title": "운영 backend-collector cpu 85% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "CPUUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-backend-collector"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        85
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "be",
+            "severity": "warning",
+            "service_name": "backend-collector"
+          },
+          "annotations": {
+            "summary": "운영 backend-collector cpu 85% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-backend-collector-memory",
+          "title": "운영 backend-collector memory 90% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "MemoryUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-backend-collector"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        90
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "be",
+            "severity": "warning",
+            "service_name": "backend-collector"
+          },
+          "annotations": {
+            "summary": "운영 backend-collector memory 90% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-backend-collector-tasks",
+          "title": "운영 backend-collector 실행 Task 없음",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "ECS/ContainerInsights",
+                "metricName": "RunningTaskCount",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-backend-collector"
+                },
+                "statistic": "Maximum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "for": "2m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "be",
+            "severity": "warning",
+            "service_name": "backend-collector"
+          },
+          "annotations": {
+            "summary": "운영 backend-collector 실행 Task 없음",
+            "description": "실행 Task가 1개 미만이거나 최근 10분간 Task 수 지표가 수신되지 않는 경우입니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-backend-logs",
+          "title": "운영 backend 오류 로그 급증",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "loki",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "queryType": "instant",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        20
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "severity": "warning",
+            "component": "be",
+            "service_name": "backend"
+          },
+          "annotations": {
+            "summary": "운영 backend 오류 로그 급증",
+            "description": "최근 5분 error/exception/fatal 일치 로그가 20건을 초과한 상태가 5분 지속됩니다. HTTP 오류율이 아니며 같은 예외가 여러 줄로 집계될 수 있습니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-backend-collector-logs",
+          "title": "운영 backend-collector 오류 로그 급증",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "loki",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend-collector\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "queryType": "instant",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        20
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "severity": "warning",
+            "component": "be",
+            "service_name": "backend-collector"
+          },
+          "annotations": {
+            "summary": "운영 backend-collector 오류 로그 급증",
+            "description": "최근 5분 error/exception/fatal 일치 로그가 20건을 초과한 상태가 5분 지속됩니다. HTTP 오류율이 아니며 같은 예외가 여러 줄로 집계될 수 있습니다."
+          }
+        }
+      ]
+    },
+    {
+      "orgId": 1,
+      "name": "stockspoon-prod-fe",
+      "folder": "Stockspoon",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "stockspoon-prod-frontend-cpu",
+          "title": "운영 frontend cpu 85% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "CPUUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-frontend"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        85
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "warning",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "운영 frontend cpu 85% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-frontend-memory",
+          "title": "운영 frontend memory 90% 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ECS",
+                "metricName": "MemoryUtilization",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-frontend"
+                },
+                "statistic": "Average",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        90
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "warning",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "운영 frontend memory 90% 초과",
+            "description": "기존 CloudWatch 지표를 조회합니다. 서비스 상태와 배포 상황을 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-frontend-tasks",
+          "title": "운영 frontend 실행 Task 없음",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "ECS/ContainerInsights",
+                "metricName": "RunningTaskCount",
+                "dimensions": {
+                  "ClusterName": "stockspoon-v2-prod-cluster",
+                  "ServiceName": "stockspoon-v2-prod-frontend"
+                },
+                "statistic": "Maximum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "for": "2m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "warning",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "운영 frontend 실행 Task 없음",
+            "description": "실행 Task가 1개 미만이거나 최근 10분간 Task 수 지표가 수신되지 않는 경우입니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-fe-logs",
+          "title": "운영 fe 오류 로그 급증",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "loki",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=~\"frontend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "queryType": "instant",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        20
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "severity": "warning",
+            "component": "fe"
+          },
+          "annotations": {
+            "summary": "운영 fe 오류 로그 급증",
+            "description": "최근 5분 error/exception/fatal 일치 로그가 20건을 초과한 상태가 5분 지속됩니다. HTTP 오류율이 아니며 같은 예외가 여러 줄로 집계될 수 있습니다."
+          }
+        }
+      ]
+    },
+    {
+      "orgId": 1,
+      "name": "stockspoon-prod-alb",
+      "folder": "Stockspoon",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "stockspoon-prod-alb-5xx",
+          "title": "운영 ALB 5xx 분당 5건 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "HTTPCode_ELB_5XX_Count",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc"
+                },
+                "statistic": "Sum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 1,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "expression": "FILL(SEARCH('{AWS/ApplicationELB,LoadBalancer} MetricName=\"HTTPCode_ELB_5XX_Count\" LoadBalancer=\"app/stockspoon-v1-alb/ebcc17bb6129bafc\"', 'Sum', 60), 0)"
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "alb",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "운영 ALB 5xx 분당 5건 초과",
+            "description": "공유 ALB 전체 지표입니다. HTTP 응답 지연은 SSE 이벤트 수신 간격과 다릅니다. 요청이 없는 구간은 정상 지연 0으로 보정하지 않습니다. 희소 오류 지표의 누락 구간은 0으로 채워 과거 오류가 계속 발생 중인 것처럼 평가하지 않습니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-alb-rejected",
+          "title": "운영 ALB 연결 거절 발생",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "RejectedConnectionCount",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc"
+                },
+                "statistic": "Sum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 1,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "expression": "FILL(SEARCH('{AWS/ApplicationELB,LoadBalancer} MetricName=\"RejectedConnectionCount\" LoadBalancer=\"app/stockspoon-v1-alb/ebcc17bb6129bafc\"', 'Sum', 60), 0)"
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "2m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "alb",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "운영 ALB 연결 거절 발생",
+            "description": "공유 ALB 전체 지표입니다. HTTP 응답 지연은 SSE 이벤트 수신 간격과 다릅니다. 요청이 없는 구간은 정상 지연 0으로 보정하지 않습니다. 희소 오류 지표의 누락 구간은 0으로 채워 과거 오류가 계속 발생 중인 것처럼 평가하지 않습니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-alb-tls",
+          "title": "운영 ALB TLS 오류 분당 5건 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "ClientTLSNegotiationErrorCount",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc"
+                },
+                "statistic": "Sum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 1,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "expression": "FILL(SEARCH('{AWS/ApplicationELB,LoadBalancer} MetricName=\"ClientTLSNegotiationErrorCount\" LoadBalancer=\"app/stockspoon-v1-alb/ebcc17bb6129bafc\"', 'Sum', 60), 0)"
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "alb",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "운영 ALB TLS 오류 분당 5건 초과",
+            "description": "공유 ALB 전체 지표입니다. HTTP 응답 지연은 SSE 이벤트 수신 간격과 다릅니다. 요청이 없는 구간은 정상 지연 0으로 보정하지 않습니다. 희소 오류 지표의 누락 구간은 0으로 채워 과거 오류가 계속 발생 중인 것처럼 평가하지 않습니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-alb-latency",
+          "title": "운영 ALB HTTP 응답 p95 2초 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 180,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "TargetResponseTime",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc"
+                },
+                "statistic": "p95",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        2
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "alb",
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "운영 ALB HTTP 응답 p95 2초 초과",
+            "description": "공유 ALB 전체 지표입니다. HTTP 응답 지연은 SSE 이벤트 수신 간격과 다릅니다. 요청이 없는 구간은 정상 지연 0으로 보정하지 않습니다. 최근 3분 내 마지막 관측값으로 평가하며 지표가 없으면 일시정상 처리합니다."
+          }
+        }
+      ]
+    }
+  ]
+}
