@@ -16,6 +16,8 @@ spec.loader.exec_module(alerting)
 URLS = {'prod': 'https://discord.com/api/webhooks/123/prod_token',
         'dev-app': 'https://discord.com/api/webhooks/456/app_token',
         'dev-ai': 'https://discord.com/api/webhooks/789/ai_token'}
+PROD_URLS = {component: 'https://discord.com/api/webhooks/' + str(900 + index) + '/prod_' + component
+             for index, component in enumerate(alerting.PROD_COMPONENTS)}
 
 
 class AlertingTest(unittest.TestCase):
@@ -27,7 +29,7 @@ class AlertingTest(unittest.TestCase):
             provisioning.mkdir(parents=True)
             for source in (ROOT / 'config/grafana/provisioning/alerting').glob('*rules.json'):
                 shutil.copy(source, provisioning)
-            with patch.object(alerting, 'STACK', root), patch.object(alerting, 'SECRET', root / 'prod'), patch.object(alerting, 'DEV_APP_SECRET', root / 'app'), patch.object(alerting, 'DEV_AI_SECRET', root / 'ai'):
+            with patch.object(alerting, 'STACK', root), patch.object(alerting, 'SECRET', root / 'prod'), patch.object(alerting, 'DEV_APP_SECRET', root / 'app'), patch.object(alerting, 'DEV_AI_SECRET', root / 'ai'), patch.object(alerting, 'PROD_SECRETS', {component: root / component for component in alerting.PROD_COMPONENTS}):
                 yield root, provisioning
 
     def rules(self, provisioning):
@@ -36,15 +38,15 @@ class AlertingTest(unittest.TestCase):
 
     def route(self, rule):
         labels = rule['labels']
-        return 'prod' if labels['environment'] == 'prod' else 'dev-' + labels['host_role']
+        return ('prod-' + labels['component'] if labels.get('component') else 'prod') if labels['environment'] == 'prod' else 'dev-' + labels['host_role']
 
     def test_each_rule_uses_only_its_own_receiver(self):
         with self.stack() as (_, provisioning):
             for _ in range(2):
-                alerting.render(provisioning, URLS['prod'], URLS['dev-app'], URLS['dev-ai'])
+                alerting.render(provisioning, URLS['prod'], URLS['dev-app'], URLS['dev-ai'], PROD_URLS)
                 rules = self.rules(provisioning)
-                self.assertEqual(len(rules), 18)
-                self.assertEqual(len({r['uid'] for r in rules}), 18)
+                self.assertEqual(len(rules), 39)
+                self.assertEqual(len({r['uid'] for r in rules}), 39)
                 for rule in rules:
                     self.assertFalse(rule['isPaused'])
                     self.assertEqual(rule['notification_settings']['receiver'], alerting.RECEIVERS[self.route(rule)])
@@ -92,7 +94,7 @@ class AlertingTest(unittest.TestCase):
     def test_aws_sync_on_fresh_server_reads_separate_parameters_without_leaks(self):
         with self.stack() as (root, provisioning):
             output = io.StringIO()
-            results = [SimpleNamespace(returncode=0, stdout=v) for v in URLS.values()]
+            results = [SimpleNamespace(returncode=0, stdout=v) for v in [*URLS.values(), *PROD_URLS.values()]]
             with patch('sys.argv', ['configure-alerting.py', '--sync-aws']), patch.object(alerting.subprocess, 'run', side_effect=results) as run, redirect_stdout(output):
                 alerting.main()
             for index, role in [(1, 'app'), (2, 'ai')]:
@@ -107,7 +109,7 @@ class AlertingTest(unittest.TestCase):
     def test_placeholder_pauses_only_its_server_and_clears_old_cache(self):
         with self.stack() as (root, provisioning):
             (root / 'ai').write_text(URLS['dev-ai'])
-            results = [SimpleNamespace(returncode=0, stdout=v) for v in [URLS['prod'], URLS['dev-app'], 'UNCONFIGURED']]
+            results = [SimpleNamespace(returncode=0, stdout=v) for v in [URLS['prod'], URLS['dev-app'], 'UNCONFIGURED', *PROD_URLS.values()]]
             with patch('sys.argv', ['configure-alerting.py', '--sync-aws']), patch.object(alerting.subprocess, 'run', side_effect=results), redirect_stdout(io.StringIO()):
                 alerting.main()
             self.assertEqual((root / 'ai').read_text().strip(), '')
@@ -158,6 +160,57 @@ class AlertingTest(unittest.TestCase):
                 self.assertLessEqual(len(rule['uid']), 40)
         for source, role in [('dev-agent/config.alloy', 'app'), ('ai-agent/config.alloy', 'ai')]:
             self.assertEqual((ROOT / source).read_text().count('host_role = "' + role + '"'), 2)
+
+    def test_each_production_webhook_enables_only_its_own_component(self):
+        for selected in alerting.PROD_COMPONENTS:
+            with self.subTest(component=selected), self.stack() as (_, provisioning):
+                alerting.render(provisioning, URLS['prod'], production_webhooks={selected: PROD_URLS[selected]})
+                for rule in self.rules(provisioning):
+                    route = self.route(rule)
+                    expected = route in ['prod', 'prod-' + selected]
+                    self.assertEqual(rule['isPaused'], not expected)
+                    if expected:
+                        self.assertEqual(rule['notification_settings']['receiver'], alerting.RECEIVERS[route])
+                    else:
+                        self.assertNotIn('notification_settings', rule)
+
+    def test_production_parameters_are_read_from_their_own_paths(self):
+        for component in alerting.PROD_COMPONENTS:
+            with self.subTest(component=component), patch.object(alerting.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='UNCONFIGURED')) as run:
+                self.assertIsNone(alerting.read_aws_webhook('prod-' + component))
+                self.assertIn(alerting.PROD_PARAMETERS[component], run.call_args.args[0])
+                self.assertIn('--with-decryption', run.call_args.args[0])
+
+    def test_backend_logs_notify_separately_in_the_same_be_channel(self):
+        with self.stack() as (_, provisioning):
+            alerting.render(provisioning, None, production_webhooks={'be': PROD_URLS['be']})
+            rules = [rule for rule in self.rules(provisioning)
+                     if rule['labels'].get('component') == 'be'
+                     and rule['data'][0]['datasourceUid'] == 'loki']
+            self.assertEqual(len(rules), 2)
+            self.assertEqual({r['labels']['service_name'] for r in rules}, {'backend', 'backend-collector'})
+            self.assertEqual(len({r['title'] for r in rules}), 2)
+            for rule in rules:
+                service = rule['labels']['service_name']
+                self.assertIn('service_name="' + service + '"', rule['data'][0]['model']['expr'])
+                self.assertIn(service, rule['annotations']['summary'])
+                self.assertFalse(rule['isPaused'])
+                self.assertEqual(rule['notification_settings']['receiver'], 'stockspoon-discord-prod-be')
+                self.assertIn('alertname', rule['notification_settings']['group_by'])
+
+    def test_shared_ai_errors_do_not_duplicate_service_log_notifications(self):
+        source = json.loads((ROOT / 'config/grafana/provisioning/alerting/rules.json').read_text())
+        for rule in source['groups'][0]['rules']:
+            if rule['data'][0]['datasourceUid'] == 'loki':
+                self.assertIn('host_role="ai"', rule['data'][0]['model']['expr'])
+        document = json.loads((ROOT / 'config/grafana/provisioning/alerting/prod-services-rules.json').read_text())
+        for group in document['groups']:
+            for rule in group['rules']:
+                self.assertLessEqual(len(rule['uid']), 40)
+                self.assertIn(rule['labels']['component'], alerting.PROD_COMPONENTS)
+                if rule['data'][0]['datasourceUid'] == 'cloudwatch':
+                    self.assertEqual(rule['data'][1]['model']['type'], 'reduce')
+                    self.assertEqual(rule['data'][2]['model']['expression'], 'B')
 
 
 if __name__ == '__main__':

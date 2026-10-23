@@ -34,7 +34,14 @@ class EnvironmentDashboardTest(unittest.TestCase):
                 for rule in group['rules']:
                     uids.append(rule['uid'])
                     environment = rule['labels']['environment']
-                    self.assertIn('environment="' + environment + '"', rule['data'][0]['model']['expr'])
+                    model = rule['data'][0]['model']
+                    if rule['data'][0]['datasourceUid'] == 'cloudwatch':
+                        self.assertEqual(environment, 'prod')
+                        dimensions = model['dimensions']
+                        self.assertTrue(dimensions.get('ClusterName') == 'stockspoon-v2-prod-cluster' or dimensions.get('LoadBalancer') == 'app/stockspoon-v1-alb/ebcc17bb6129bafc')
+                        self.assertFalse(any('$' in value for value in dimensions.values()))
+                    else:
+                        self.assertIn('environment="' + environment + '"', model['expr'])
         self.assertEqual(len(set(uids)), len(uids))
 
 
