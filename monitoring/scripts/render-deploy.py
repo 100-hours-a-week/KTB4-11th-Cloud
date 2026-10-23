@@ -157,6 +157,8 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
                 destination["otlp_http_endpoint"], service, "dev"
             ).encode()
     installer = "ai-agent" if target in ["dev-ai-agent", "prod-ai-agent"] else target
+    if target != "server":
+        files["system-logs.sh"] = (ROOT / "scripts" / "deploy" / "system-logs.sh").read_bytes()
     files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{installer}.sh").read_bytes()
     return files
 
