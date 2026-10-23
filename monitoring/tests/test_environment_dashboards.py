@@ -6,6 +6,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class EnvironmentDashboardTest(unittest.TestCase):
+    def test_development_logs_scope_services_and_panels_to_the_selected_stack(self):
+        dashboard = json.loads((ROOT / 'config/grafana/dashboards/dev/service-logs.json').read_text())
+        variables = dashboard['templating']['list']
+        self.assertEqual([v['name'] for v in variables], ['host_role', 'cluster', 'service'])
+        for variable in variables[1:]:
+            self.assertIn('host_role=~"$host_role"', variable['query'])
+        for panel in dashboard['panels']:
+            for target in panel['targets']:
+                self.assertIn('host_role=~"$host_role"', target['expr'])
+        from urllib.parse import parse_qs, urlsplit
+        shortcuts = {link['title']: parse_qs(urlsplit(link['url']).query)
+                     for link in dashboard['links'] if link['url'].startswith('/d/')}
+        for title, role in [('Backend', 'app'), ('Frontend', 'app'), ('Nginx', 'app'), ('Market HTTP', 'ai')]:
+            self.assertEqual(shortcuts[title]['var-host_role'], [role])
+            self.assertNotEqual(shortcuts[title]['var-service'], ['$__all'])
+
     def test_log_and_host_queries_are_fixed_to_the_folder_environment(self):
         for environment in ['dev', 'prod']:
             for name in ['overview', 'service-logs']:
