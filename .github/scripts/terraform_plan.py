@@ -26,7 +26,10 @@ BACKEND_CONFIGS = {
 VAR_FILES = {
     "messaging": "environments/dev/terraform.tfvars.example",
     "messaging@prod": "environments/prod/terraform.tfvars.example",
+    "redis": "environments/dev/terraform.tfvars.example",
     "redis@prod": "environments/prod/terraform.tfvars.example",
+    # S3에 배포된 중앙 모니터링 서버와 개발 연결을 CI에서도 유지한다.
+    "monitoring": "development.tfvars.example",
 }
 
 MESSAGING_ROOTS = {"messaging", "messaging@prod"}
@@ -35,6 +38,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 def run(root: str, *args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
     command = ["terraform", f"-chdir={root_dir(root)}", *args]
+    print(f"[{root}] terraform {' '.join(args)}", flush=True)
     result = subprocess.run(command, text=True, capture_output=capture, check=False)
     if result.returncode != 0:
         output = "\n".join(filter(None, [result.stdout, result.stderr]))

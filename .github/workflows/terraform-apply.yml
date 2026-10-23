@@ -1,142 +1,125 @@
-# name: Terraform Apply
+name: Terraform Apply
 
-# on:
-#   push:
-#     branches: [main]
-#     paths:
-#       - "app-server/**"
-#       - "storage/**"
-#       - "iam/**"
-#       - "shared-infra/**"
-#       - "test-infra/**"
-#       - "messaging/**"
-#       - "redis/**"
-#       - "ecr/**"
-#       - "ecs/**"
-#       - "monitoring/**"
-#       - "ai-server/infra/**"
-#       - "ai-server/dev-infra/**"
-#       - "ai-server/dashboard/**"
-#       - ".github/workflows/terraform-*.yml"
-#       - ".github/scripts/terraform_*.py"
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app-server/**"
+      - "storage/**"
+      - "iam/**"
+      - "shared-infra/**"
+      - "test-infra/**"
+      - "messaging/**"
+      - "redis/**"
+      - "ecr/**"
+      - "ecs/**"
+      - "monitoring/**"
+      - "ai-server/infra/**"
+      - "ai-server/dev-infra/**"
+      - "ai-server/dashboard/**"
+      - ".github/workflows/terraform-*.yml"
+      - ".github/scripts/terraform_*.py"
+      - "modules/**"
+      - "scripts/tests/test_terraform_*.py"
 
-# permissions:
-#   contents: read
+permissions:
+  contents: read
 
-# concurrency:
-#   group: terraform-apply-main
-#   cancel-in-progress: false
+env:
+  TF_IN_AUTOMATION: "true"
+  PYTHONUNBUFFERED: "1"
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
 
-# jobs:
-#   detect-roots:
-#     name: Detect affected Terraform roots
-#     runs-on: ubuntu-24.04
-#     outputs:
-#       matrix: ${{ steps.roots.outputs.matrix }}
-#       roots: ${{ steps.roots.outputs.roots }}
-#       has_roots: ${{ steps.roots.outputs.has_roots }}
-#     steps:
-#       - name: Check out main commit
-#         uses: actions/checkout@v7
-#         with:
-#           fetch-depth: 0
+concurrency:
+  group: terraform-apply-main
+  cancel-in-progress: false
 
-#       - name: Find affected roots and state consumers
-#         id: roots
-#         env:
-#           BEFORE_SHA: ${{ github.event.before }}
-#           CURRENT_SHA: ${{ github.sha }}
-#         run: |
-#           if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-#             git ls-files app-server storage iam shared-infra test-infra messaging redis ai-server > changed-paths.txt
-#           else
-#             git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA" > changed-paths.txt
-#           fi
-#           python3 .github/scripts/terraform_roots.py changed-paths.txt --all-if-affected >> "$GITHUB_OUTPUT"
+jobs:
+  apply:
+    name: Plan and apply affected Terraform roots
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Check out main commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-#   plan:
-#     name: Main plan ${{ matrix.root }}
-#     needs: detect-roots
-#     if: needs.detect-roots.outputs.has_roots == 'true'
-#     runs-on: ubuntu-24.04
-#     concurrency:
-#       group: terraform-main-plan-${{ matrix.root }}
-#       cancel-in-progress: false
-#     strategy:
-#       fail-fast: false
-#       matrix: ${{ fromJSON(needs.detect-roots.outputs.matrix) }}
-#     permissions:
-#       contents: read
-#       id-token: write
-#     steps:
-#       - name: Check out main commit
-#         uses: actions/checkout@v7
+      - name: Test Terraform workflow helpers
+        run: python3 -m unittest discover -s scripts/tests -p 'test_terraform_*.py' -v
 
-#       - name: Set up Terraform
-#         uses: hashicorp/setup-terraform@v4
-#         with:
-#           terraform_version: 1.16.2
-#           terraform_wrapper: false
+      - name: Compile Python helper scripts
+        run: python3 -m py_compile .github/scripts/terraform_*.py
 
-#       - name: Assume read-only Terraform plan role
-#         uses: aws-actions/configure-aws-credentials@v6
-#         with:
-#           role-to-assume: ${{ vars.AWS_TERRAFORM_PLAN_ROLE_ARN }}
-#           aws-region: ap-northeast-2
-#           role-session-name: TerraformMainPlan-${{ github.run_id }}
+      - name: Find last successful main deployment
+        id: last-apply
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...context.repo,
+              workflow_id: 'terraform-apply.yml',
+              branch: 'main',
+              event: 'push',
+              status: 'success',
+              per_page: 1,
+            });
+            core.setOutput('sha', data.workflow_runs[0]?.head_sha ?? '');
 
-#       - name: Create root plan summary
-#         env:
-#           ROOT: ${{ matrix.root }}
-#           TF_IN_AUTOMATION: "true"
-#         run: python3 .github/scripts/terraform_plan.py "$ROOT"
+      - name: Find affected roots and state consumers
+        id: roots
+        env:
+          LAST_APPLIED_SHA: ${{ steps.last-apply.outputs.sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          python3 .github/scripts/terraform_changes.py \
+            --base "$LAST_APPLIED_SHA" --head "$CURRENT_SHA"
+          python3 .github/scripts/terraform_roots.py changed-paths.txt >> "$GITHUB_OUTPUT"
 
-#   apply:
-#     name: Apply Terraform plans
-#     needs: [detect-roots, plan]
-#     if: needs.detect-roots.outputs.has_roots == 'true' && needs.plan.result == 'success'
-#     runs-on: ubuntu-24.04
-#     permissions:
-#       contents: read
-#       id-token: write
-#     steps:
-#       - name: Check out main commit
-#         uses: actions/checkout@v7
+      - name: Set up Terraform
+        if: steps.roots.outputs.has_roots == 'true'
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.2
+          terraform_wrapper: false
 
-#       - name: Set up Terraform
-#         uses: hashicorp/setup-terraform@v4
-#         with:
-#           terraform_version: 1.16.2
-#           terraform_wrapper: false
+      - name: Prepare Terraform provider cache
+        if: steps.roots.outputs.has_roots == 'true'
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
-#       - name: Assume protected Terraform apply role
-#         uses: aws-actions/configure-aws-credentials@v6
-#         with:
-#           role-to-assume: ${{ vars.AWS_TERRAFORM_APPLY_ROLE_ARN }}
-#           aws-region: ap-northeast-2
-#           role-session-name: TerraformApply-${{ github.run_id }}
+      - name: Assume protected Terraform apply role
+        if: steps.roots.outputs.has_roots == 'true'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+          role-session-name: TerraformApply-${{ github.run_id }}
 
-#       - name: Apply all roots in dependency order
-#         env:
-#           ROOTS_JSON: ${{ needs.detect-roots.outputs.roots }}
-#           TF_IN_AUTOMATION: "true"
-#         run: python3 .github/scripts/terraform_apply.py "$ROOTS_JSON"
+      - name: Apply affected roots in dependency order
+        if: steps.roots.outputs.has_roots == 'true'
+        env:
+          ROOTS_JSON: ${{ steps.roots.outputs.roots }}
+          TF_IN_AUTOMATION: "true"
+        run: python3 .github/scripts/terraform_apply.py "$ROOTS_JSON"
 
-#       - name: Verify ECS deployments
-#         if: contains(fromJSON(needs.detect-roots.outputs.roots), 'ecs')
-#         env:
-#           AWS_REGION: ap-northeast-2
-#         run: |
-#           cluster="$(terraform -chdir=ecs output -raw cluster_name)"
-#           backend="$(terraform -chdir=ecs output -raw backend_service_name)"
-#           market_http="$(terraform -chdir=ecs output -json market_http_service_name | jq -r '. // empty')"
+      - name: Verify ECS deployments
+        if: contains(fromJSON(steps.roots.outputs.roots || '[]'), 'ecs')
+        env:
+          AWS_REGION: ap-northeast-2
+        run: |
+          cluster="$(terraform -chdir=ecs output -raw cluster_name)"
+          backend="$(terraform -chdir=ecs output -raw backend_service_name)"
+          market_http="$(terraform -chdir=ecs output -json market_http_service_name | jq -r '. // empty')"
 
-#           services=("$backend")
-#           if [[ -n "$market_http" ]]; then
-#             services+=("$market_http")
-#           fi
+          services=("$backend")
+          if [[ -n "$market_http" ]]; then
+            services+=("$market_http")
+          fi
 
-#           python3 .github/scripts/terraform_verify_ecs_services.py \
-#             --region "$AWS_REGION" \
-#             --cluster "$cluster" \
-#             "${services[@]}"
+          python3 .github/scripts/terraform_verify_ecs_services.py \
+            --region "$AWS_REGION" \
+            --cluster "$cluster" \
+            "${services[@]}"

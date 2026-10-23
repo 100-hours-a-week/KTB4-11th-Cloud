@@ -78,8 +78,8 @@ jobs:
       - name: Test backend rollback controller
         run: python3 -m unittest discover -s ecs/tests -v
 
-      - name: Test Terraform root dependency selection
-        run: python3 -m unittest discover -s scripts/tests -p test_terraform_roots.py -v
+      - name: Test Terraform workflow helpers
+        run: python3 -m unittest discover -s scripts/tests -p 'test_terraform_*.py' -v
 
       - name: Test telemetry deployment payloads without AWS access
         run: python3 -m unittest discover -s monitoring/tests -p 'test_*.py' -v
@@ -89,7 +89,7 @@ jobs:
 
   plan:
     name: Plan ${{ matrix.root }}
-    needs: [detect-roots, validate]
+    needs: [detect-roots, validate, validate-workflow-scripts]
     if: >-
       needs.detect-roots.outputs.has_roots == 'true' &&
       needs.validate.result == 'success' &&
