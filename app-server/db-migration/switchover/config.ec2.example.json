@@ -1,0 +1,39 @@
+{
+  "schema": "stockspoon",
+  "source": {
+    "host": "10.0.1.246", "port": 3306, "user": "root",
+    "password_env": "SWITCH_V1_PASSWORD", "tls": true,
+    "server_host": "10.0.1.246", "server_port": 3306,
+    "server_id": 1, "uuid": "613cbc9f-ba4f-11f1-9bb7-1aa07765412a"
+  },
+  "target": {
+    "host": "10.0.1.217", "port": 3306, "user": "root",
+    "password_env": "SWITCH_TARGET_PASSWORD", "tls": true,
+    "server_host": "10.0.1.217", "server_port": 3306,
+    "server_id": 104, "uuid": "68916670-cbad-11f1-a331-1ef0c86dbde0"
+  },
+  "proxy_admin": {
+    "host": "127.0.0.1", "port": 16032, "user": "admin",
+    "password_env": "SWITCH_PROXY_ADMIN_PASSWORD"
+  },
+  "proxy_app": {
+    "host": "127.0.0.1", "port": 16033, "user": "stockspoon",
+    "password_env": "SWITCH_APP_PASSWORD"
+  },
+  "forward_replication": {
+    "user": "repl_seed_20261019", "password_env": "SWITCH_FORWARD_REPL_PASSWORD"
+  },
+  "reverse_replication": {
+    "user": "switchover_reverse", "password_env": "SWITCH_REVERSE_REPL_PASSWORD"
+  },
+  "query_timeout_seconds": 15,
+  "sync_timeout_seconds": 30,
+  "routing_timeout_seconds": 20,
+  "cutover_timeout_seconds": 180,
+  "aws": {
+    "region": "ap-northeast-2",
+    "cluster": "stockspoon-v2-prod-cluster",
+    "service": "stockspoon-v2-prod-proxysql-fargate",
+    "container": "proxysql"
+  }
+}
