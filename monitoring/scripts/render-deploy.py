@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 import gzip
+import lzma
 import io
 import ipaddress
 import json
@@ -111,7 +112,10 @@ def config_bytes(path: Path) -> bytes:
     return content
 
 
-def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False) -> dict[str, bytes]:
+def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict[str, bytes]:
+    if streamer_metrics_port is not None:
+        if target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= streamer_metrics_port <= 65535 or streamer_metrics_port in [9108, 12345]:
+            raise ValueError("Select an AI agent and a non-conflicting private streamer metrics port")
     if sse_prometheus and target not in ["server", "dev-ai-agent"]:
         raise ValueError("SSE Prometheus is available only for server and dev-ai-agent deployments")
     if target == "server":
@@ -161,6 +165,9 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
                  for name in ["compose.yaml", "config.alloy"]}
         if sse_prometheus:
             files["ai-agent/config.alloy"] += (ROOT / "ai-agent/market-metrics.alloy").read_bytes()
+        if streamer_metrics_port is not None:
+            fragment = (ROOT / "ai-agent/streamer-metrics.alloy").read_text()
+            files["ai-agent/config.alloy"] += fragment.replace("__STREAMER_METRICS_PORT__", str(streamer_metrics_port)).encode()
         services = AI_SERVICES + (["market-http"] if environment == "dev" else [])
         files["agent.env"] = (
             "LOKI_PUSH_URL=" + checked_endpoint(destination["loki_push_url"], 3100, "/loki/api/v1/push")
@@ -189,7 +196,7 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
     return files
 
 
-def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False) -> dict:
+def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict:
     output_name = "plg_tempo" if target == "server" else "development_telemetry"
     if target in ["dev-ai-agent", "prod-ai-agent"]:
         output_name = "ai_telemetry"
@@ -204,16 +211,21 @@ def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False) ->
         raise ValueError("Invalid target instance ID")
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as tar:
-        for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus).items(),
+        for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus, streamer_metrics_port=streamer_metrics_port).items(),
                                     key=lambda item: (item[0].endswith(".py"), len(item[1]), item[0])):
             info = tarfile.TarInfo(name)
             info.size, info.mode = len(content), 0o644
             tar.addfile(info, io.BytesIO(content))
     encoded = base64.b64encode(gzip.compress(archive.getvalue(), compresslevel=9, mtime=0)).decode()
+    unpack = "base64 -d | tar -xz"
+    if len(encoded) > 23000:
+        encoded = base64.b64encode(lzma.compress(archive.getvalue())).decode()
+        decoder = "import sys,lzma;sys.stdout.buffer.write(lzma.decompress(sys.stdin.buffer.read()))"
+        unpack = "base64 -d | python3 -c " + shlex.quote(decoder) + " | tar -x"
     command = "\n".join([
         "#!/bin/bash", "set -Eeuo pipefail", "umask 077",
         "work_dir=$(mktemp -d)", "trap 'rm -rf \"$work_dir\"' EXIT",
-        f"printf '%s' {shlex.quote(encoded)} | base64 -d | tar -xz -C \"$work_dir\"",
+        f"printf '%s' {shlex.quote(encoded)} | {unpack} -C \"$work_dir\"",
         'bash "$work_dir/install.sh"',
     ])
     if len(command.encode()) > 24000:
@@ -233,7 +245,10 @@ def main() -> None:
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--sse-prometheus", action="store_true", help="Opt in after AI metric endpoints are verified; only server/dev-ai-agent")
+    parser.add_argument("--streamer-metrics-port", type=int, help="Explicit loopback port after the AI streamer endpoint is verified; AI agents only")
     args = parser.parse_args()
+    if args.streamer_metrics_port is not None and (args.target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= args.streamer_metrics_port <= 65535 or args.streamer_metrics_port in [9108, 12345]):
+        parser.error("--streamer-metrics-port requires an AI agent and a non-conflicting port")
     if args.sse_prometheus and args.target not in ["server", "dev-ai-agent"]:
         parser.error("--sse-prometheus requires server or dev-ai-agent")
     if args.target in METRICS_TARGETS:
@@ -268,7 +283,7 @@ def main() -> None:
         print("Merge these keys into the existing MARKET_HTTP_ENV_JSON GitHub Variable; do not replace its other settings.")
         print("Requires the AI image containing PR #380; ECS application rollout is separate.")
     else:
-        payload = make_payload(args.target, outputs, sse_prometheus=args.sse_prometheus)
+        payload = make_payload(args.target, outputs, sse_prometheus=args.sse_prometheus, streamer_metrics_port=args.streamer_metrics_port)
         args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
         print(f"Prepared {args.target} payload for {payload['InstanceIds'][0]}: {args.output}")
     args.output.chmod(0o600)

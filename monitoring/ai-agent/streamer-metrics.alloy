@@ -1,0 +1,20 @@
+prometheus.scrape "streamer_metrics" {
+  targets = [{"__address__" = "127.0.0.1:__STREAMER_METRICS_PORT__", service_name = "market-streamer"}]
+  scrape_interval = "15s"
+  scrape_timeout = "5s"
+  metrics_path = "/metrics"
+  forward_to = [prometheus.relabel.streamer_metrics.receiver]
+}
+
+prometheus.relabel "streamer_metrics" {
+  forward_to = [prometheus.remote_write.server.receiver]
+  rule {
+    source_labels = ["__name__"]
+    regex = "market_streamer_market_events_received(_bytes)?_total|market_streamer_market_data_age_seconds|up"
+    action = "keep"
+  }
+  rule {
+    target_label = "job"
+    replacement = "market-streamer-metrics"
+  }
+}
