@@ -409,7 +409,7 @@
     {
       "id": 34,
       "title": "Valkey · 앱 연결 풀 상태",
-      "description": "앱 클라이언트 풀의 상태입니다. ElastiCache 서버 연결 수와 다르며 waiting 의미는 AI 계측 계약을 확인합니다.",
+      "description": "앱 클라이언트 풀의 in_use·available 연결 수와 acquiring(연결 획득을 진행 중인 요청 수)를 표시합니다. acquiring은 풀 내부 대기열 길이가 아니며 ElastiCache 서버 연결 수와도 구분합니다.",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -444,7 +444,20 @@
             "spanNulls": false
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "acquiring"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "acquiring · 연결 획득 중 요청"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
