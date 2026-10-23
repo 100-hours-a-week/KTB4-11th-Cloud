@@ -1,11 +1,11 @@
 # Offline contract checks: no AWS calls and no real state access.
 # Explicit values keep local *.auto.tfvars from changing test scenarios.
 variables {
-  plg_tempo_enabled     = false
-  dev_telemetry_enabled = false
+  plg_tempo_enabled         = false
+  dev_telemetry_enabled     = false
   dev_ai_telemetry_enabled  = false
   prod_ai_telemetry_enabled = false
-  grafana_domain_name   = ""
+  grafana_domain_name       = ""
 }
 
 override_data {
@@ -243,9 +243,9 @@ run "collect_existing_ai_hosts" {
     values          = { private_ip = "10.0.11.236" }
   }
   variables {
-    plg_tempo_enabled        = true
-    dev_telemetry_enabled    = true
-    dev_ai_telemetry_enabled = true
+    plg_tempo_enabled         = true
+    dev_telemetry_enabled     = true
+    dev_ai_telemetry_enabled  = true
     prod_ai_telemetry_enabled = true
   }
   assert {
