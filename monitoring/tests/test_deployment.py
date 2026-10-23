@@ -23,6 +23,16 @@ def outputs():
             "loki_bucket": "stockspoon-telemetry-loki", "tempo_bucket": "stockspoon-telemetry-tempo",
             "grafana_url": "https://monitoring.stock-spoon.com/",
         }},
+        "ai_telemetry": {"value": {
+            environment: {
+                "instance_id": instance, "environment": environment, "cluster": cluster,
+                "loki_push_url": "http://10.0.11.236:3100/loki/api/v1/push",
+                "prometheus_write_url": "http://10.0.11.236:9090/api/v1/write",
+            } for environment, instance, cluster in [
+                ("dev", "i-01111111111111111", "stockspoon-v2-dev"),
+                ("prod", "i-02222222222222222", "stockspoon-v1-ai"),
+            ]
+        }},
         "development_telemetry": {"value": {
             "instance_id": "i-0fedcba9876543210", "environment": "dev",
             "cluster": "stockspoon-v2-dev",
@@ -46,6 +56,31 @@ class DeploymentTest(unittest.TestCase):
             self.assertIn("OTEL_LOGS_EXPORTER=none", env)
         self.assertNotIn("dev-agent/docker-compose.yaml", files)
 
+    def test_ai_agents_use_distinct_targets_and_only_development_collects_market_http(self):
+        for environment in ["dev", "prod"]:
+            with self.subTest(environment=environment):
+                target = environment + "-ai-agent"
+                destination = outputs()["ai_telemetry"]["value"][environment]
+                files = deploy.deployment_files(target, destination)
+                payload = deploy.make_payload(target, outputs())
+                self.assertEqual(payload["InstanceIds"], [destination["instance_id"]])
+                env = files["agent.env"].decode()
+                self.assertIn("DEPLOYMENT_ENVIRONMENT=" + environment, env)
+                regex = next(line.split("=", 1)[1] for line in env.splitlines() if line.startswith("AI_SERVICE_REGEX="))
+                self.assertEqual("market-http" in regex.split("|"), environment == "dev")
+                self.assertFalse({"postgres", "questdb", "postgres-migrate", "questdb-migrate"} & set(regex.split("|")))
+                self.assertNotIn("backend.otel.env", files)
+                self.assertIn("/opt/stockspoon-ai-telemetry-agent", files["install.sh"].decode())
+                self.assertNotIn("/home/ubuntu/ai", files["install.sh"].decode())
+
+    def test_ai_agent_cannot_fall_back_to_another_environment(self):
+        state = outputs()
+        del state["ai_telemetry"]["value"]["dev"]
+        with self.assertRaises(ValueError):
+            deploy.make_payload("dev-ai-agent", state)
+        with self.assertRaises(ValueError):
+            deploy.deployment_files("prod-ai-agent", outputs()["ai_telemetry"]["value"]["dev"])
+
     def test_missing_development_state_cannot_fall_back_to_production(self):
         state = outputs()
         state["development_telemetry"]["value"] = None
@@ -68,7 +103,7 @@ class DeploymentTest(unittest.TestCase):
         self.assertFalse(any("password" in name or "tfstate" in name for name in files))
 
     def test_payload_is_bash_syntax_checked_and_under_ssm_limit(self):
-        for target in ["server", "dev-agent"]:
+        for target in ["server", "dev-agent", "dev-ai-agent", "prod-ai-agent"]:
             payload = deploy.make_payload(target, outputs())
             commands = payload["Parameters"]["commands"][0]
             self.assertLess(len(commands.encode()), 24000)

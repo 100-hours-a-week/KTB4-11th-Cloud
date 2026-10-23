@@ -18,6 +18,11 @@ from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
+AI_SERVICES = [
+    "news-http", "portfolio-rebalancer", "report-builder", "news-preprocessor",
+    "news-clusterer", "market-syncer", "news-graph-builder", "market-collector",
+    "market-streamer", "portfolio-builder",
+]
 
 
 def checked_endpoint(value: str, port: int, path: str = "") -> str:
@@ -69,6 +74,20 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
         if any(not re.fullmatch(r"[a-zA-Z0-9.:/_-]+", value) for value in values.values()):
             raise ValueError("Unexpected characters in the server environment")
         files["server.env"] = "".join(f"{key}={value}\n" for key, value in values.items()).encode()
+    elif target in ["dev-ai-agent", "prod-ai-agent"]:
+        environment = "dev" if target == "dev-ai-agent" else "prod"
+        expected_cluster = "stockspoon-v2-dev" if environment == "dev" else "stockspoon-v1-ai"
+        if destination.get("environment") != environment or destination.get("cluster") != expected_cluster:
+            raise ValueError("AI agent environment and target must match")
+        files = {"ai-agent/" + name: (ROOT / "ai-agent" / name).read_bytes()
+                 for name in ["compose.yaml", "config.alloy"]}
+        services = AI_SERVICES + (["market-http"] if environment == "dev" else [])
+        files["agent.env"] = (
+            "LOKI_PUSH_URL=" + checked_endpoint(destination["loki_push_url"], 3100, "/loki/api/v1/push")
+            + "\nPROMETHEUS_WRITE_URL=" + checked_endpoint(destination["prometheus_write_url"], 9090, "/api/v1/write")
+            + f"\nDEPLOYMENT_ENVIRONMENT={environment}\nTELEMETRY_CLUSTER={expected_cluster}\n"
+            + "AI_SERVICE_REGEX=" + "|".join(services) + "\n"
+        ).encode()
     else:
         if destination.get("environment") != "dev" or destination.get("cluster") != "stockspoon-v2-dev":
             raise ValueError("The development payload must target the development stack")
@@ -83,13 +102,19 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
             files[f"{service}.otel.env"] = otel_environment(
                 destination["otlp_http_endpoint"], service, "dev"
             ).encode()
-    files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{target}.sh").read_bytes()
+    installer = "ai-agent" if target in ["dev-ai-agent", "prod-ai-agent"] else target
+    files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{installer}.sh").read_bytes()
     return files
 
 
 def make_payload(target: str, outputs: dict) -> dict:
     output_name = "plg_tempo" if target == "server" else "development_telemetry"
-    destination = outputs.get(output_name, {}).get("value")
+    if target in ["dev-ai-agent", "prod-ai-agent"]:
+        output_name = "ai_telemetry"
+        environment = "dev" if target == "dev-ai-agent" else "prod"
+        destination = (outputs.get(output_name, {}).get("value") or {}).get(environment)
+    else:
+        destination = outputs.get(output_name, {}).get("value")
     if not destination:
         raise ValueError(f"Enable and apply {output_name} before preparing this deployment")
     instance_id = destination["instance_id"]
@@ -121,7 +146,7 @@ def make_payload(target: str, outputs: dict) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=["server", "dev-agent"])
+    parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent"])
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

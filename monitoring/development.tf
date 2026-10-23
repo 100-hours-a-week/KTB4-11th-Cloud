@@ -1,5 +1,5 @@
 variable "dev_telemetry_enabled" {
-  description = "Connect the dedicated test-infra development Compose host to central monitoring"
+  description = "Connect the development App EC2 and optionally its AI EC2 to central monitoring"
   type        = bool
   default     = false
 
@@ -69,8 +69,8 @@ data "aws_route_table" "telemetry" {
   subnet_id = data.aws_subnet.telemetry[0].id
 }
 
-# Only these two hosts need a path across the peering. Do not route entire
-# production/development CIDRs to each other or expose ingestion through ALB.
+# Keep host-specific routes across the peering. The AI host's return route
+# is managed separately in ai_agents.tf; no whole-VPC route is required.
 resource "aws_route" "development_to_telemetry" {
   count                     = var.dev_telemetry_enabled ? 1 : 0
   route_table_id            = data.aws_route_table.development[0].id

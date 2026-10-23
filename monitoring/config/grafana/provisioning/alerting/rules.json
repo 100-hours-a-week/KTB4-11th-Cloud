@@ -425,7 +425,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",service_name=~\"backend|backend-collector|market-http|frontend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",service_name=~\"backend|backend-collector|market-http|frontend|news-http|portfolio-rebalancer|report-builder|news-preprocessor|news-clusterer|market-syncer|news-graph-builder|market-collector|market-streamer|portfolio-builder\"} |~ \"(?i)error|exception|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
