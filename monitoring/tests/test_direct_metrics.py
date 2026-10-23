@@ -26,8 +26,8 @@ class DirectMetricsTest(unittest.TestCase):
                             else dict(line.split('=', 1) for line in output.read_text().splitlines()))
                 self.assertEqual(settings, {
                     'MARKET_HTTP_PROMETHEUS_ENABLED': 'true',
-                    'MARKET_HTTP_PROMETHEUS_HOST': '0.0.0.0',
-                    'MARKET_HTTP_PROMETHEUS_PORT': '9108',
+                    'MARKET_HTTP_PROMETHEUS_HOST': '0.0.0.0' if target.startswith('prod') else '127.0.0.1',
+                    'MARKET_HTTP_PROMETHEUS_PORT': '9101',
                 })
                 self.assertEqual(output.stat().st_mode & 0o777, 0o600)
 

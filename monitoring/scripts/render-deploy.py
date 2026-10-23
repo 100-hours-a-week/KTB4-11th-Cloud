@@ -97,11 +97,11 @@ def market_http_tracing_environment(outputs: dict) -> dict[str, str]:
     return settings
 
 
-def market_http_metrics_environment() -> dict[str, str]:
+def market_http_metrics_environment(*, development: bool = False) -> dict[str, str]:
     return {
         "MARKET_HTTP_PROMETHEUS_ENABLED": "true",
-        "MARKET_HTTP_PROMETHEUS_HOST": "0.0.0.0",
-        "MARKET_HTTP_PROMETHEUS_PORT": "9108",
+        "MARKET_HTTP_PROMETHEUS_HOST": "127.0.0.1" if development else "0.0.0.0",
+        "MARKET_HTTP_PROMETHEUS_PORT": "9101",
     }
 
 
@@ -114,7 +114,7 @@ def config_bytes(path: Path) -> bytes:
 
 def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict[str, bytes]:
     if streamer_metrics_port is not None:
-        if target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= streamer_metrics_port <= 65535 or streamer_metrics_port in [9108, 12345]:
+        if target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= streamer_metrics_port <= 65535 or streamer_metrics_port in [9101, 12345]:
             raise ValueError("Select an AI agent and a non-conflicting private streamer metrics port")
     if sse_prometheus and target not in ["server", "dev-ai-agent"]:
         raise ValueError("SSE Prometheus is available only for server and dev-ai-agent deployments")
@@ -245,14 +245,14 @@ def main() -> None:
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--sse-prometheus", action="store_true", help="Opt in after AI metric endpoints are verified; only server/dev-ai-agent")
-    parser.add_argument("--streamer-metrics-port", type=int, help="Explicit loopback port after the AI streamer endpoint is verified; AI agents only")
+    parser.add_argument("--streamer-metrics-port", type=int, help="Explicit loopback streamer port (contract: 9102); AI agents only")
     args = parser.parse_args()
-    if args.streamer_metrics_port is not None and (args.target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= args.streamer_metrics_port <= 65535 or args.streamer_metrics_port in [9108, 12345]):
+    if args.streamer_metrics_port is not None and (args.target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= args.streamer_metrics_port <= 65535 or args.streamer_metrics_port in [9101, 12345]):
         parser.error("--streamer-metrics-port requires an AI agent and a non-conflicting port")
     if args.sse_prometheus and args.target not in ["server", "dev-ai-agent"]:
         parser.error("--sse-prometheus requires server or dev-ai-agent")
     if args.target in METRICS_TARGETS:
-        settings = market_http_metrics_environment()
+        settings = market_http_metrics_environment(development=args.target == "dev-ai-metrics")
         content = (json.dumps(settings, indent=2) + "\n" if args.target.startswith("prod")
                    else "".join(f"{key}={value}\n" for key, value in settings.items()))
         args.output.write_text(content)

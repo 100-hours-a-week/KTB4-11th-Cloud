@@ -1,6 +1,6 @@
 // The development AI host publishes only its own private market-http listener.
 discovery.relabel "dev_market_metrics" {
-  targets = [{"__address__" = "127.0.0.1:9108", service_name = "market-http", environment = sys.env("DEPLOYMENT_ENVIRONMENT")}]
+  targets = [{"__address__" = "127.0.0.1:9101", service_name = "market-http", environment = sys.env("DEPLOYMENT_ENVIRONMENT")}]
   rule {
     source_labels = ["environment"]
     regex = "dev"
