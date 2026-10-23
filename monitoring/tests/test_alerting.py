@@ -203,6 +203,7 @@ class AlertingTest(unittest.TestCase):
         for rule in source['groups'][0]['rules']:
             if rule['data'][0]['datasourceUid'] == 'loki':
                 self.assertIn('host_role="ai"', rule['data'][0]['model']['expr'])
+                self.assertIn('service_name!="system"', rule['data'][0]['model']['expr'])
         document = json.loads((ROOT / 'config/grafana/provisioning/alerting/prod-services-rules.json').read_text())
         for group in document['groups']:
             for rule in group['rules']:
