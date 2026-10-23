@@ -89,7 +89,7 @@ jobs:
 
   plan:
     name: Plan ${{ matrix.root }}
-    needs: [detect-roots, validate]
+    needs: [detect-roots, validate, validate-workflow-scripts]
     if: >-
       needs.detect-roots.outputs.has_roots == 'true' &&
       needs.validate.result == 'success' &&
