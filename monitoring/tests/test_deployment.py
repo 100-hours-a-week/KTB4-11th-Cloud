@@ -102,6 +102,13 @@ class DeploymentTest(unittest.TestCase):
         self.assertNotIn("PASSWORD", files["server.env"].decode())
         self.assertFalse(any("password" in name or "tfstate" in name for name in files))
 
+    def test_json_transport_compaction_preserves_configuration_values(self):
+        files = deploy.deployment_files("server", outputs()["plg_tempo"]["value"])
+        for source in (ROOT / "config").rglob("*.json"):
+            if not source.name.endswith(".local.json"):
+                name = "config/" + source.relative_to(ROOT / "config").as_posix()
+                self.assertEqual(json.loads(source.read_bytes()), json.loads(files[name]))
+
     def test_payload_is_bash_syntax_checked_and_under_ssm_limit(self):
         for target in ["server", "dev-agent", "dev-ai-agent", "prod-ai-agent"]:
             payload = deploy.make_payload(target, outputs())
