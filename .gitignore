@@ -34,3 +34,6 @@ override.tf.json
 __pycache__/
 
 docs/
+
+test-infra/*
+!test-infra/sse-k6/
