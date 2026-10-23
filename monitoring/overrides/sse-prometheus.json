@@ -344,7 +344,7 @@
     {
       "id": 33,
       "title": "SSE · Valkey 수신→ASGI 전송 지연",
-      "description": "market-http 내부 처리 지연입니다. 원본 거래소→브라우저 지연이 아닙니다.",
+      "description": "Pub/Sub 수신부터 ASGI send 반환까지의 처리 지연입니다. 초기 스냅샷은 제외되며 원본 거래소→브라우저 지연이 아닙니다.",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -652,7 +652,7 @@
     {
       "id": 38,
       "title": "원본 시세 · 수신 바이트 / 초",
-      "description": "원본 시세 수신 페이로드 바이트입니다. AI EC2의 원본 수신 지표로 시세 Task 선택과 무관합니다.",
+      "description": "원본 entry를 compact UTF-8 JSON으로 직렬화한 크기입니다. 실제 소켓·네트워크 바이트와 다릅니다. AI EC2 지표로 시세 Task 선택과 무관합니다.",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",

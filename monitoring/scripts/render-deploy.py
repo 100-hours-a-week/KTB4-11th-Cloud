@@ -98,11 +98,14 @@ def market_http_tracing_environment(outputs: dict) -> dict[str, str]:
 
 
 def market_http_metrics_environment(*, development: bool = False) -> dict[str, str]:
-    return {
-        "MARKET_HTTP_PROMETHEUS_ENABLED": "true",
-        "MARKET_HTTP_PROMETHEUS_HOST": "127.0.0.1" if development else "0.0.0.0",
+    settings = {
+        "MARKET_HTTP_PROMETHEUS_BIND_HOST": "0.0.0.0",
         "MARKET_HTTP_PROMETHEUS_PORT": "9101",
     }
+    if development:
+        settings.update({"MARKET_STREAMER_PROMETHEUS_BIND_HOST": "0.0.0.0",
+                         "MARKET_STREAMER_PROMETHEUS_PORT": "9102"})
+    return settings
 
 
 def config_bytes(path: Path) -> bytes:
@@ -260,7 +263,9 @@ def main() -> None:
         variable = "MARKET_HTTP_ENV_JSON" if args.target.startswith("prod") else "DEV_AI_ENV"
         print(f"Prepared metrics fragment: {args.output}")
         print(f"Merge into existing {variable}; preserve CloudWatch metrics and other settings.")
-        print("Requires the AI image with the separate Prometheus listener; application rollout is separate.")
+        print("Requires the PR #393 image; application rollout is separate.")
+        if args.target == "dev-ai-metrics":
+            print("EC2 Docker bridge also requires compose.dev-ai-metrics.yaml loopback port mappings.")
         print("No AWS command was submitted. No Terraform apply was executed.")
         return
     if args.state_json:
