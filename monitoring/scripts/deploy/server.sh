@@ -23,7 +23,7 @@ find "$stack_dir/grafana" -type d -exec chmod a+rx {} +
 find "$stack_dir/grafana" -type f ! -name '*.local.json' -exec chmod a+r {} +
 chmod a+r "$stack_dir/"*.yaml
 install -m 0755 "$bundle_dir/configure-alerting.py" "$stack_dir/configure-alerting.py"
-python3 "$stack_dir/configure-alerting.py"
+python3 "$stack_dir/configure-alerting.py" --sync-aws
 docker compose config --quiet
 docker compose up -d
 # Directory mounts preserve updates, but provisioning changes load on startup.
