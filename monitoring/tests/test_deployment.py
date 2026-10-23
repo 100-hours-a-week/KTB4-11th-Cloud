@@ -60,7 +60,7 @@ class DeploymentTest(unittest.TestCase):
 
     def test_server_bundle_has_dashboards_but_no_runtime_secrets_or_data(self):
         files = deploy.deployment_files("server", outputs()["plg_tempo"]["value"])
-        self.assertIn("config/grafana/dashboards/overview.json", files)
+        self.assertIn("config/grafana/dashboards/prod/overview.json", files)
         self.assertIn("config/grafana/provisioning/dashboards/main.yaml", files)
         self.assertEqual([name for name in files if name.endswith(".env")], ["server.env"])
         self.assertIn("GRAFANA_COOKIE_SECURE=true", files["server.env"].decode())
