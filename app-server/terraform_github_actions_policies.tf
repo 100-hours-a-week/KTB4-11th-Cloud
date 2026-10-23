@@ -247,6 +247,17 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     ]
   }
 
+  # AI roots own SecureString parameters under separate environment prefixes.
+  statement {
+    sid     = "ReadAiSecretParameters"
+    effect  = "Allow"
+    actions = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
+    resources = [
+      for environment in ["dev", "prod"] :
+      "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/ai/${environment}/*"
+    ]
+  }
+
   # ListAliases does not support resource-level scoping; restrict it to Seoul.
   statement {
     sid       = "ListKmsAliasesInSeoul"
