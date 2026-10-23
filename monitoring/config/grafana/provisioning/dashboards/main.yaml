@@ -9,4 +9,14 @@ providers:
     updateIntervalSeconds: 30
     allowUiUpdates: false
     options:
-      path: /etc/grafana/dashboards
+      path: /etc/grafana/dashboards/prod
+  - name: stockspoon-dev
+    orgId: 1
+    folder: Stockspoon 개발
+    type: file
+    disableDeletion: false
+    editable: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards/dev

@@ -1,9 +1,10 @@
 {
   "uid": "stockspoon-overview",
-  "title": "Stockspoon 개발·운영 모니터링",
+  "title": "Stockspoon 운영 호스트 모니터링",
   "schemaVersion": 39,
   "version": 1,
   "tags": [
+    "prod",
     "stockspoon",
     "telemetry"
   ],
@@ -19,41 +20,12 @@
     {
       "title": "트레이스 조회 (Tempo)",
       "type": "link",
-      "url": "/explore?schemaVersion=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%20resource.deployment.environment.name%20%3D~%20%5C%22${environment:regex}%5C%22%20%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+      "url": "/explore?schemaVersion=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%20resource.deployment.environment.name%20%3D~%20%5C%22prod%5C%22%20%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
       "targetBlank": true
     }
   ],
   "templating": {
     "list": [
-      {
-        "name": "environment",
-        "label": "환경",
-        "type": "custom",
-        "query": "dev,prod",
-        "multi": true,
-        "includeAll": true,
-        "allValue": "dev|prod",
-        "options": [
-          {
-            "text": "dev",
-            "value": "dev",
-            "selected": false
-          },
-          {
-            "text": "prod",
-            "value": "prod",
-            "selected": true
-          }
-        ],
-        "current": {
-          "text": [
-            "prod"
-          ],
-          "value": [
-            "prod"
-          ]
-        }
-      },
       {
         "name": "cluster",
         "label": "클러스터",
@@ -62,8 +34,8 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "query": "label_values(node_uname_info{environment=~\"$environment\"}, cluster)",
-        "definition": "label_values(node_uname_info{environment=~\"$environment\"}, cluster)",
+        "query": "label_values(node_uname_info{environment=\"prod\"}, cluster)",
+        "definition": "label_values(node_uname_info{environment=\"prod\"}, cluster)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -87,8 +59,8 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "query": "label_values(node_uname_info{environment=~\"$environment\",cluster=~\"$cluster\"}, instance)",
-        "definition": "label_values(node_uname_info{environment=~\"$environment\",cluster=~\"$cluster\"}, instance)",
+        "query": "label_values(node_uname_info{environment=\"prod\",cluster=~\"$cluster\"}, instance)",
+        "definition": "label_values(node_uname_info{environment=\"prod\",cluster=~\"$cluster\"}, instance)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -112,8 +84,8 @@
           "type": "loki",
           "uid": "loki"
         },
-        "query": "label_values({environment=~\"$environment\",cluster=~\"$cluster\"}, service_name)",
-        "definition": "label_values({environment=~\"$environment\",cluster=~\"$cluster\"}, service_name)",
+        "query": "label_values({environment=\"prod\",cluster=~\"$cluster\"}, service_name)",
+        "definition": "label_values({environment=\"prod\",cluster=~\"$cluster\"}, service_name)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -167,7 +139,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(node_uname_info{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\"})",
+          "expr": "count(node_uname_info{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -223,7 +195,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(up{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\",job=\"integrations/unix\"})",
+          "expr": "sum(up{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\",job=\"integrations/unix\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -279,7 +251,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\" [$__range]))",
+          "expr": "sum(count_over_time({environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\" [$__range]))",
           "datasource": {
             "type": "loki",
             "uid": "loki"
@@ -336,7 +308,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\",mode=\"idle\"}[$__rate_interval])))",
+          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\",mode=\"idle\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -392,7 +364,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\"})",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -448,7 +420,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 * (1 - node_filesystem_avail_bytes{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/docker.*\"} / node_filesystem_size_bytes{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/docker.*\"})",
+          "expr": "100 * (1 - node_filesystem_avail_bytes{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/docker.*\"} / node_filesystem_size_bytes{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs|nsfs\",mountpoint!~\"/run.*|/var/lib/docker.*\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -504,7 +476,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(instance) (rate(node_network_receive_bytes_total{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\",device!~\"lo|docker.*|veth.*|br-.*\"}[$__rate_interval]))",
+          "expr": "sum by(instance) (rate(node_network_receive_bytes_total{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\",device!~\"lo|docker.*|veth.*|br-.*\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -513,7 +485,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by(instance) (rate(node_network_transmit_bytes_total{environment=~\"$environment\",cluster=~\"$cluster\",instance=~\"$instance\",device!~\"lo|docker.*|veth.*|br-.*\"}[$__rate_interval]))",
+          "expr": "sum by(instance) (rate(node_network_transmit_bytes_total{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\",device!~\"lo|docker.*|veth.*|br-.*\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -569,7 +541,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(service_name) (rate({environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"}[$__auto]))",
+          "expr": "sum by(service_name) (rate({environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"}[$__auto]))",
           "datasource": {
             "type": "loki",
             "uid": "loki"
@@ -626,7 +598,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"}",
+          "expr": "{environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"}",
           "datasource": {
             "type": "loki",
             "uid": "loki"

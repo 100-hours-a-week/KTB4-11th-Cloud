@@ -1,9 +1,10 @@
 {
   "uid": "stockspoon-service-logs",
-  "title": "Stockspoon 서비스 로그 분석",
+  "title": "Stockspoon 운영 서비스 로그 분석",
   "schemaVersion": 39,
   "version": 1,
   "tags": [
+    "prod",
     "stockspoon",
     "telemetry"
   ],
@@ -19,41 +20,12 @@
     {
       "title": "트레이스 조회 (Tempo)",
       "type": "link",
-      "url": "/explore?schemaVersion=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%20resource.deployment.environment.name%20%3D~%20%5C%22${environment:regex}%5C%22%20%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+      "url": "/explore?schemaVersion=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%20resource.deployment.environment.name%20%3D~%20%5C%22prod%5C%22%20%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
       "targetBlank": true
     }
   ],
   "templating": {
     "list": [
-      {
-        "name": "environment",
-        "label": "환경",
-        "type": "custom",
-        "query": "dev,prod",
-        "multi": true,
-        "includeAll": true,
-        "allValue": "dev|prod",
-        "options": [
-          {
-            "text": "dev",
-            "value": "dev",
-            "selected": false
-          },
-          {
-            "text": "prod",
-            "value": "prod",
-            "selected": true
-          }
-        ],
-        "current": {
-          "text": [
-            "prod"
-          ],
-          "value": [
-            "prod"
-          ]
-        }
-      },
       {
         "name": "cluster",
         "label": "클러스터",
@@ -62,8 +34,8 @@
           "type": "loki",
           "uid": "loki"
         },
-        "query": "label_values({environment=~\"$environment\"}, cluster)",
-        "definition": "label_values({environment=~\"$environment\"}, cluster)",
+        "query": "label_values({environment=\"prod\"}, cluster)",
+        "definition": "label_values({environment=\"prod\"}, cluster)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -87,8 +59,8 @@
           "type": "loki",
           "uid": "loki"
         },
-        "query": "label_values({environment=~\"$environment\",cluster=~\"$cluster\"}, service_name)",
-        "definition": "label_values({environment=~\"$environment\",cluster=~\"$cluster\"}, service_name)",
+        "query": "label_values({environment=\"prod\",cluster=~\"$cluster\"}, service_name)",
+        "definition": "label_values({environment=\"prod\",cluster=~\"$cluster\"}, service_name)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -124,7 +96,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(service_name) (rate({environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"}[$__auto]))",
+          "expr": "sum by(service_name) (rate({environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"}[$__auto]))",
           "queryType": "range",
           "legendFormat": "{{service_name}}"
         }
@@ -153,7 +125,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(service_name) (count_over_time({environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+          "expr": "sum by(service_name) (count_over_time({environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\" [5m]))",
           "queryType": "range",
           "legendFormat": "{{service_name}}"
         }
@@ -182,7 +154,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(service_name) (count_over_time({environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)warn\" [5m]))",
+          "expr": "sum by(service_name) (count_over_time({environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)warn\" [5m]))",
           "queryType": "range",
           "legendFormat": "{{service_name}}"
         }
@@ -211,7 +183,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\"",
+          "expr": "{environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\"",
           "queryType": "range",
           "legendFormat": "{{service_name}}"
         }
@@ -238,7 +210,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{environment=~\"$environment\",cluster=~\"$cluster\",service_name=~\"$service\"}",
+          "expr": "{environment=\"prod\",cluster=~\"$cluster\",service_name=~\"$service\"}",
           "queryType": "range",
           "legendFormat": "{{service_name}}"
         }
