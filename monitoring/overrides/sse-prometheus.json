@@ -19,7 +19,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(task_id,stream) (market_http_sse_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "expr": "sum by(task_id,stream) (market_http_sse_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
           "legendFormat": "{{task_id}} / {{stream}}",
           "range": true,
           "datasource": {
@@ -74,7 +74,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(market_http_sse_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "expr": "sum(market_http_sse_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
           "legendFormat": "전체 연결",
           "range": true,
           "datasource": {
@@ -129,7 +129,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "up{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",job=\"market-http-metrics\"}",
+          "expr": "up{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",job=\"market-http-metrics\",task_id=~\"${task:regex}\"}",
           "legendFormat": "Task {{task_id}}",
           "range": true,
           "datasource": {
@@ -184,7 +184,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(stream) (rate(market_http_sse_connections_started_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "expr": "sum by(stream) (rate(market_http_sse_connections_started_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
           "legendFormat": "{{stream}} 시작",
           "range": true,
           "datasource": {
@@ -194,7 +194,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum by(stream,reason) (rate(market_http_sse_connections_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "expr": "sum by(stream,reason) (rate(market_http_sse_connections_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
           "legendFormat": "{{stream}} 종료 / {{reason}}",
           "range": true,
           "datasource": {
@@ -249,7 +249,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(stream) (rate(market_http_sse_events_sent_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "expr": "sum by(stream) (rate(market_http_sse_events_sent_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
           "legendFormat": "{{stream}}",
           "range": true,
           "datasource": {
@@ -304,7 +304,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(stream) (rate(market_http_sse_events_sent_bytes_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "expr": "sum by(stream) (rate(market_http_sse_events_sent_bytes_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
           "legendFormat": "{{stream}}",
           "range": true,
           "datasource": {
@@ -359,7 +359,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
           "legendFormat": "{{stream}} p95",
           "range": true,
           "datasource": {
@@ -369,7 +369,7 @@
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
           "legendFormat": "{{stream}} p99",
           "range": true,
           "datasource": {
@@ -424,7 +424,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(state) (market_http_valkey_pool_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "expr": "sum by(state) (market_http_valkey_pool_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
           "legendFormat": "{{state}}",
           "range": true,
           "datasource": {
@@ -492,7 +492,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by(le,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
           "legendFormat": "{{result}} p95",
           "range": true,
           "datasource": {
@@ -502,7 +502,7 @@
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by(le,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
           "legendFormat": "{{result}} p99",
           "range": true,
           "datasource": {
@@ -557,7 +557,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(market_http_valkey_pool_acquire_timeouts_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "expr": "sum(rate(market_http_valkey_pool_acquire_timeouts_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
           "legendFormat": "타임아웃",
           "range": true,
           "datasource": {
@@ -597,7 +597,7 @@
     {
       "id": 37,
       "title": "원본 시세 · 수신 이벤트 / 초",
-      "description": "원본 이벤트 수입니다. SSE fan-out 전송 수와 일대일로 비교하지 않습니다.",
+      "description": "원본 이벤트 수입니다. SSE fan-out 전송 수와 일대일로 비교하지 않습니다. AI EC2의 원본 수신 지표로 시세 Task 선택과 무관합니다.",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -652,7 +652,7 @@
     {
       "id": 38,
       "title": "원본 시세 · 수신 바이트 / 초",
-      "description": "원본 시세 수신 페이로드 바이트입니다.",
+      "description": "원본 시세 수신 페이로드 바이트입니다. AI EC2의 원본 수신 지표로 시세 Task 선택과 무관합니다.",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -707,7 +707,7 @@
     {
       "id": 39,
       "title": "원본 시세 · 마지막 수신 후 경과 시간",
-      "description": "장 운영 시간과 구독 상태를 함께 확인합니다. 무수신 상태에서도 증가하는 Gauge가 필요합니다. 자동 장애 임계치는 아직 설정하지 않습니다.",
+      "description": "장 운영 시간과 구독 상태를 함께 확인합니다. 무수신 상태에서도 증가하는 Gauge가 필요합니다. 자동 장애 임계치는 아직 설정하지 않습니다. AI EC2의 원본 수신 지표로 시세 Task 선택과 무관합니다.",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -762,7 +762,7 @@
     {
       "id": 40,
       "title": "원본 시세 · 메트릭 수집 상태",
-      "description": "1은 수집 성공, 0은 실패이며 시계열 없음은 미설정·대상 소멸일 수 있습니다.",
+      "description": "1은 수집 성공, 0은 실패이며 시계열 없음은 미설정·대상 소멸일 수 있습니다. AI EC2의 원본 수신 지표로 시세 Task 선택과 무관합니다.",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",

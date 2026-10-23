@@ -212,7 +212,7 @@ def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, st
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as tar:
         for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus, streamer_metrics_port=streamer_metrics_port).items(),
-                                    key=lambda item: (item[0].endswith(".py"), len(item[1]), item[0])):
+                                    key=lambda item: (not item[0].endswith(".py"), len(item[1]), item[0])):
             info = tarfile.TarInfo(name)
             info.size, info.mode = len(content), 0o644
             tar.addfile(info, io.BytesIO(content))
