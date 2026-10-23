@@ -238,6 +238,8 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
       for name in [
         "dev/app",
         "dev/ai",
+        "dev/fe",
+        "dev/be",
         "prod/market-http",
         "prod/be",
         "prod/fe",

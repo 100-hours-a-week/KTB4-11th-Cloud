@@ -17,6 +17,10 @@ DEV_AI_SECRET = Path('/srv/stockspoon-telemetry/secrets/discord_dev_ai_webhook_u
 STACK = Path('/opt/stockspoon-telemetry')
 DEV_PARAMETERS = {role: '/stockspoon/monitoring/dev/' + role + '/discord-webhook' for role in ['app', 'ai']}
 RECEIVERS = {'prod': 'stockspoon-discord', 'dev-app': 'stockspoon-discord-dev-app', 'dev-ai': 'stockspoon-discord-dev-ai'}
+DEV_COMPONENTS = ('fe', 'be')
+DEV_PARAMETERS.update({component: '/stockspoon/monitoring/dev/' + component + '/discord-webhook' for component in DEV_COMPONENTS})
+DEV_SERVICE_SECRETS = {component: Path('/srv/stockspoon-telemetry/secrets/discord_dev_' + component + '_webhook_url') for component in DEV_COMPONENTS}
+RECEIVERS.update({'dev-' + component: 'stockspoon-discord-dev-' + component for component in DEV_COMPONENTS})
 
 PROD_COMPONENTS = ('market-http', 'be', 'fe', 'alb')
 PROD_PARAMETERS = {component: '/stockspoon/monitoring/prod/' + component + '/discord-webhook' for component in PROD_COMPONENTS}
@@ -33,12 +37,16 @@ def validate_webhooks(webhooks: dict[str, str | None]) -> None:
         raise ValueError('Each alert channel must use a different Discord webhook')
 
 
-def render(provisioning: Path, webhook: str | None, dev_app_webhook: str | None = None, dev_ai_webhook: str | None = None, production_webhooks: dict[str, str | None] | None = None) -> None:
+def render(provisioning: Path, webhook: str | None, dev_app_webhook: str | None = None, dev_ai_webhook: str | None = None, production_webhooks: dict[str, str | None] | None = None, development_webhooks: dict[str, str | None] | None = None) -> None:
     webhooks = {'prod': webhook, 'dev-app': dev_app_webhook, 'dev-ai': dev_ai_webhook}
     production_webhooks = production_webhooks or {}
     if set(production_webhooks) - set(PROD_COMPONENTS):
         raise ValueError('Unknown production component')
     webhooks.update({'prod-' + component: production_webhooks.get(component) for component in PROD_COMPONENTS})
+    development_webhooks = development_webhooks or {}
+    if set(development_webhooks) - set(DEV_COMPONENTS):
+        raise ValueError('Unknown development component')
+    webhooks.update({'dev-' + component: development_webhooks.get(component) for component in DEV_COMPONENTS})
     validate_webhooks(webhooks)
     documents = {}
     for rules_path in sorted(provisioning.glob('*rules.json')):
@@ -48,7 +56,11 @@ def render(provisioning: Path, webhook: str | None, dev_app_webhook: str | None 
                 environment = rule.get('labels', {}).get('environment')
                 route = environment
                 if environment == 'dev':
-                    route = 'dev-' + rule.get('labels', {}).get('host_role', '')
+                    labels = rule.get('labels', {})
+                    component = labels.get('component')
+                    if component and (labels.get('host_role') != 'app' or component not in [*DEV_COMPONENTS, 'nginx']):
+                        raise ValueError('Development service alerts must select an App FE/BE/Nginx component')
+                    route = 'dev-' + (component if component in DEV_COMPONENTS else labels.get('host_role', ''))
                 elif environment == 'prod' and rule.get('labels', {}).get('component'):
                     route = 'prod-' + rule['labels']['component']
                 if route not in RECEIVERS:
@@ -99,6 +111,8 @@ def read_aws_webhook(environment: str) -> str | None:
         capture_output=True, text=True,
     )
     if result.returncode:
+        if environment in ['dev-' + component for component in DEV_COMPONENTS] and 'ParameterNotFound' in getattr(result, 'stderr', ''):
+            return None
         raise SystemExit(f'Cannot read the {environment} Discord webhook from AWS; check the parameter/secret and instance IAM policy. No configuration changed.')
     value = result.stdout.strip()
     if environment != 'prod' and value == 'UNCONFIGURED':
@@ -128,15 +142,16 @@ def main() -> None:
     args = parser.parse_args()
     if args.existing_channel and (args.environment != 'prod' or args.component):
         parser.error('--existing-channel is production-only; configure a separate development webhook')
-    if args.environment == 'dev' and not args.sync_aws and args.host_role is None:
+    if args.environment == 'dev' and not args.sync_aws and args.host_role is None and not args.component:
         parser.error('Select --host-role app or ai for development configuration')
-    if args.component and args.environment != 'prod':
-        parser.error('--component is production-only')
+    if args.component and args.environment == 'dev' and (args.component not in DEV_COMPONENTS or args.host_role == 'ai'):
+        parser.error('Development --component must be fe or be on the App host')
     selected_route = 'prod' if args.environment == 'prod' else 'dev-' + (args.host_role or 'app')
-    if args.environment == 'prod' and args.component:
-        selected_route = 'prod-' + args.component
+    if args.component:
+        selected_route = args.environment + '-' + args.component
     secrets = {'prod': SECRET, 'dev-app': DEV_APP_SECRET, 'dev-ai': DEV_AI_SECRET}
     secrets.update({'prod-' + component: path for component, path in PROD_SECRETS.items()})
+    secrets.update({'dev-' + component: path for component, path in DEV_SERVICE_SECRETS.items()})
     webhooks = {environment: read_secret(path) for environment, path in secrets.items()}
     changed_environments = []
     if args.sync_aws:
@@ -153,7 +168,8 @@ def main() -> None:
         changed_environments = [selected_route]
     validate_webhooks(webhooks)
     render(STACK / 'grafana/provisioning/alerting', webhooks['prod'], webhooks['dev-app'], webhooks['dev-ai'],
-           {component: webhooks['prod-' + component] for component in PROD_COMPONENTS})
+           {component: webhooks['prod-' + component] for component in PROD_COMPONENTS},
+           {component: webhooks['dev-' + component] for component in DEV_COMPONENTS})
     for environment in changed_environments:
         save_secret(secrets[environment], webhooks[environment])
     for environment, value in webhooks.items():

@@ -14,6 +14,7 @@ services:
       - --storage.path=/var/lib/alloy
       - /etc/alloy/config.alloy
     environment:
+      SYSTEM_JOURNAL_PATH: ${SYSTEM_JOURNAL_PATH:?set SYSTEM_JOURNAL_PATH}
       TELEMETRY_HOST: ${TELEMETRY_HOST:?set TELEMETRY_HOST}
       DEPLOYMENT_ENVIRONMENT: dev
       TELEMETRY_CLUSTER: stockspoon-v2-dev

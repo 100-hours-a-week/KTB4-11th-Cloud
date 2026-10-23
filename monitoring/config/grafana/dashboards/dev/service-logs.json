@@ -18,6 +18,48 @@
   "refresh": "30s",
   "links": [
     {
+      "title": "App 전체",
+      "type": "link",
+      "url": "/d/stockspoon-dev-service-logs?var-host_role=app&var-cluster=%24__all&var-service=%24__all",
+      "keepTime": true,
+      "targetBlank": false
+    },
+    {
+      "title": "AI 전체",
+      "type": "link",
+      "url": "/d/stockspoon-dev-service-logs?var-host_role=ai&var-cluster=%24__all&var-service=%24__all",
+      "keepTime": true,
+      "targetBlank": false
+    },
+    {
+      "title": "Backend",
+      "type": "link",
+      "url": "/d/stockspoon-dev-service-logs?var-host_role=app&var-cluster=%24__all&var-service=backend",
+      "keepTime": true,
+      "targetBlank": false
+    },
+    {
+      "title": "Frontend",
+      "type": "link",
+      "url": "/d/stockspoon-dev-service-logs?var-host_role=app&var-cluster=%24__all&var-service=frontend",
+      "keepTime": true,
+      "targetBlank": false
+    },
+    {
+      "title": "Nginx",
+      "type": "link",
+      "url": "/d/stockspoon-dev-service-logs?var-host_role=app&var-cluster=%24__all&var-service=nginx",
+      "keepTime": true,
+      "targetBlank": false
+    },
+    {
+      "title": "Market HTTP",
+      "type": "link",
+      "url": "/d/stockspoon-dev-service-logs?var-host_role=ai&var-cluster=%24__all&var-service=market-http",
+      "keepTime": true,
+      "targetBlank": false
+    },
+    {
       "title": "트레이스 조회 (Tempo)",
       "type": "link",
       "url": "/explore?schemaVersion=1&panes=%7B%22traces%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%20resource.deployment.environment.name%20%3D~%20%5C%22dev%5C%22%20%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
@@ -27,6 +69,31 @@
   "templating": {
     "list": [
       {
+        "name": "host_role",
+        "label": "스택 (app: BE·FE·nginx / ai: AI·시세)",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "query": "label_values({environment=\"dev\"}, host_role)",
+        "definition": "label_values({environment=\"dev\"}, host_role)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "sort": 1,
+        "options": [],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
         "name": "cluster",
         "label": "클러스터",
         "type": "query",
@@ -34,8 +101,8 @@
           "type": "loki",
           "uid": "loki"
         },
-        "query": "label_values({environment=\"dev\"}, cluster)",
-        "definition": "label_values({environment=\"dev\"}, cluster)",
+        "query": "label_values({environment=\"dev\",host_role=~\"$host_role\"}, cluster)",
+        "definition": "label_values({environment=\"dev\",host_role=~\"$host_role\"}, cluster)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -59,8 +126,8 @@
           "type": "loki",
           "uid": "loki"
         },
-        "query": "label_values({environment=\"dev\",cluster=~\"$cluster\"}, service_name)",
-        "definition": "label_values({environment=\"dev\",cluster=~\"$cluster\"}, service_name)",
+        "query": "label_values({environment=\"dev\",host_role=~\"$host_role\",cluster=~\"$cluster\"}, service_name)",
+        "definition": "label_values({environment=\"dev\",host_role=~\"$host_role\",cluster=~\"$cluster\"}, service_name)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -96,9 +163,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(service_name) (rate({environment=\"dev\",cluster=~\"$cluster\",service_name=~\"$service\"}[$__auto]))",
+          "expr": "sum by(host_role,service_name) (rate({environment=\"dev\",host_role=~\"$host_role\",cluster=~\"$cluster\",service_name=~\"$service\"}[$__auto]))",
           "queryType": "range",
-          "legendFormat": "{{service_name}}"
+          "legendFormat": "{{host_role}} / {{service_name}}"
         }
       ],
       "options": {
@@ -125,9 +192,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(service_name) (count_over_time({environment=\"dev\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+          "expr": "sum by(host_role,service_name) (count_over_time({environment=\"dev\",host_role=~\"$host_role\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\" [5m]))",
           "queryType": "range",
-          "legendFormat": "{{service_name}}"
+          "legendFormat": "{{host_role}} / {{service_name}}"
         }
       ],
       "options": {
@@ -154,9 +221,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(service_name) (count_over_time({environment=\"dev\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)warn\" [5m]))",
+          "expr": "sum by(host_role,service_name) (count_over_time({environment=\"dev\",host_role=~\"$host_role\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)warn\" [5m]))",
           "queryType": "range",
-          "legendFormat": "{{service_name}}"
+          "legendFormat": "{{host_role}} / {{service_name}}"
         }
       ],
       "options": {
@@ -183,9 +250,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{environment=\"dev\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\"",
+          "expr": "{environment=\"dev\",host_role=~\"$host_role\",cluster=~\"$cluster\",service_name=~\"$service\"} |~ \"(?i)error|exception|fatal\"",
           "queryType": "range",
-          "legendFormat": "{{service_name}}"
+          "legendFormat": "{{host_role}} / {{service_name}}"
         }
       ],
       "options": {
@@ -210,9 +277,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{environment=\"dev\",cluster=~\"$cluster\",service_name=~\"$service\"}",
+          "expr": "{environment=\"dev\",host_role=~\"$host_role\",cluster=~\"$cluster\",service_name=~\"$service\"}",
           "queryType": "range",
-          "legendFormat": "{{service_name}}"
+          "legendFormat": "{{host_role}} / {{service_name}}"
         }
       ],
       "options": {
@@ -221,5 +288,5 @@
       }
     }
   ],
-  "description": "로그 기반 지표입니다. HTTP 요청 오류율이나 Task 자원 사용률을 나타내지 않습니다."
+  "description": "개발 App(BE·FE·nginx)과 AI(시세 포함) 스택을 선택한 뒤 서비스별 로그를 조회합니다. 로그 발생량이며 HTTP 요청 오류율이나 Task 자원 사용률을 나타내지 않습니다."
 }

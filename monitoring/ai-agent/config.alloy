@@ -37,6 +37,84 @@ loki.source.docker "apps" {
   forward_to = [loki.write.server.receiver]
 }
 
+// Host logs are separate from application stdout; database containers stay excluded.
+loki.relabel "journal_metadata" {
+  forward_to = []
+  rule {
+    source_labels = ["__journal__transport", "__journal__systemd_unit"]
+    regex = "kernel;.*|.*;(docker|containerd|ssh|sshd)\\.service"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__journal_priority"]
+    regex = "[0-6]"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label = "unit"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label = "level"
+  }
+  rule {
+    source_labels = ["__journal__transport"]
+    target_label = "transport"
+  }
+}
+
+loki.source.journal "system" {
+  path = sys.env("SYSTEM_JOURNAL_PATH")
+  // Only a short startup overlap; no historical CloudWatch import.
+  max_age = "1m"
+  relabel_rules = loki.relabel.journal_metadata.rules
+  labels = { source = "journal" }
+  forward_to = [loki.relabel.system.receiver]
+}
+
+loki.source.file "system_files" {
+  targets = [
+    { __path__ = "/host/var/log/cloud-init.log", source = "cloud-init" },
+    { __path__ = "/host/var/log/cloud-init-output.log", source = "cloud-init-output" },
+    { __path__ = "/host/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log", source = "cloudwatch-agent" },
+  ]
+  file_match {
+    enabled = true
+  }
+  tail_from_end = true
+  on_positions_file_error = "restart_from_end"
+  forward_to = [loki.relabel.system.receiver]
+}
+
+loki.relabel "system" {
+  forward_to = [loki.write.server.receiver]
+  rule {
+    target_label = "service_name"
+    replacement = "system"
+  }
+  rule {
+    target_label = "log_kind"
+    replacement = "system"
+  }
+  rule {
+    target_label = "environment"
+    replacement = sys.env("DEPLOYMENT_ENVIRONMENT")
+  }
+  rule {
+    target_label = "cluster"
+    replacement = sys.env("TELEMETRY_CLUSTER")
+  }
+  rule {
+    target_label = "host"
+    replacement = sys.env("TELEMETRY_HOST")
+  }
+  rule {
+    target_label = "host_role"
+    replacement = "ai"
+  }
+}
+
 loki.write "server" {
   endpoint {
     url = sys.env("LOKI_PUSH_URL")

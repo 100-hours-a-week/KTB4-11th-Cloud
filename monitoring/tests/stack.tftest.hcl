@@ -161,6 +161,10 @@ run "independent_server" {
     error_message = "Development Discord must have its own encrypted parameter, with only its name exposed as an output."
   }
   assert {
+    condition     = length(aws_ssm_parameter.development_discord_webhook) == 4 && output.development_discord_webhook_parameters.fe == "/stockspoon/monitoring/dev/fe/discord-webhook" && output.development_discord_webhook_parameters.be == "/stockspoon/monitoring/dev/be/discord-webhook"
+    error_message = "Development FE and BE must have separate encrypted slots without replacing App or AI."
+  }
+  assert {
     condition     = length(aws_ssm_parameter.production_discord_webhook) == 4 && output.production_discord_webhook_parameters.be == "/stockspoon/monitoring/prod/be/discord-webhook"
     error_message = "Production services and ALB must use four independent encrypted webhook slots."
   }

@@ -180,6 +180,20 @@ class DeploymentTest(unittest.TestCase):
             # The payload only writes its packaged configs; it contains no Terraform command.
             self.assertNotIn("terraform", commands)
 
+    def test_agents_package_the_system_log_preflight_but_server_does_not(self):
+        state = outputs()
+        for target, destination in [
+            ('dev-agent', state['development_telemetry']['value']),
+            ('dev-ai-agent', state['ai_telemetry']['value']['dev']),
+            ('prod-ai-agent', state['ai_telemetry']['value']['prod']),
+        ]:
+            with self.subTest(target=target):
+                files = deploy.deployment_files(target, destination)
+                self.assertEqual(files['system-logs.sh'], (ROOT / 'scripts/deploy/system-logs.sh').read_bytes())
+                installer = files['install.sh'].decode()
+                self.assertLess(installer.index('detect_system_journal'), installer.index('install -m'))
+        self.assertNotIn('system-logs.sh', deploy.deployment_files('server', state['plg_tempo']['value']))
+
     def test_cli_only_renders_a_payload_without_submitting_commands(self):
         with tempfile.TemporaryDirectory() as directory:
             source, destination = Path(directory) / "state.json", Path(directory) / "payload.json"

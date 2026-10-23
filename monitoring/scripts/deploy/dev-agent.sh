@@ -6,12 +6,14 @@ bundle_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 agent_dir=/opt/stockspoon-telemetry-agent
 docker info >/dev/null
 docker compose version >/dev/null
+source "$bundle_dir/system-logs.sh"
+system_journal_path=$(detect_system_journal)
 install -d -m 0755 "$agent_dir"
 install -d -m 0750 /var/lib/stockspoon-v2-dev-alloy
 install -m 0644 "$bundle_dir/dev-agent/compose.yaml" "$agent_dir/compose.yaml"
 install -m 0644 "$bundle_dir/dev-agent/config.alloy" "$agent_dir/config.alloy"
 install -m 0644 "$bundle_dir/agent.env" "$agent_dir/.env"
-printf 'TELEMETRY_HOST=%s\n' "$(hostname)" >> "$agent_dir/.env"
+printf 'TELEMETRY_HOST=%s\nSYSTEM_JOURNAL_PATH=%s\n' "$(hostname)" "$system_journal_path" >> "$agent_dir/.env"
 for service in backend frontend; do
   install -m 0644 "$bundle_dir/$service.otel.env" "$agent_dir/$service.otel.env"
 done

@@ -6,15 +6,15 @@
   "editable": false,
   "tags": [
     "stockspoon",
-    "aws",
-    "prod"
+    "prod",
+    "prometheus"
   ],
   "timezone": "browser",
   "time": {
     "from": "now-30m",
     "to": "now"
   },
-  "refresh": "",
+  "refresh": "30s",
   "graphTooltip": 1,
   "links": [
     {
@@ -67,12 +67,12 @@
   "panels": [
     {
       "id": 1,
-      "title": "Task별 CPU 사용률",
-      "description": "동일 Task의 CpuUtilized / CpuReserved × 100",
+      "title": "Task별 CPU 사용 코어",
+      "description": "1은 CPU 코어 1개 사용량입니다. Task 예약 CPU 대비 백분율이 아닙니다.",
       "type": "timeseries",
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "gridPos": {
         "x": 0,
@@ -83,31 +83,18 @@
       "targets": [
         {
           "refId": "A",
-          "id": "a",
+          "expr": "sum by(task_id,service_name) (rate(container_cpu_usage_seconds_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=~\"${service:regex}\",task_id!=\"\"}[2m]))",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
           "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "queryMode": "Logs",
-          "logsMode": "LogsInsights",
-          "queryLanguage": "CWLI",
-          "region": "ap-northeast-2",
-          "expression": "filter Type = \"Task\" and ServiceName = \"${service}\" and CpuReserved > 0 | stats avg(100 * CpuUtilized / CpuReserved) as CPUPercent by bin(1m), TaskId",
-          "statsGroups": [
-            "TaskId"
-          ],
-          "logGroups": [
-            {
-              "name": "/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
-              "arn": "arn:aws:logs:ap-northeast-2:250832562715:log-group:/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
-              "accountId": "250832562715"
-            }
-          ]
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "suffix:cores",
           "decimals": 2,
           "color": {
             "mode": "palette-classic"
@@ -135,12 +122,12 @@
     },
     {
       "id": 2,
-      "title": "Task별 메모리 사용률",
-      "description": "동일 Task의 MemoryUtilized / MemoryReserved × 100",
+      "title": "Task별 메모리 Working Set",
+      "description": "캐시 중 비활성 페이지를 제외한 앱 컨테이너 Working Set의 Task별 합계입니다.",
       "type": "timeseries",
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "gridPos": {
         "x": 12,
@@ -151,31 +138,18 @@
       "targets": [
         {
           "refId": "A",
-          "id": "a",
+          "expr": "sum by(task_id,service_name) (container_memory_working_set_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=~\"${service:regex}\",task_id!=\"\"}) / 1024 / 1024",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
           "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "queryMode": "Logs",
-          "logsMode": "LogsInsights",
-          "queryLanguage": "CWLI",
-          "region": "ap-northeast-2",
-          "expression": "filter Type = \"Task\" and ServiceName = \"${service}\" and MemoryReserved > 0 | stats avg(100 * MemoryUtilized / MemoryReserved) as MemoryPercent by bin(1m), TaskId",
-          "statsGroups": [
-            "TaskId"
-          ],
-          "logGroups": [
-            {
-              "name": "/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
-              "arn": "arn:aws:logs:ap-northeast-2:250832562715:log-group:/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
-              "accountId": "250832562715"
-            }
-          ]
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "mbytes",
           "decimals": 2,
           "color": {
             "mode": "palette-classic"
@@ -203,12 +177,12 @@
     },
     {
       "id": 3,
-      "title": "Task별 자원 사용·예약량",
-      "description": "현재 조회 기간의 평균·최대와 마지막 관측값입니다. 실행 중인 Task 목록은 아닙니다.",
-      "type": "table",
+      "title": "Task별 메모리 RSS",
+      "description": "앱 컨테이너 RSS의 Task별 합계입니다. Task 예약 메모리·한도와 구분합니다.",
+      "type": "timeseries",
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "gridPos": {
         "x": 0,
@@ -219,29 +193,18 @@
       "targets": [
         {
           "refId": "A",
-          "id": "a",
+          "expr": "sum by(task_id,service_name) (container_memory_rss{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=~\"${service:regex}\",task_id!=\"\"}) / 1024 / 1024",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
           "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "queryMode": "Logs",
-          "logsMode": "LogsInsights",
-          "queryLanguage": "CWLI",
-          "region": "ap-northeast-2",
-          "expression": "filter Type = \"Task\" and ServiceName = \"${service}\" | stats avg(MemoryUtilized) as MemoryUsedMB, max(MemoryUtilized) as MemoryPeakMB, latest(MemoryReserved) as MemoryReservedMB, avg(CpuUtilized) as CPUUsedUnits, latest(CpuReserved) as CPUReservedUnits, latest(@timestamp) as LastSeen by TaskId | sort MemoryPeakMB desc | limit 100",
-          "statsGroups": [],
-          "logGroups": [
-            {
-              "name": "/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
-              "arn": "arn:aws:logs:ap-northeast-2:250832562715:log-group:/aws/ecs/containerinsights/stockspoon-v2-prod-cluster/performance",
-              "accountId": "250832562715"
-            }
-          ]
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "mbytes",
           "decimals": 2,
           "color": {
             "mode": "palette-classic"
@@ -253,10 +216,20 @@
         "overrides": []
       },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     }
   ],
-  "description": "기존 Container Insights 성능 로그를 Logs Insights로 조회합니다. 로그 스캔 요금이 발생할 수 있어 자동 새로고침은 꺼져 있습니다. 조회 기간에 실행된 Task가 포함되며 종료한 Task도 표시됩니다."
+  "description": "Alloy/cAdvisor가 직접 수집한 앱 컨테이너 CPU·메모리를 ECS Task별로 합산합니다. DB·ProxySQL·pause·수집기 컨테이너는 제외합니다. CPU는 사용 코어 수이며 Task 예약량 대비 백분율이 아닙니다."
 }

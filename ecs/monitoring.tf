@@ -112,6 +112,15 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     host_path = "/"
   }
   volume {
+    name      = "host-sys"
+    host_path = "/sys"
+  }
+  volume {
+    name      = "docker-data"
+    host_path = "/var/lib/docker"
+  }
+
+  volume {
     name      = "alloy-data"
     host_path = "/var/lib/stockspoon-v2-alloy"
   }
@@ -124,6 +133,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     memoryReservation = 256
     memory            = 512
     user              = "0:0"
+    privileged        = true
     entryPoint        = ["/bin/sh", "-ec"]
     command = [join(" ", [
       "printf '%s' \"$ALLOY_CONFIG\" > /tmp/config.alloy;",
@@ -133,6 +143,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     environment = [
       { name = "ALLOY_CONFIG", value = file("${path.module}/alloy/config.alloy") },
       { name = "ECS_CLUSTER", value = aws_ecs_cluster.main.name },
+      { name = "SSE_PROMETHEUS_ENABLED", value = tostring(var.telemetry_sse_prometheus_enabled) },
       { name = "DEPLOYMENT_ENVIRONMENT", value = "prod" },
       { name = "TASK_FAMILY_REGEX", value = "${var.name_prefix}-(backend|backend-collector|market-http|frontend)" },
       { name = "LOKI_PUSH_URL", value = local.telemetry_server.loki_push_url },
@@ -141,6 +152,9 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     mountPoints = [
       { sourceVolume = "docker-socket", containerPath = "/var/run/docker.sock", readOnly = true },
       { sourceVolume = "host-root", containerPath = "/host", readOnly = true },
+      { sourceVolume = "host-root", containerPath = "/rootfs", readOnly = true },
+      { sourceVolume = "host-sys", containerPath = "/sys", readOnly = true },
+      { sourceVolume = "docker-data", containerPath = "/var/lib/docker", readOnly = true },
       { sourceVolume = "alloy-data", containerPath = "/var/lib/alloy", readOnly = false },
     ]
     logConfiguration = {
