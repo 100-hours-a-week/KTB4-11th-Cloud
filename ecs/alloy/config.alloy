@@ -142,6 +142,15 @@ prometheus.relabel "task_resources" {
 discovery.relabel "market_metrics" {
   targets = discovery.relabel.apps.output
   rule {
+    target_label = "__tmp_sse_enabled"
+    replacement = sys.env("SSE_PROMETHEUS_ENABLED")
+  }
+  rule {
+    source_labels = ["__tmp_sse_enabled"]
+    regex = "true"
+    action = "keep"
+  }
+  rule {
     source_labels = ["service_name"]
     regex = "market-http"
     action = "keep"

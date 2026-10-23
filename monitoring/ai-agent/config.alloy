@@ -157,34 +157,3 @@ prometheus.remote_write "server" {
     url = sys.env("PROMETHEUS_WRITE_URL")
   }
 }
-
-// The development AI host publishes only its own private market-http listener.
-discovery.relabel "dev_market_metrics" {
-  targets = [{"__address__" = "127.0.0.1:9108", service_name = "market-http", environment = sys.env("DEPLOYMENT_ENVIRONMENT")}]
-  rule {
-    source_labels = ["environment"]
-    regex = "dev"
-    action = "keep"
-  }
-}
-
-prometheus.scrape "market_metrics" {
-  targets = discovery.relabel.dev_market_metrics.output
-  scrape_interval = "15s"
-  scrape_timeout = "5s"
-  metrics_path = "/metrics"
-  forward_to = [prometheus.relabel.market_metrics.receiver]
-}
-
-prometheus.relabel "market_metrics" {
-  forward_to = [prometheus.remote_write.server.receiver]
-  rule {
-    source_labels = ["__name__"]
-    regex = "market_http_sse_active_connections|up"
-    action = "keep"
-  }
-  rule {
-    target_label = "job"
-    replacement = "market-http-metrics"
-  }
-}

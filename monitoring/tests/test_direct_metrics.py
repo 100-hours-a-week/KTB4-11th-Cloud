@@ -43,7 +43,16 @@ class DirectMetricsTest(unittest.TestCase):
                 self.assertIn('ecs_service=~"${service:regex}"', target['expr'])
 
     def test_only_sse_panels_switch_sources_in_the_mixed_ecs_dashboard(self):
-        dashboard = json.loads((ROOT / 'config/grafana/dashboards/prod/ecs-sse.json').read_text())
+        destination = {
+            'private_ip': '10.0.11.236', 'compose_project_name': 'test',
+            'aws_region': 'ap-northeast-2', 'loki_bucket': 'test-loki', 'tempo_bucket': 'test-tempo',
+        }
+        default = deploy.deployment_files('server', destination)
+        name = 'config/grafana/dashboards/prod/ecs-sse.json'
+        self.assertTrue(all(p['datasource']['uid'] == 'cloudwatch'
+                            for p in json.loads(default[name])['panels']))
+        files = deploy.deployment_files('server', destination, sse_prometheus=True)
+        dashboard = json.loads(files[name])
         ids = set()
         for panel in dashboard['panels']:
             self.assertNotIn(panel['id'], ids)
@@ -51,6 +60,20 @@ class DirectMetricsTest(unittest.TestCase):
             self.assertEqual(panel['datasource']['uid'],
                              'prometheus' if panel['id'] in [1, 7, 8] else 'cloudwatch')
         self.assertEqual(ids, set(range(1, 9)))
+
+    def test_ai_scraping_stays_off_until_explicitly_requested(self):
+        destination = {
+            'environment': 'dev', 'cluster': 'stockspoon-v2-dev',
+            'loki_push_url': 'http://10.0.11.236:3100/loki/api/v1/push',
+            'prometheus_write_url': 'http://10.0.11.236:9090/api/v1/write',
+        }
+        name = 'ai-agent/config.alloy'
+        default = deploy.deployment_files('dev-ai-agent', destination)[name]
+        enabled = deploy.deployment_files('dev-ai-agent', destination, sse_prometheus=True)[name]
+        self.assertNotIn(b'prometheus.scrape "market_metrics"', default)
+        self.assertIn(b'prometheus.scrape "market_metrics"', enabled)
+        with self.assertRaises(ValueError):
+            deploy.deployment_files('prod-ai-agent', destination, sse_prometheus=True)
 
     def test_cloudwatch_scaling_and_alarm_sources_remain_present(self):
         scaling = (ROOT.parent / 'ecs/service_scaling.tf').read_text()

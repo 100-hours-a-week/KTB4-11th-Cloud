@@ -143,6 +143,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     environment = [
       { name = "ALLOY_CONFIG", value = file("${path.module}/alloy/config.alloy") },
       { name = "ECS_CLUSTER", value = aws_ecs_cluster.main.name },
+      { name = "SSE_PROMETHEUS_ENABLED", value = tostring(var.telemetry_sse_prometheus_enabled) },
       { name = "DEPLOYMENT_ENVIRONMENT", value = "prod" },
       { name = "TASK_FAMILY_REGEX", value = "${var.name_prefix}-(backend|backend-collector|market-http|frontend)" },
       { name = "LOKI_PUSH_URL", value = local.telemetry_server.loki_push_url },

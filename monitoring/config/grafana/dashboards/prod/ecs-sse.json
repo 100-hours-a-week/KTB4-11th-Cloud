@@ -68,11 +68,11 @@
     {
       "id": 1,
       "title": "market-http · Task당 SSE 연결 수",
-      "description": "각 market-http 프로세스가 별도 메트릭 포트로 노출한 현재 연결 수를 15초마다 수집합니다. 단일 프로세스 실행 기준이며 서비스 선택과 무관합니다.",
+      "description": "각 Task가 약 60초마다 발행한 연결 수의 평균·최대입니다. Sum은 시간별 표본도 합산하므로 전체 동시 연결 수로 사용하지 않습니다. 서비스 선택과 무관하게 market-http를 표시합니다.",
       "type": "timeseries",
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
       },
       "gridPos": {
         "x": 0,
@@ -83,19 +83,55 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(task_id) (market_http_sse_active_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
-          "legendFormat": "Task {{task_id}}",
-          "range": true,
+          "id": "a",
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "StockSpoon/ECS",
+          "metricName": "ActiveSSEConnections",
+          "statistic": "Average",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-market-http"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Task 평균",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "StockSpoon/ECS",
+          "metricName": "ActiveSSEConnections",
+          "statistic": "Maximum",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-market-http"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "기간 내 Task 최대",
+          "hide": false
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "decimals": 0,
+          "decimals": 2,
           "color": {
             "mode": "palette-classic"
           },
@@ -131,7 +167,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 0,
         "w": 12,
         "h": 8
       },
@@ -222,7 +258,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 8,
         "w": 12,
         "h": 8
       },
@@ -313,7 +349,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 16,
+        "y": 8,
         "w": 12,
         "h": 8
       },
@@ -427,7 +463,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 16,
         "w": 12,
         "h": 8
       },
@@ -518,7 +554,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 24,
+        "y": 16,
         "w": 12,
         "h": 8
       },
@@ -597,117 +633,7 @@
           "sort": "desc"
         }
       }
-    },
-    {
-      "id": 7,
-      "title": "market-http · 전체 SSE 연결 수",
-      "description": "현재 수집되는 market-http Task 연결 수의 합계입니다. 모든 Task의 메트릭 수집이 정상인지 함께 확인해야 합니다.",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(market_http_sse_active_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
-          "legendFormat": "전체 연결",
-          "range": true,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 8,
-      "title": "market-http · 메트릭 수집 상태",
-      "description": "Task별 1은 메트릭 HTTP 수집 성공, 0은 실패입니다. 시계열이 없으면 대상 발견 또는 수집기 배포 여부를 확인합니다.",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "up{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",job=\"market-http-metrics\"}",
-          "legendFormat": "Task {{task_id}}",
-          "range": true,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
     }
   ],
-  "description": "SSE 패널은 Prometheus 직접 수집입니다. ECS 서비스 CPU·메모리·예약량과 목표/실행/대기 Task 수 패널은 기존 CloudWatch 조회를 유지합니다."
+  "description": "CloudWatch 기존 지표를 조회합니다. SSE는 market-http의 Task당 평균·최대 연결 수이며 전체 연결 합계가 아닙니다. 누락 데이터는 0으로 보정하지 않습니다."
 }
