@@ -1,6 +1,6 @@
 // The development AI host publishes only its own private market-http listener.
 discovery.relabel "dev_market_metrics" {
-  targets = [{"__address__" = "127.0.0.1:9108", service_name = "market-http", environment = sys.env("DEPLOYMENT_ENVIRONMENT")}]
+  targets = [{"__address__" = "127.0.0.1:9101", service_name = "market-http", environment = sys.env("DEPLOYMENT_ENVIRONMENT")}]
   rule {
     source_labels = ["environment"]
     regex = "dev"
@@ -20,7 +20,7 @@ prometheus.relabel "market_metrics" {
   forward_to = [prometheus.remote_write.server.receiver]
   rule {
     source_labels = ["__name__"]
-    regex = "market_http_sse_active_connections|up"
+    regex = "market_http_sse_active_connections|market_http_sse_connections|market_http_sse_connections_(started|closed)_total|market_http_sse_events_sent(_bytes)?_total|market_http_sse_delivery_latency_seconds_(bucket|sum|count)|market_http_valkey_pool_connections|market_http_valkey_pool_acquire_duration_seconds_(bucket|sum|count)|market_http_valkey_pool_acquire_timeouts_total|up"
     action = "keep"
   }
   rule {

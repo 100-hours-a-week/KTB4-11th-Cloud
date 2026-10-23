@@ -26,8 +26,8 @@ class DirectMetricsTest(unittest.TestCase):
                             else dict(line.split('=', 1) for line in output.read_text().splitlines()))
                 self.assertEqual(settings, {
                     'MARKET_HTTP_PROMETHEUS_ENABLED': 'true',
-                    'MARKET_HTTP_PROMETHEUS_HOST': '0.0.0.0',
-                    'MARKET_HTTP_PROMETHEUS_PORT': '9108',
+                    'MARKET_HTTP_PROMETHEUS_HOST': '0.0.0.0' if target.startswith('prod') else '127.0.0.1',
+                    'MARKET_HTTP_PROMETHEUS_PORT': '9101',
                 })
                 self.assertEqual(output.stat().st_mode & 0o777, 0o600)
 
@@ -58,12 +58,12 @@ class DirectMetricsTest(unittest.TestCase):
             self.assertNotIn(panel['id'], ids)
             ids.add(panel['id'])
             self.assertEqual(panel['datasource']['uid'],
-                             'prometheus' if panel['id'] in [1, 7, 8, 20, 21] else
+                             'prometheus' if (panel['id'] in [1, 7, 8, 20, 21] or panel['id'] >= 30) else
                              'loki' if panel['id'] >= 22 else 'cloudwatch')
-        self.assertEqual(ids, set(range(1, 9)) | set(range(20, 26)))
+        self.assertEqual(ids, set(range(1, 9)) | set(range(20, 26)) | set(range(30, 41)))
         baseline = {p['id']: p for p in json.loads(default[name])['panels']}
         for panel in dashboard['panels']:
-            if panel['id'] >= 20:
+            if 20 <= panel['id'] <= 25:
                 self.assertEqual(panel['targets'], baseline[panel['id']]['targets'])
                 for target in panel['targets']:
                     self.assertIn('environment="prod"', target['expr'])
@@ -88,6 +88,9 @@ class DirectMetricsTest(unittest.TestCase):
                     self.assertNotIn('or vector(0)', target['expr'])
         override = json.loads((ROOT / 'overrides/sse-prometheus.json').read_text())
         for panel in override['panels']:
+            if panel['id'] >= 37:
+                self.assertNotIn('task_id', panel['targets'][0]['expr'])
+                continue
             self.assertIn('task_id=~"${task:regex}"', panel['targets'][0]['expr'])
         source = (ROOT.parent / 'ecs/alloy/config.alloy').read_text().split('loki.source.docker')[0]
         self.assertIn('__meta_docker_container_label_com_amazonaws_ecs_task_arn', source)
