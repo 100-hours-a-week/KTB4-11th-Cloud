@@ -66,3 +66,15 @@ variable "sse_k6_extension_version" {
   type        = string
   default     = "v0.1.11"
 }
+
+variable "sse_vpc_peering_connection_id" {
+  description = "Existing test/production VPC peering managed by monitoring"
+  type        = string
+  default     = "pcx-0ce88aa1e25be2dc0"
+}
+
+variable "sse_container_port" {
+  description = "market-http HTTP/SSE container port"
+  type        = number
+  default     = 8000
+}

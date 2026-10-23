@@ -14,7 +14,7 @@ output "sse_k6_private_ip" {
 }
 
 output "sse_k6_security_group_id" {
-  description = "Dedicated SSE generator security group; production target access requires separate routing and rules"
+  description = "Dedicated SSE generator security group allowed on the production SSE HTTP port"
   value       = aws_security_group.sse_k6.id
 }
 
