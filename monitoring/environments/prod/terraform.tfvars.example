@@ -1,0 +1,6 @@
+# Shared production settings for local and CI plans; contains no secrets.
+plg_tempo_enabled       = true
+plg_tempo_instance_type = "t3.xlarge"
+plg_tempo_data_size_gib = 100
+grafana_domain_name     = "monitoring.stock-spoon.com"
+dev_telemetry_enabled   = true
