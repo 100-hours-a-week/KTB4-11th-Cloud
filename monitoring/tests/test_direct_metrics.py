@@ -24,11 +24,14 @@ class DirectMetricsTest(unittest.TestCase):
                 run.assert_not_called()
                 settings = (json.loads(output.read_text()) if target.startswith('prod')
                             else dict(line.split('=', 1) for line in output.read_text().splitlines()))
-                self.assertEqual(settings, {
-                    'MARKET_HTTP_PROMETHEUS_ENABLED': 'true',
-                    'MARKET_HTTP_PROMETHEUS_HOST': '0.0.0.0' if target.startswith('prod') else '127.0.0.1',
+                expected = {
+                    'MARKET_HTTP_PROMETHEUS_BIND_HOST': '0.0.0.0',
                     'MARKET_HTTP_PROMETHEUS_PORT': '9101',
-                })
+                }
+                if target == 'dev-ai-metrics':
+                    expected.update({'MARKET_STREAMER_PROMETHEUS_BIND_HOST': '0.0.0.0',
+                                     'MARKET_STREAMER_PROMETHEUS_PORT': '9102'})
+                self.assertEqual(settings, expected)
                 self.assertEqual(output.stat().st_mode & 0o777, 0o600)
 
     def test_task_panels_use_direct_metrics_and_do_not_claim_reservation_percentages(self):
