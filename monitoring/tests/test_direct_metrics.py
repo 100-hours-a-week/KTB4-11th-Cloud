@@ -50,7 +50,7 @@ class DirectMetricsTest(unittest.TestCase):
         default = deploy.deployment_files('server', destination)
         name = 'config/grafana/dashboards/prod/ecs-sse.json'
         self.assertTrue(all(p['datasource']['uid'] == 'cloudwatch'
-                            for p in json.loads(default[name])['panels']))
+                            for p in json.loads(default[name])['panels'] if p['id'] < 20))
         files = deploy.deployment_files('server', destination, sse_prometheus=True)
         dashboard = json.loads(files[name])
         ids = set()
@@ -58,8 +58,23 @@ class DirectMetricsTest(unittest.TestCase):
             self.assertNotIn(panel['id'], ids)
             ids.add(panel['id'])
             self.assertEqual(panel['datasource']['uid'],
-                             'prometheus' if panel['id'] in [1, 7, 8] else 'cloudwatch')
-        self.assertEqual(ids, set(range(1, 9)))
+                             'prometheus' if panel['id'] in [1, 7, 8, 20, 21] else
+                             'loki' if panel['id'] >= 22 else 'cloudwatch')
+        self.assertEqual(ids, set(range(1, 9)) | set(range(20, 26)))
+        baseline = {p['id']: p for p in json.loads(default[name])['panels']}
+        for panel in dashboard['panels']:
+            if panel['id'] >= 20:
+                self.assertEqual(panel['targets'], baseline[panel['id']]['targets'])
+                for target in panel['targets']:
+                    self.assertIn('environment="prod"', target['expr'])
+                    self.assertIn('market-http', target['expr'])
+                    self.assertNotIn('$service', target['expr'])
+        for index, left in enumerate(dashboard['panels']):
+            a = left['gridPos']
+            for right in dashboard['panels'][index + 1:]:
+                b = right['gridPos']
+                self.assertFalse(a['x'] < b['x'] + b['w'] and b['x'] < a['x'] + a['w']
+                                 and a['y'] < b['y'] + b['h'] and b['y'] < a['y'] + a['h'])
 
     def test_ai_scraping_stays_off_until_explicitly_requested(self):
         destination = {
