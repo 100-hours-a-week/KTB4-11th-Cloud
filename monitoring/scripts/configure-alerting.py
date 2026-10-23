@@ -12,22 +12,24 @@ import subprocess
 
 # Preserve the already configured production credential and receiver.
 SECRET = Path('/srv/stockspoon-telemetry/secrets/discord_webhook_url')
-DEV_SECRET = Path('/srv/stockspoon-telemetry/secrets/discord_dev_webhook_url')
+DEV_APP_SECRET = Path('/srv/stockspoon-telemetry/secrets/discord_dev_app_webhook_url')
+DEV_AI_SECRET = Path('/srv/stockspoon-telemetry/secrets/discord_dev_ai_webhook_url')
 STACK = Path('/opt/stockspoon-telemetry')
-DEV_PARAMETER = '/stockspoon/monitoring/dev/discord-webhook'
-RECEIVERS = {'prod': 'stockspoon-discord', 'dev': 'stockspoon-discord-dev'}
+DEV_PARAMETERS = {role: '/stockspoon/monitoring/dev/' + role + '/discord-webhook' for role in ['app', 'ai']}
+RECEIVERS = {'prod': 'stockspoon-discord', 'dev-app': 'stockspoon-discord-dev-app', 'dev-ai': 'stockspoon-discord-dev-ai'}
 
 
 def validate_webhooks(webhooks: dict[str, str | None]) -> None:
     for webhook in webhooks.values():
         if webhook and not re.fullmatch(r'https://discord\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+', webhook):
             raise ValueError('Expected a Discord HTTPS webhook URL')
-    if webhooks.get('prod') and webhooks.get('prod') == webhooks.get('dev'):
-        raise ValueError('Development and production must use different Discord webhooks')
+    configured = [value for value in webhooks.values() if value]
+    if len(configured) != len(set(configured)):
+        raise ValueError('Production, development App and development AI must use different Discord webhooks')
 
 
-def render(provisioning: Path, webhook: str | None, dev_webhook: str | None = None) -> None:
-    webhooks = {'prod': webhook, 'dev': dev_webhook}
+def render(provisioning: Path, webhook: str | None, dev_app_webhook: str | None = None, dev_ai_webhook: str | None = None) -> None:
+    webhooks = {'prod': webhook, 'dev-app': dev_app_webhook, 'dev-ai': dev_ai_webhook}
     validate_webhooks(webhooks)
     documents = {}
     for rules_path in sorted(provisioning.glob('*rules.json')):
@@ -35,13 +37,16 @@ def render(provisioning: Path, webhook: str | None, dev_webhook: str | None = No
         for group in document['groups']:
             for rule in group['rules']:
                 environment = rule.get('labels', {}).get('environment')
-                if environment not in RECEIVERS:
-                    raise ValueError('Every alert rule must explicitly select dev or prod')
-                rule['isPaused'] = not bool(webhooks[environment])
-                if webhooks[environment]:
+                route = environment
+                if environment == 'dev':
+                    route = 'dev-' + rule.get('labels', {}).get('host_role', '')
+                if route not in RECEIVERS:
+                    raise ValueError('Every alert rule must select prod or a development App/AI host_role')
+                rule['isPaused'] = not bool(webhooks[route])
+                if webhooks[route]:
                     rule['notification_settings'] = {
-                        'receiver': RECEIVERS[environment],
-                        'group_by': ['alertname', 'environment', 'cluster'],
+                        'receiver': RECEIVERS[route],
+                        'group_by': ['alertname', 'environment', 'host_role', 'cluster'],
                         'group_wait': '30s', 'group_interval': '5m', 'repeat_interval': '4h',
                     }
                 else:
@@ -75,7 +80,7 @@ def read_aws_webhook(environment: str) -> str | None:
                      '--secret-id', 'stockspoon/v1/app/discord-webhook',
                      '--query', 'SecretString']
     else:
-        arguments = ['ssm', 'get-parameter', '--name', DEV_PARAMETER,
+        arguments = ['ssm', 'get-parameter', '--name', DEV_PARAMETERS[environment.removeprefix('dev-')],
                      '--with-decryption', '--query', 'Parameter.Value']
     result = subprocess.run(
         ['aws', *arguments, '--region', 'ap-northeast-2', '--output', 'text', '--no-cli-pager'],
@@ -84,7 +89,7 @@ def read_aws_webhook(environment: str) -> str | None:
     if result.returncode:
         raise SystemExit(f'Cannot read the {environment} Discord webhook from AWS; check the parameter/secret and instance IAM policy. No configuration changed.')
     value = result.stdout.strip()
-    if environment == 'dev' and value == 'UNCONFIGURED':
+    if environment.startswith('dev-') and value == 'UNCONFIGURED':
         return None
     if not value:
         raise SystemExit(f'Empty {environment} webhook from AWS; no configuration changed')
@@ -102,6 +107,7 @@ def save_secret(path: Path, value: str | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--environment', choices=['prod', 'dev'], default='prod')
+    parser.add_argument('--host-role', choices=['app', 'ai'])
     source = parser.add_mutually_exclusive_group()
     source.add_argument('--configure', action='store_true', help='Prompt for a webhook without echoing it')
     source.add_argument('--existing-channel', action='store_true', help='Read the existing production application Discord secret from AWS')
@@ -109,7 +115,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.existing_channel and args.environment != 'prod':
         parser.error('--existing-channel is production-only; configure a separate development webhook')
-    secrets = {'prod': SECRET, 'dev': DEV_SECRET}
+    if args.environment == 'dev' and not args.sync_aws and args.host_role is None:
+        parser.error('Select --host-role app or ai for development configuration')
+    selected_route = 'prod' if args.environment == 'prod' else 'dev-' + (args.host_role or 'app')
+    secrets = {'prod': SECRET, 'dev-app': DEV_APP_SECRET, 'dev-ai': DEV_AI_SECRET}
     webhooks = {environment: read_secret(path) for environment, path in secrets.items()}
     changed_environments = []
     if args.sync_aws:
@@ -122,10 +131,10 @@ def main() -> None:
             webhook = getpass.getpass(f'Discord webhook URL ({args.environment}): ').strip()
         if not webhook:
             raise SystemExit('Empty Discord webhook URL; no configuration changed')
-        webhooks[args.environment] = webhook
-        changed_environments = [args.environment]
+        webhooks[selected_route] = webhook
+        changed_environments = [selected_route]
     validate_webhooks(webhooks)
-    render(STACK / 'grafana/provisioning/alerting', webhooks['prod'], webhooks['dev'])
+    render(STACK / 'grafana/provisioning/alerting', webhooks['prod'], webhooks['dev-app'], webhooks['dev-ai'])
     for environment in changed_environments:
         save_secret(secrets[environment], webhooks[environment])
     for environment, value in webhooks.items():

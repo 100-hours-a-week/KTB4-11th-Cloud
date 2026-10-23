@@ -157,7 +157,7 @@ run "independent_server" {
     plg_tempo_enabled = true
   }
   assert {
-    condition     = aws_ssm_parameter.development_discord_webhook[0].type == "SecureString" && output.development_discord_webhook_parameter == "/stockspoon/monitoring/dev/discord-webhook"
+    condition     = aws_ssm_parameter.development_discord_webhook["app"].type == "SecureString" && output.development_discord_webhook_parameters.app == "/stockspoon/monitoring/dev/app/discord-webhook" && output.development_discord_webhook_parameters.ai == "/stockspoon/monitoring/dev/ai/discord-webhook"
     error_message = "Development Discord must have its own encrypted parameter, with only its name exposed as an output."
   }
   assert {

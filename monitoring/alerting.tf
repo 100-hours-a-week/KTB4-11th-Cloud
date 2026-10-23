@@ -1,7 +1,7 @@
 resource "aws_ssm_parameter" "development_discord_webhook" {
-  count       = var.plg_tempo_enabled ? 1 : 0
-  name        = "/stockspoon/monitoring/dev/discord-webhook"
-  description = "Development Grafana Discord webhook URL; set the real value in Parameter Store outside Terraform"
+  for_each    = var.plg_tempo_enabled ? toset(["app", "ai"]) : toset([])
+  name        = "/stockspoon/monitoring/dev/${each.key}/discord-webhook"
+  description = "Development ${each.key} Grafana Discord webhook URL; set the real value in Parameter Store outside Terraform"
   type        = "SecureString"
   tier        = "Standard"
 
@@ -12,6 +12,7 @@ resource "aws_ssm_parameter" "development_discord_webhook" {
   tags = {
     Environment = "dev"
     Service     = "grafana-alerting"
+    HostRole    = each.key
   }
 
   # Bootstrap the slot once. Its value and metadata are owned by the operator.
@@ -21,7 +22,7 @@ resource "aws_ssm_parameter" "development_discord_webhook" {
   }
 }
 
-output "development_discord_webhook_parameter" {
-  description = "SSM SecureString name only; the webhook value is never an output"
-  value       = var.plg_tempo_enabled ? aws_ssm_parameter.development_discord_webhook[0].name : null
+output "development_discord_webhook_parameters" {
+  description = "Development App/AI SSM SecureString names only; no webhook values"
+  value       = { for role, parameter in aws_ssm_parameter.development_discord_webhook : role => parameter.name }
 }
