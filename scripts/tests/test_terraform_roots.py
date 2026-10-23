@@ -92,6 +92,17 @@ class DependencyGraphTest(unittest.TestCase):
 
 
 class ChangedRootSelectionTest(unittest.TestCase):
+    def test_nested_sse_k6_changes_select_only_its_own_root(self):
+        self.assertEqual(
+            roots.affected_roots(["test-infra/sse-k6/compute.tf"]),
+            ["test-infra/sse-k6"],
+        )
+
+    def test_test_infra_changes_include_sse_k6_consumer(self):
+        self.assertIn(
+            "test-infra/sse-k6", roots.affected_roots(["test-infra/network.tf"]),
+        )
+
     def test_production_ai_changes_select_ai_before_monitoring_and_ecs(self):
         self.assertEqual(
             roots.affected_roots(["ai-server/infra/compute.tf"]),

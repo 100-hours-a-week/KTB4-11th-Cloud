@@ -15,6 +15,7 @@ from pathlib import PurePosixPath
 ROOT_DEPENDENCIES = {
     "shared-infra": set(),
     "test-infra": set(),
+    "test-infra/sse-k6": {"test-infra"},
     "storage": set(),
     "ecr": set(),
     "ai-server/dashboard": set(),
@@ -110,9 +111,14 @@ def affected_roots(paths: list[str]) -> list[str]:
         for module, consumers in MODULE_CONSUMERS.items():
             if normalized == module or normalized.startswith(f"{module}/"):
                 selected.update(consumers)
+        matching_directories = [
+            root_dir(root) for root in ROOT_ORDER
+            if normalized == root_dir(root) or normalized.startswith(f"{root_dir(root)}/")
+        ]
+        closest_directory = max(matching_directories, key=len, default=None)
         for root in ROOT_ORDER:
             directory = root_dir(root)
-            if normalized == directory or normalized.startswith(f"{directory}/"):
+            if directory == closest_directory:
                 relative = path.relative_to(directory)
                 if relative.parts[:1] == ("environments",) and len(relative.parts) >= 2:
                     environments = {
