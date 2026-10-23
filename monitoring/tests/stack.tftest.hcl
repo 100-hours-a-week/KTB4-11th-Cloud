@@ -3,7 +3,51 @@
 variables {
   plg_tempo_enabled     = false
   dev_telemetry_enabled = false
+  dev_ai_telemetry_enabled  = false
+  prod_ai_telemetry_enabled = false
   grafana_domain_name   = ""
+}
+
+override_data {
+  target = data.terraform_remote_state.development_ai
+  values = {
+    outputs = {
+      ai_instance_id       = "i-01111111111111111"
+      ai_private_ip        = "10.20.1.61"
+      ai_security_group_id = "sg-01111111111111111"
+    }
+  }
+}
+
+override_data {
+  target = data.terraform_remote_state.production_ai
+  values = {
+    outputs = {
+      ai_instance_id       = "i-02222222222222222"
+      ai_private_ip        = "10.0.1.50"
+      ai_security_group_id = "sg-02222222222222222"
+    }
+  }
+}
+
+override_data {
+  target = data.aws_instance.ai["dev"]
+  values = { private_ip = "10.20.1.61", subnet_id = "subnet-0fedcba9876543210" }
+}
+
+override_data {
+  target = data.aws_instance.ai["prod"]
+  values = { private_ip = "10.0.1.50", subnet_id = "subnet-0123456789abcdef0" }
+}
+
+override_data {
+  target = data.aws_subnet.ai["dev"]
+  values = { id = "subnet-0fedcba9876543210", vpc_id = "vpc-0fedcba9876543210" }
+}
+
+override_data {
+  target = data.aws_subnet.ai["prod"]
+  values = { id = "subnet-0123456789abcdef0", vpc_id = "vpc-0123456789abcdef0" }
 }
 
 mock_provider "aws" {
@@ -180,5 +224,27 @@ run "reuse_development_peering" {
   assert {
     condition     = length(aws_vpc_peering_connection.development) == 0 && aws_route.development_to_telemetry[0].vpc_peering_connection_id == "pcx-0123456789abcdef0"
     error_message = "A supplied peering connection must be reused without creating a duplicate."
+  }
+}
+
+run "collect_existing_ai_hosts" {
+  command = plan
+  variables {
+    plg_tempo_enabled        = true
+    dev_telemetry_enabled    = true
+    dev_ai_telemetry_enabled = true
+    prod_ai_telemetry_enabled = true
+  }
+  assert {
+    condition     = length(aws_instance.telemetry) == 1 && length(data.aws_instance.ai) == 2 && length(aws_vpc_security_group_ingress_rule.ai_telemetry) == 4
+    error_message = "AI collection must reuse both existing hosts and open only two private ingestion ports per host."
+  }
+  assert {
+    condition     = aws_route.telemetry_to_development_ai[0].destination_cidr_block == "10.20.1.61/32"
+    error_message = "The development AI return route must be limited to its single private address."
+  }
+  assert {
+    condition     = output.ai_telemetry.dev.environment == "dev" && output.ai_telemetry.prod.environment == "prod" && output.ai_telemetry.prod.cluster == "stockspoon-v1-ai"
+    error_message = "The existing V1 AI host remains production, separate from development AI."
   }
 }
