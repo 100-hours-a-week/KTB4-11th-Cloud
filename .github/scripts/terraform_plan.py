@@ -24,6 +24,8 @@ BACKEND_CONFIGS = {
 }
 
 VAR_FILES = {
+    "monitoring": "environments/prod/terraform.tfvars.example",
+    "ecs": "environments/prod/terraform.tfvars.example",
     "messaging": "environments/dev/terraform.tfvars.example",
     "messaging@prod": "environments/prod/terraform.tfvars.example",
     "redis@prod": "environments/prod/terraform.tfvars.example",

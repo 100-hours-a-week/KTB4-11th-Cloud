@@ -407,7 +407,7 @@ variable "ecs_deploy_github_subjects" {
   description = "GitHub OIDC subjects allowed to deploy the AI market services to ECS"
   type        = list(string)
   default = [
-    "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/dev",
+    "repo:100-hours-a-week@167328634/KTB4-11th-AI@1372520303:ref:refs/heads/main",
   ]
 }
 
