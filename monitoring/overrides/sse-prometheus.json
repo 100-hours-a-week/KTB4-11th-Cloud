@@ -19,7 +19,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(task_id) (market_http_sse_active_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "expr": "sum by(task_id) (market_http_sse_active_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
           "legendFormat": "Task {{task_id}}",
           "range": true,
           "datasource": {
@@ -74,7 +74,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(market_http_sse_active_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "expr": "sum(market_http_sse_active_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
           "legendFormat": "전체 연결",
           "range": true,
           "datasource": {
@@ -129,7 +129,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "up{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",job=\"market-http-metrics\"}",
+          "expr": "up{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",job=\"market-http-metrics\",task_id=~\"${task:regex}\"}",
           "legendFormat": "Task {{task_id}}",
           "range": true,
           "datasource": {
