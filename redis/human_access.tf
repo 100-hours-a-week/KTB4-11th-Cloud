@@ -14,10 +14,12 @@ locals {
   # 키 조회·수정만 허용하고 FLUSHALL·KEYS·CONFIG·INFO 등 위험 명령은 차단한다.
   # +@connection은 PING·HELLO 등 클라이언트 연결 명령용이다.
   # 앱 사용자와 같은 이유로 `&*`를 유지해 plan에 영구 diff가 생기지 않게 한다.
+  # ElastiCache가 자동으로 추가하는 `-@all`을 명시해 반복적인 사용자 수정을 막는다.
   human_access_string = join(" ", [
     "on",
     "~*",
     "&*",
+    "-@all",
     "+@read",
     "+@write",
     "+@connection",
