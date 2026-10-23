@@ -40,9 +40,9 @@ locals {
     } : {},
   )
   ai_ingestion = {
-    for pair in setproduct(keys(local.ai_hosts), ["loki", "prometheus"]) : "${pair[0]}-${pair[1]}" => {
+    for pair in setproduct(keys(local.ai_hosts), ["loki", "prometheus", "traces"]) : "${pair[0]}-${pair[1]}" => {
       environment = pair[0]
-      port        = pair[1] == "loki" ? 3100 : 9090
+      port        = { loki = 3100, prometheus = 9090, traces = 4318 }[pair[1]]
     }
   }
 }
@@ -79,7 +79,7 @@ resource "aws_vpc_security_group_ingress_rule" "ai_telemetry" {
   from_port                    = each.value.port
   to_port                      = each.value.port
   ip_protocol                  = "tcp"
-  description                  = "${each.value.environment} AI EC2 to central log/metric ingestion"
+  description                  = "${each.value.environment} AI EC2 to central ${each.value.port == 4318 ? "trace" : "log/metric"} ingestion"
   depends_on                   = [data.aws_subnet.ai, aws_vpc_peering_connection.development]
 }
 
@@ -93,6 +93,7 @@ output "ai_telemetry" {
       cluster              = environment == "dev" ? "stockspoon-v2-dev" : "stockspoon-v1-ai"
       loki_push_url        = "http://${aws_instance.telemetry[0].private_ip}:3100/loki/api/v1/push"
       prometheus_write_url = "http://${aws_instance.telemetry[0].private_ip}:9090/api/v1/write"
+      otlp_http_endpoint   = "http://${aws_instance.telemetry[0].private_ip}:4318"
     }
   }
 }

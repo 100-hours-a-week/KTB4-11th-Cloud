@@ -237,6 +237,11 @@ run "reuse_development_peering" {
 
 run "collect_existing_ai_hosts" {
   command = plan
+  override_resource {
+    target          = aws_instance.telemetry[0]
+    override_during = plan
+    values          = { private_ip = "10.0.11.236" }
+  }
   variables {
     plg_tempo_enabled        = true
     dev_telemetry_enabled    = true
@@ -244,8 +249,16 @@ run "collect_existing_ai_hosts" {
     prod_ai_telemetry_enabled = true
   }
   assert {
-    condition     = length(aws_instance.telemetry) == 1 && length(data.aws_instance.ai) == 2 && length(aws_vpc_security_group_ingress_rule.ai_telemetry) == 4
-    error_message = "AI collection must reuse both existing hosts and open only two private ingestion ports per host."
+    condition     = length(aws_instance.telemetry) == 1 && length(data.aws_instance.ai) == 2 && length(aws_vpc_security_group_ingress_rule.ai_telemetry) == 6
+    error_message = "AI collection must reuse both existing hosts and open only log, metric and OTLP/HTTP ports per host."
+  }
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.ai_telemetry["dev-traces"].from_port == 4318 && aws_vpc_security_group_ingress_rule.ai_telemetry["prod-traces"].to_port == 4318 && aws_vpc_security_group_ingress_rule.ai_telemetry["dev-traces"].referenced_security_group_id != aws_vpc_security_group_ingress_rule.ai_telemetry["prod-traces"].referenced_security_group_id
+    error_message = "OTLP/HTTP ingress must be scoped to each existing AI security group."
+  }
+  assert {
+    condition     = output.ai_telemetry.dev.otlp_http_endpoint == "http://10.0.11.236:4318" && output.ai_telemetry.prod.otlp_http_endpoint == output.ai_telemetry.dev.otlp_http_endpoint
+    error_message = "Both AI environments must use the private central Tempo OTLP/HTTP endpoint."
   }
   assert {
     condition     = aws_route.telemetry_to_development_ai[0].destination_cidr_block == "10.20.1.61/32"
