@@ -223,6 +223,13 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     resources = [local.backend_datasource_url_parameter_arn]
   }
 
+  statement {
+    sid       = "ReadBackendCollectorUrl"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
+    resources = ["arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/v2/prod/backend/KIWOOM_COLLECTOR_URL"]
+  }
+
   # ListAliases does not support resource-level scoping; restrict it to Seoul.
   statement {
     sid       = "ListKmsAliasesInSeoul"
