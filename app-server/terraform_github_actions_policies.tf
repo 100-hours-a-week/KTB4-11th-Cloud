@@ -25,6 +25,10 @@ locals {
     },
     {
       bucket = "stockspoon-terraform-state-v1"
+      key    = "sse-k6/terraform.tfstate"
+    },
+    {
+      bucket = "stockspoon-terraform-state-v1"
       key    = "ai-server/infra/terraform.tfstate"
     },
     {
