@@ -29,6 +29,12 @@ discovery.relabel "apps" {
     replacement = "$1"
     target_label = "service_name"
   }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_task_arn"]
+    regex = ".*/([^/]+)$"
+    replacement = "$1"
+    target_label = "task_id"
+  }
 }
 
 loki.source.docker "apps" {
@@ -65,6 +71,175 @@ prometheus.scrape "host" {
   job_name = "ecs-host"
   scrape_interval = "30s"
   forward_to = [prometheus.remote_write.server.receiver]
+}
+
+prometheus.exporter.cadvisor "tasks" {
+  docker_only = true
+  disable_root_cgroup_stats = true
+  enabled_metrics = ["cpu", "memory"]
+  store_container_labels = false
+  allowlisted_container_labels = [
+    "com.amazonaws.ecs.task-definition-family",
+    "com.amazonaws.ecs.task-arn",
+    "com.amazonaws.ecs.container-name",
+  ]
+  storage_duration = "1m"
+}
+
+prometheus.scrape "task_resources" {
+  targets = prometheus.exporter.cadvisor.tasks.targets
+  scrape_interval = "30s"
+  forward_to = [prometheus.relabel.task_resources.receiver]
+}
+
+prometheus.relabel "task_resources" {
+  forward_to = [prometheus.remote_write.server.receiver]
+  rule {
+    source_labels = ["container_label_com_amazonaws_ecs_task_definition_family"]
+    regex = sys.env("TASK_FAMILY_REGEX")
+    action = "keep"
+  }
+  rule {
+    source_labels = ["container_label_com_amazonaws_ecs_container_name"]
+    regex = "backend|backend-collector|frontend|market-http"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__name__"]
+    regex = "container_cpu_usage_seconds_total|container_memory_working_set_bytes|container_memory_rss"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["container_label_com_amazonaws_ecs_task_arn"]
+    regex = ".*/([^/]+)"
+    replacement = "$1"
+    target_label = "task_id"
+  }
+  rule {
+    source_labels = ["task_id"]
+    regex = ".+"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["container_label_com_amazonaws_ecs_task_definition_family"]
+    regex = sys.env("TASK_FAMILY_REGEX")
+    replacement = "$1"
+    target_label = "service_name"
+  }
+  rule {
+    source_labels = ["container_label_com_amazonaws_ecs_task_definition_family"]
+    target_label = "ecs_service"
+  }
+  rule {
+    source_labels = ["container_label_com_amazonaws_ecs_container_name"]
+    target_label = "container"
+  }
+  rule {
+    target_label = "job"
+    replacement = "ecs-task-resources"
+  }
+  rule {
+    regex = "__name__|instance|job|id|container|ecs_service|service_name|task_id"
+    action = "labelkeep"
+  }
+}
+
+discovery.aws "market_tasks" {
+  role             = "ecs"
+  region           = sys.env("AWS_REGION")
+  clusters         = [sys.env("ECS_CLUSTER_ARN")]
+  port             = 9101
+  refresh_interval = "30s"
+}
+
+discovery.relabel "market_metrics" {
+  targets = discovery.aws.market_tasks.targets
+  rule {
+    target_label = "__tmp_sse_enabled"
+    replacement = sys.env("SSE_PROMETHEUS_ENABLED")
+  }
+  rule {
+    source_labels = ["__tmp_sse_enabled"]
+    regex = "true"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_service"]
+    regex = sys.env("MARKET_HTTP_SERVICE")
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_last_status", "__meta_ecs_desired_status"]
+    regex = "RUNNING;RUNNING"
+    action = "keep"
+  }
+  // Each daemon scrapes only tasks on its own EC2 host.
+  rule {
+    target_label = "__tmp_host_name"
+    replacement = constants.hostname
+  }
+  rule {
+    source_labels = ["__tmp_host_name"]
+    regex = "ip-([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)(.*)"
+    target_label = "__tmp_host_ip"
+    replacement = "$1.$2.$3.$4"
+  }
+  rule {
+    source_labels = ["__meta_ecs_ec2_instance_private_ip"]
+    target_label = "__tmp_host_ip"
+    action = "keepequal"
+  }
+  rule {
+    source_labels = ["__meta_ecs_ip_address"]
+    regex = "([0-9.]+)"
+    replacement = "$1:9101"
+    target_label = "__address__"
+  }
+  rule {
+    source_labels = ["__address__"]
+    regex = "[0-9.]+:9101"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_task_arn"]
+    regex = ".*/([^/]+)"
+    replacement = "$1"
+    target_label = "task_id"
+  }
+  rule {
+    source_labels = ["task_id"]
+    regex = ".+"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_service"]
+    target_label = "ecs_service"
+  }
+  rule {
+    target_label = "service_name"
+    replacement = "market-http"
+  }
+}
+
+prometheus.scrape "market_metrics" {
+  targets = discovery.relabel.market_metrics.output
+  scrape_interval = "15s"
+  scrape_timeout = "5s"
+  metrics_path = "/metrics"
+  forward_to = [prometheus.relabel.market_metrics.receiver]
+}
+
+prometheus.relabel "market_metrics" {
+  forward_to = [prometheus.remote_write.server.receiver]
+  rule {
+    source_labels = ["__name__"]
+    regex = "market_http_sse_active_connections|market_http_sse_connections|market_http_sse_connections_(started|closed)_total|market_http_sse_events_sent(_bytes)?_total|market_http_sse_delivery_latency_seconds_(bucket|sum|count)|market_http_valkey_pool_connections|market_http_valkey_pool_acquire_duration_seconds_(bucket|sum|count)|market_http_valkey_pool_acquire_timeouts_total|up"
+    action = "keep"
+  }
+  rule {
+    target_label = "job"
+    replacement = "market-http-metrics"
+  }
 }
 
 prometheus.remote_write "server" {

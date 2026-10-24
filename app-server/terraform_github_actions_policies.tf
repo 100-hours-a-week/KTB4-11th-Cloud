@@ -25,6 +25,10 @@ locals {
     },
     {
       bucket = "stockspoon-terraform-state-v1"
+      key    = "sse-k6/terraform.tfstate"
+    },
+    {
+      bucket = "stockspoon-terraform-state-v1"
       key    = "ai-server/infra/terraform.tfstate"
     },
     {
@@ -223,6 +227,43 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     resources = [local.backend_datasource_url_parameter_arn]
   }
 
+  statement {
+    sid       = "ReadBackendCollectorUrl"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
+    resources = ["arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/v2/prod/backend/KIWOOM_COLLECTOR_URL"]
+  }
+
+  statement {
+    sid     = "ReadMonitoringDiscordWebhookParameters"
+    effect  = "Allow"
+    actions = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
+    resources = [
+      for name in [
+        "dev/app",
+        "dev/ai",
+        "dev/fe",
+        "dev/be",
+        "prod/market-http",
+        "prod/be",
+        "prod/fe",
+        "prod/alb",
+      ] :
+      "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/monitoring/${name}/discord-webhook"
+    ]
+  }
+
+  # AI roots own SecureString parameters under separate environment prefixes.
+  statement {
+    sid     = "ReadAiSecretParameters"
+    effect  = "Allow"
+    actions = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
+    resources = [
+      for environment in ["dev", "prod"] :
+      "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/ai/${environment}/*"
+    ]
+  }
+
   # ListAliases does not support resource-level scoping; restrict it to Seoul.
   statement {
     sid       = "ListKmsAliasesInSeoul"
@@ -367,9 +408,12 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
   }
 
   statement {
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter"]
-    resources = ["arn:aws:ssm:ap-northeast-2::parameter/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id"]
+    effect  = "Allow"
+    actions = ["ssm:GetParameter"]
+    resources = [
+      "arn:aws:ssm:ap-northeast-2::parameter/aws/service/canonical/ubuntu/server/resolute/stable/current/amd64/hvm/ebs-gp3/ami-id",
+      "arn:aws:ssm:ap-northeast-2::parameter/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+    ]
   }
 
   statement {

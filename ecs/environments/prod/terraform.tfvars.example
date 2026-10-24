@@ -1,0 +1,3 @@
+# Keep production ECS telemetry enabled when planning from a clean checkout.
+plg_tempo_enabled = true
+telemetry_sse_prometheus_enabled = true

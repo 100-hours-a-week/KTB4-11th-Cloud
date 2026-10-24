@@ -159,7 +159,10 @@ resource "aws_ecs_task_definition" "market_http" {
         { name = "MARKET_HTTP_METRICS_NAMESPACE", value = local.sse_metrics_namespace },
         { name = "MARKET_HTTP_METRICS_CLUSTER_NAME", value = aws_ecs_cluster.main.name },
         { name = "MARKET_HTTP_METRICS_SERVICE_NAME", value = "${var.name_prefix}-market-http" },
-        ], local.telemetry_otlp_environment,
+        ], var.telemetry_sse_prometheus_enabled ? [
+        { name = "MARKET_HTTP_PROMETHEUS_BIND_HOST", value = "0.0.0.0" },
+        { name = "MARKET_HTTP_PROMETHEUS_PORT", value = "9101" },
+        ] : [], local.telemetry_otlp_environment,
       var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "market-http" }] : [])
 
       secrets = [

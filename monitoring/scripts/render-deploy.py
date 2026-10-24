@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 import gzip
+import lzma
 import io
 import ipaddress
 import json
@@ -25,6 +26,7 @@ AI_SERVICES = [
 ]
 AI_TRACING_TARGETS = ["dev-ai-tracing", "prod-ai-tracing"]
 MARKET_TRACING_TARGET = "prod-market-http-tracing"
+METRICS_TARGETS = ["dev-ai-metrics", "prod-market-http-metrics"]
 
 
 def checked_endpoint(value: str, port: int, path: str = "") -> str:
@@ -95,6 +97,17 @@ def market_http_tracing_environment(outputs: dict) -> dict[str, str]:
     return settings
 
 
+def market_http_metrics_environment(*, development: bool = False) -> dict[str, str]:
+    settings = {
+        "MARKET_HTTP_PROMETHEUS_BIND_HOST": "0.0.0.0",
+        "MARKET_HTTP_PROMETHEUS_PORT": "9101",
+    }
+    if development:
+        settings.update({"MARKET_STREAMER_PROMETHEUS_BIND_HOST": "0.0.0.0",
+                         "MARKET_STREAMER_PROMETHEUS_PORT": "9102"})
+    return settings
+
+
 def config_bytes(path: Path) -> bytes:
     content = path.read_bytes()
     if path.suffix == ".json":
@@ -102,7 +115,12 @@ def config_bytes(path: Path) -> bytes:
     return content
 
 
-def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
+def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict[str, bytes]:
+    if streamer_metrics_port is not None:
+        if target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= streamer_metrics_port <= 65535 or streamer_metrics_port in [9101, 12345]:
+            raise ValueError("Select an AI agent and a non-conflicting private streamer metrics port")
+    if sse_prometheus and target not in ["server", "dev-ai-agent"]:
+        raise ValueError("SSE Prometheus is available only for server and dev-ai-agent deployments")
     if target == "server":
         files = {
             "config/" + path.relative_to(ROOT / "config").as_posix(): config_bytes(path)
@@ -135,6 +153,11 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
             raise ValueError("AI agent environment and target must match")
         files = {"ai-agent/" + name: (ROOT / "ai-agent" / name).read_bytes()
                  for name in ["compose.yaml", "config.alloy"]}
+        if sse_prometheus:
+            files["ai-agent/config.alloy"] += (ROOT / "ai-agent/market-metrics.alloy").read_bytes()
+        if streamer_metrics_port is not None:
+            fragment = (ROOT / "ai-agent/streamer-metrics.alloy").read_text()
+            files["ai-agent/config.alloy"] += fragment.replace("__STREAMER_METRICS_PORT__", str(streamer_metrics_port)).encode()
         services = AI_SERVICES + (["market-http"] if environment == "dev" else [])
         files["agent.env"] = (
             "LOKI_PUSH_URL=" + checked_endpoint(destination["loki_push_url"], 3100, "/loki/api/v1/push")
@@ -157,11 +180,13 @@ def deployment_files(target: str, destination: dict) -> dict[str, bytes]:
                 destination["otlp_http_endpoint"], service, "dev"
             ).encode()
     installer = "ai-agent" if target in ["dev-ai-agent", "prod-ai-agent"] else target
+    if target != "server":
+        files["system-logs.sh"] = (ROOT / "scripts" / "deploy" / "system-logs.sh").read_bytes()
     files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{installer}.sh").read_bytes()
     return files
 
 
-def make_payload(target: str, outputs: dict) -> dict:
+def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict:
     output_name = "plg_tempo" if target == "server" else "development_telemetry"
     if target in ["dev-ai-agent", "prod-ai-agent"]:
         output_name = "ai_telemetry"
@@ -176,15 +201,21 @@ def make_payload(target: str, outputs: dict) -> dict:
         raise ValueError("Invalid target instance ID")
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as tar:
-        for name, content in sorted(deployment_files(target, destination).items()):
+        for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus, streamer_metrics_port=streamer_metrics_port).items(),
+                                    key=lambda item: (not item[0].endswith(".py"), len(item[1]), item[0])):
             info = tarfile.TarInfo(name)
             info.size, info.mode = len(content), 0o644
             tar.addfile(info, io.BytesIO(content))
-    encoded = base64.b64encode(gzip.compress(archive.getvalue(), mtime=0)).decode()
+    encoded = base64.b64encode(gzip.compress(archive.getvalue(), compresslevel=9, mtime=0)).decode()
+    unpack = "base64 -d | tar -xz"
+    if len(encoded) > 23000:
+        encoded = base64.b64encode(lzma.compress(archive.getvalue())).decode()
+        decoder = "import sys,lzma;sys.stdout.buffer.write(lzma.decompress(sys.stdin.buffer.read()))"
+        unpack = "base64 -d | python3 -c " + shlex.quote(decoder) + " | tar -x"
     command = "\n".join([
         "#!/bin/bash", "set -Eeuo pipefail", "umask 077",
         "work_dir=$(mktemp -d)", "trap 'rm -rf \"$work_dir\"' EXIT",
-        f"printf '%s' {shlex.quote(encoded)} | base64 -d | tar -xz -C \"$work_dir\"",
+        f"printf '%s' {shlex.quote(encoded)} | {unpack} -C \"$work_dir\"",
         'bash "$work_dir/install.sh"',
     ])
     if len(command.encode()) > 24000:
@@ -200,10 +231,30 @@ def make_payload(target: str, outputs: dict) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET])
+    parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET, *METRICS_TARGETS])
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--sse-prometheus", action="store_true", help="Enable dev AI scraping; accepted for server compatibility (SSE panels are always included)")
+    parser.add_argument("--streamer-metrics-port", type=int, help="Explicit loopback streamer port (contract: 9102); AI agents only")
     args = parser.parse_args()
+    if args.streamer_metrics_port is not None and (args.target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= args.streamer_metrics_port <= 65535 or args.streamer_metrics_port in [9101, 12345]):
+        parser.error("--streamer-metrics-port requires an AI agent and a non-conflicting port")
+    if args.sse_prometheus and args.target not in ["server", "dev-ai-agent"]:
+        parser.error("--sse-prometheus requires server or dev-ai-agent")
+    if args.target in METRICS_TARGETS:
+        settings = market_http_metrics_environment(development=args.target == "dev-ai-metrics")
+        content = (json.dumps(settings, indent=2) + "\n" if args.target.startswith("prod")
+                   else "".join(f"{key}={value}\n" for key, value in settings.items()))
+        args.output.write_text(content)
+        args.output.chmod(0o600)
+        variable = "MARKET_HTTP_ENV_JSON" if args.target.startswith("prod") else "DEV_AI_ENV"
+        print(f"Prepared metrics fragment: {args.output}")
+        print(f"Merge into existing {variable}; preserve CloudWatch metrics and other settings.")
+        print("Requires the PR #393 image; application rollout is separate.")
+        if args.target == "dev-ai-metrics":
+            print("EC2 Docker bridge also requires compose.dev-ai-metrics.yaml loopback port mappings.")
+        print("No AWS command was submitted. No Terraform apply was executed.")
+        return
     if args.state_json:
         outputs = json.loads(args.state_json.read_text())
     else:
@@ -224,7 +275,7 @@ def main() -> None:
         print("Merge these keys into the existing MARKET_HTTP_ENV_JSON GitHub Variable; do not replace its other settings.")
         print("Requires the AI image containing PR #380; ECS application rollout is separate.")
     else:
-        payload = make_payload(args.target, outputs)
+        payload = make_payload(args.target, outputs, sse_prometheus=args.sse_prometheus, streamer_metrics_port=args.streamer_metrics_port)
         args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
         print(f"Prepared {args.target} payload for {payload['InstanceIds'][0]}: {args.output}")
     args.output.chmod(0o600)

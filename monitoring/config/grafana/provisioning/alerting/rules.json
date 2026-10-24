@@ -425,7 +425,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",host_role=\"ai\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",host_role=\"ai\",service_name!=\"system\"} |~ \"(?i)error|exception|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,

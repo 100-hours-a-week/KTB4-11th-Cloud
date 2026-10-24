@@ -414,7 +414,7 @@
         },
         {
           "uid": "stockspoon-dev-app-error-logs",
-          "title": "개발 APP · 서비스 오류 로그 급증",
+          "title": "개발 Nginx · 오류 로그 급증",
           "condition": "B",
           "data": [
             {
@@ -430,7 +430,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=~\"backend|frontend|nginx\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=\"nginx\"} |~ \"(?i)error|exception|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
@@ -486,11 +486,179 @@
             "managed_by": "stockspoon",
             "environment": "dev",
             "severity": "warning",
-            "host_role": "app"
+            "host_role": "app",
+            "component": "nginx",
+            "service_name": "nginx"
           },
           "annotations": {
-            "summary": "개발 APP · 서비스 오류 로그 급증",
-            "description": "개발 환경의 호스트 지표·서비스 로그입니다. 개발 서버와 Alloy 상태를 확인하세요."
+            "summary": "개발 Nginx · 오류 로그 급증",
+            "description": "개발 App EC2의 Nginx 오류 로그가 증가했습니다. 기존 개발 App 채널에서 서버 상태와 함께 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-dev-fe-error-logs",
+          "title": "개발 FE · 오류 로그 급증",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "loki",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=\"frontend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "queryType": "instant",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        20
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning",
+            "host_role": "app",
+            "component": "fe",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "개발 FE · 오류 로그 급증",
+            "description": "개발 frontend 서비스 오류 로그가 증가했습니다. 해당 서비스의 로그와 배포 상태를 확인하세요."
+          }
+        },
+        {
+          "uid": "stockspoon-dev-be-error-logs",
+          "title": "개발 BE · 오류 로그 급증",
+          "condition": "B",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "loki",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=\"backend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "queryType": "instant",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        20
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "dev",
+            "severity": "warning",
+            "host_role": "app",
+            "component": "be",
+            "service_name": "backend"
+          },
+          "annotations": {
+            "summary": "개발 BE · 오류 로그 급증",
+            "description": "개발 backend 서비스 오류 로그가 증가했습니다. 해당 서비스의 로그와 배포 상태를 확인하세요."
           }
         }
       ]
