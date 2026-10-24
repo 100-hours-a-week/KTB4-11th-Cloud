@@ -211,7 +211,7 @@ resource "aws_ecs_task_definition" "backend" {
           # During database promotion, queue only the configured ProxySQL write failures.
           { name = "DB_WRITE_REPLAY_ENABLED", value = tostring(var.backend_db_write_replay_enabled) },
           { name = "DB_WRITE_REPLAY_QUEUE_URL", value = data.terraform_remote_state.messaging_prod.outputs.db_write_replay_queue_url },
-          { name = "DB_WRITE_REPLAY_PROXYSQL_ERROR_CODES", value = "9001" },
+          { name = "DB_WRITE_REPLAY_PROXYSQL_ERROR_CODES", value = "9001,1290" },
         ],
         [{
           name  = "TF_DATASOURCE_URL_PARAMETER_VERSION"
