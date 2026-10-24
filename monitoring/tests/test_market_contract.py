@@ -57,6 +57,21 @@ class MarketContractTest(unittest.TestCase):
         self.assertIn('acquiring', json.dumps(pool))
         self.assertNotIn('or vector(0)', pool['targets'][0]['expr'])
 
+    def test_ecs_awsvpc_metrics_use_ecs_ip_and_filter_to_local_running_service(self):
+        source = (ROOT.parent / 'ecs/alloy/config.alloy').read_text()
+        section = source.split('discovery.relabel "market_metrics" {', 1)[1].split('prometheus.scrape "market_metrics"', 1)[0]
+        self.assertIn('targets = discovery.aws.market_tasks.targets', section)
+        self.assertIn('__meta_ecs_ip_address', section)
+        self.assertNotIn('__meta_docker_network_ip', section)
+        self.assertIn('__meta_ecs_task_arn', section)
+        self.assertIn('regex = "RUNNING;RUNNING"', section)
+        self.assertIn('regex = sys.env("MARKET_HTTP_SERVICE")', section)
+        self.assertIn('__meta_ecs_ec2_instance_private_ip', section)
+        self.assertIn('action = "keepequal"', section)
+        task = (ROOT.parent / 'ecs/monitoring.tf').read_text()
+        self.assertIn('task_role_arn            = aws_iam_role.telemetry_alloy[0].arn', task)
+        self.assertIn('aws_iam_role_policy.telemetry_alloy_discovery', task)
+
     def test_ecs_log_task_label_is_preserved(self):
         source = (ROOT.parent / 'ecs/alloy/config.alloy').read_text().split('loki.source.docker')[0]
         self.assertIn('__meta_docker_container_label_com_amazonaws_ecs_task_arn', source)

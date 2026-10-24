@@ -102,6 +102,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
   network_mode             = "host"
   pid_mode                 = "host"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.telemetry_alloy[0].arn
 
   volume {
     name      = "docker-socket"
@@ -143,6 +144,8 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     environment = [
       { name = "ALLOY_CONFIG", value = file("${path.module}/alloy/config.alloy") },
       { name = "ECS_CLUSTER", value = aws_ecs_cluster.main.name },
+      { name = "AWS_REGION", value = var.aws_region },
+      { name = "MARKET_HTTP_SERVICE", value = "${var.name_prefix}-market-http" },
       { name = "SSE_PROMETHEUS_ENABLED", value = tostring(var.telemetry_sse_prometheus_enabled) },
       { name = "DEPLOYMENT_ENVIRONMENT", value = "prod" },
       { name = "TASK_FAMILY_REGEX", value = "${var.name_prefix}-(backend|backend-collector|market-http|frontend)" },
@@ -184,5 +187,6 @@ resource "aws_ecs_service" "telemetry_alloy" {
 
   depends_on = [
     aws_vpc_security_group_ingress_rule.telemetry_from_alloy,
+    aws_iam_role_policy.telemetry_alloy_discovery,
   ]
 }

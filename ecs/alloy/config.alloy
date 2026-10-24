@@ -144,9 +144,16 @@ prometheus.relabel "task_resources" {
   }
 }
 
-// Docker discovery follows the awsvpc pause container's shared network.
+discovery.aws "market_tasks" {
+  role             = "ecs"
+  region           = sys.env("AWS_REGION")
+  clusters         = [sys.env("ECS_CLUSTER")]
+  port             = 9101
+  refresh_interval = "30s"
+}
+
 discovery.relabel "market_metrics" {
-  targets = discovery.relabel.apps.output
+  targets = discovery.aws.market_tasks.targets
   rule {
     target_label = "__tmp_sse_enabled"
     replacement = sys.env("SSE_PROMETHEUS_ENABLED")
@@ -157,12 +164,33 @@ discovery.relabel "market_metrics" {
     action = "keep"
   }
   rule {
-    source_labels = ["service_name"]
-    regex = "market-http"
+    source_labels = ["__meta_ecs_service"]
+    regex = sys.env("MARKET_HTTP_SERVICE")
     action = "keep"
   }
   rule {
-    source_labels = ["__meta_docker_network_ip"]
+    source_labels = ["__meta_ecs_last_status", "__meta_ecs_desired_status"]
+    regex = "RUNNING;RUNNING"
+    action = "keep"
+  }
+  // Each daemon scrapes only tasks on its own EC2 host.
+  rule {
+    target_label = "__tmp_host_name"
+    replacement = constants.hostname
+  }
+  rule {
+    source_labels = ["__tmp_host_name"]
+    regex = "ip-([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)(.*)"
+    target_label = "__tmp_host_ip"
+    replacement = "$1.$2.$3.$4"
+  }
+  rule {
+    source_labels = ["__meta_ecs_ec2_instance_private_ip"]
+    target_label = "__tmp_host_ip"
+    action = "keepequal"
+  }
+  rule {
+    source_labels = ["__meta_ecs_ip_address"]
     regex = "([0-9.]+)"
     replacement = "$1:9101"
     target_label = "__address__"
@@ -173,7 +201,7 @@ discovery.relabel "market_metrics" {
     action = "keep"
   }
   rule {
-    source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_task_arn"]
+    source_labels = ["__meta_ecs_task_arn"]
     regex = ".*/([^/]+)"
     replacement = "$1"
     target_label = "task_id"
@@ -184,8 +212,12 @@ discovery.relabel "market_metrics" {
     action = "keep"
   }
   rule {
-    source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_task_definition_family"]
+    source_labels = ["__meta_ecs_service"]
     target_label = "ecs_service"
+  }
+  rule {
+    target_label = "service_name"
+    replacement = "market-http"
   }
 }
 
