@@ -147,7 +147,7 @@ prometheus.relabel "task_resources" {
 discovery.aws "market_tasks" {
   role             = "ecs"
   region           = sys.env("AWS_REGION")
-  clusters         = [sys.env("ECS_CLUSTER")]
+  clusters         = [sys.env("ECS_CLUSTER_ARN")]
   port             = 9101
   refresh_interval = "30s"
 }

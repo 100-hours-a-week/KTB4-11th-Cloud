@@ -144,6 +144,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
     environment = [
       { name = "ALLOY_CONFIG", value = file("${path.module}/alloy/config.alloy") },
       { name = "ECS_CLUSTER", value = aws_ecs_cluster.main.name },
+      { name = "ECS_CLUSTER_ARN", value = aws_ecs_cluster.main.arn },
       { name = "AWS_REGION", value = var.aws_region },
       { name = "MARKET_HTTP_SERVICE", value = "${var.name_prefix}-market-http" },
       { name = "SSE_PROMETHEUS_ENABLED", value = tostring(var.telemetry_sse_prometheus_enabled) },
