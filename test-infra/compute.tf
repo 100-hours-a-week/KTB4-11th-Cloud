@@ -190,3 +190,8 @@ resource "aws_instance" "k6" {
     ManagedBy   = "Terraform"
   }
 }
+
+resource "aws_ec2_instance_state" "k6" {
+  instance_id = aws_instance.k6.id
+  state       = "stopped"
+}
