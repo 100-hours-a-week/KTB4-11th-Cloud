@@ -15,8 +15,11 @@ data "aws_iam_policy_document" "telemetry_alloy_discovery" {
     }
   }
   statement {
-    actions   = ["ecs:DescribeClusters"]
-    resources = [aws_ecs_cluster.main.arn]
+    actions = ["ecs:DescribeClusters"]
+    resources = [
+      aws_ecs_cluster.main.arn,
+      "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:cluster/default",
+    ]
   }
   statement {
     actions   = ["ecs:ListServices", "ecs:ListTasks"]

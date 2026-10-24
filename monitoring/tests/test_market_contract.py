@@ -61,6 +61,10 @@ class MarketContractTest(unittest.TestCase):
         source = (ROOT.parent / 'ecs/alloy/config.alloy').read_text()
         section = source.split('discovery.relabel "market_metrics" {', 1)[1].split('prometheus.scrape "market_metrics"', 1)[0]
         self.assertIn('targets = discovery.aws.market_tasks.targets', section)
+        self.assertIn('clusters         = [sys.env("ECS_CLUSTER_ARN")]', source)
+        self.assertIn('value = aws_ecs_cluster.main.arn', (ROOT.parent / 'ecs/monitoring.tf').read_text())
+        permissions = (ROOT.parent / 'ecs/monitoring_discovery.tf').read_text()
+        self.assertIn(':cluster/default', permissions)
         self.assertIn('__meta_ecs_ip_address', section)
         self.assertNotIn('__meta_docker_network_ip', section)
         self.assertIn('__meta_ecs_task_arn', section)
