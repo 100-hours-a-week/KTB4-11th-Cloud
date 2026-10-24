@@ -129,19 +129,6 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
         }
         files["smoke.py"] = (ROOT / "scripts" / "smoke.py").read_bytes()
         files["configure-alerting.py"] = (ROOT / "scripts" / "configure-alerting.py").read_bytes()
-        if sse_prometheus:
-            name = "config/grafana/dashboards/prod/ecs-sse.json"
-            dashboard = json.loads(files[name])
-            override = json.loads((ROOT / "overrides/sse-prometheus.json").read_text())
-            panels = {panel['id']: panel for panel in override['panels']}
-            for index, panel in enumerate(dashboard['panels']):
-                if panel['id'] in panels:
-                    dashboard['panels'][index] = panels.pop(panel['id'])
-                else:
-                    panel['gridPos']['y'] += 8
-            dashboard['panels'].extend(panels.values())
-            dashboard['description'] = override['description']
-            files[name] = json.dumps(dashboard, ensure_ascii=False, separators=(",", ":")).encode()
         address = ipaddress.IPv4Address(destination["private_ip"])
         root_url = destination.get("grafana_url") or "http://localhost:13000/"
         parsed_root = urlsplit(root_url)
@@ -247,7 +234,7 @@ def main() -> None:
     parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET, *METRICS_TARGETS])
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--sse-prometheus", action="store_true", help="Opt in after AI metric endpoints are verified; only server/dev-ai-agent")
+    parser.add_argument("--sse-prometheus", action="store_true", help="Enable dev AI scraping; accepted for server compatibility (SSE panels are always included)")
     parser.add_argument("--streamer-metrics-port", type=int, help="Explicit loopback streamer port (contract: 9102); AI agents only")
     args = parser.parse_args()
     if args.streamer_metrics_port is not None and (args.target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= args.streamer_metrics_port <= 65535 or args.streamer_metrics_port in [9101, 12345]):
