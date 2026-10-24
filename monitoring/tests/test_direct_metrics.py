@@ -52,8 +52,7 @@ class DirectMetricsTest(unittest.TestCase):
         }
         default = deploy.deployment_files('server', destination)
         name = 'config/grafana/dashboards/prod/ecs-sse.json'
-        self.assertTrue(all(p['datasource']['uid'] == 'cloudwatch'
-                            for p in json.loads(default[name])['panels'] if p['id'] < 20))
+        self.assertEqual(default[name], deploy.deployment_files('server', destination, sse_prometheus=True)[name])
         files = deploy.deployment_files('server', destination, sse_prometheus=True)
         dashboard = json.loads(files[name])
         ids = set()
@@ -85,7 +84,7 @@ class DirectMetricsTest(unittest.TestCase):
         self.assertEqual(variable['allValue'], '.*')
         self.assertIn('ecs_service="stockspoon-v2-prod-market-http"', variable['query'])
         for panel in dashboard['panels']:
-            if panel['id'] >= 20:
+            if 20 <= panel['id'] <= 36:
                 for target in panel['targets']:
                     self.assertIn('task_id=~"${task:regex}"', target['expr'])
                     self.assertNotIn('or vector(0)', target['expr'])

@@ -31,6 +31,32 @@ class MarketContractTest(unittest.TestCase):
                 self.assertIsNotNone(re.fullmatch(pattern, name), name)
             self.assertIsNone(re.fullmatch(pattern, 'market_http_private_unapproved_metric'))
 
+    def test_production_scrape_port_and_app_configuration_agree(self):
+        production = (ROOT.parent / 'ecs/environments/prod/terraform.tfvars.example').read_text()
+        self.assertIn('telemetry_sse_prometheus_enabled = true', production)
+        task = (ROOT.parent / 'ecs/svc_market_http.tf').read_text()
+        settings = deploy.market_http_metrics_environment()
+        for name, value in settings.items():
+            self.assertIn(f'{{ name = "{name}", value = "{value}" }}', task)
+        self.assertIn('var.telemetry_sse_prometheus_enabled ? [', task)
+        alloy = (ROOT.parent / 'ecs/alloy/config.alloy').read_text()
+        self.assertIn('replacement = "$1:9101"', alloy)
+        rules = (ROOT.parent / 'ecs/monitoring_metrics.tf').read_text()
+        self.assertIn('from_port                    = 9101', rules)
+        self.assertIn('referenced_security_group_id = aws_security_group.ecs_instance.id', rules)
+        self.assertNotIn('cidr_ipv4', rules)
+
+    def test_pool_dashboard_is_present_without_opt_in_and_keeps_states(self):
+        dashboard = json.loads((ROOT / 'config/grafana/dashboards/prod/ecs-sse.json').read_text())
+        pool = next(p for p in dashboard['panels'] if any(
+            'market_http_valkey_pool_connections{' in target.get('expr', '') for target in p['targets']))
+        self.assertEqual(pool['datasource']['uid'], 'prometheus')
+        self.assertIn('sum by(state)', pool['targets'][0]['expr'])
+        self.assertIn('in_use', json.dumps(pool))
+        self.assertIn('available', json.dumps(pool))
+        self.assertIn('acquiring', json.dumps(pool))
+        self.assertNotIn('or vector(0)', pool['targets'][0]['expr'])
+
     def test_ecs_log_task_label_is_preserved(self):
         source = (ROOT.parent / 'ecs/alloy/config.alloy').read_text().split('loki.source.docker')[0]
         self.assertIn('__meta_docker_container_label_com_amazonaws_ecs_task_arn', source)

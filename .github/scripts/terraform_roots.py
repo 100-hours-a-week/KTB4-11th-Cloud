@@ -11,7 +11,7 @@ from pathlib import PurePosixPath
 
 # A root ID is a Terraform directory, optionally suffixed with "@<env>" when the
 # same directory is planned and applied with another backend and var file.
-# A bare directory name is that root's default (dev) environment.
+# A bare directory name uses DEFAULT_ENVIRONMENTS, falling back to dev.
 ROOT_DEPENDENCIES = {
     "shared-infra": set(),
     "test-infra": set(),
@@ -42,6 +42,8 @@ ROOT_DEPENDENCIES = {
 MODULE_CONSUMERS = {
     "modules/terraform-ci-policies": {"app-server"},
 }
+
+DEFAULT_ENVIRONMENTS = {"ecs": "prod", "monitoring": "prod"}
 
 
 def dependency_order(
@@ -80,6 +82,10 @@ for _consumer, _dependencies in ROOT_DEPENDENCIES.items():
 def root_dir(root: str) -> str:
     """Return the Terraform directory for a root ID such as ``messaging@prod``."""
     return root.split("@", 1)[0]
+
+
+def root_environment(root: str) -> str:
+    return root.split("@", 1)[1] if "@" in root else DEFAULT_ENVIRONMENTS.get(root, "dev")
 
 
 def changes_workflow(path: PurePosixPath) -> bool:
@@ -122,12 +128,12 @@ def affected_roots(paths: list[str]) -> list[str]:
                 relative = path.relative_to(directory)
                 if relative.parts[:1] == ("environments",) and len(relative.parts) >= 2:
                     environments = {
-                        candidate.split("@", 1)[1] if "@" in candidate else "dev"
+                        root_environment(candidate)
                         for candidate in ROOT_ORDER if root_dir(candidate) == directory
                     }
                     if relative.parts[1] not in environments:
                         raise ValueError(f"unknown Terraform environment: {directory}/{relative.parts[1]}")
-                    environment = root.split("@", 1)[1] if "@" in root else "dev"
+                    environment = root_environment(root)
                     if relative.parts[1] != environment:
                         continue
                 selected.add(root)

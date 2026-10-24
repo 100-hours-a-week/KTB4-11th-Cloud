@@ -92,6 +92,23 @@ class DependencyGraphTest(unittest.TestCase):
 
 
 class ChangedRootSelectionTest(unittest.TestCase):
+    def test_ecs_production_var_file_selects_ecs_and_its_consumer(self):
+        self.assertEqual(
+            roots.affected_roots(["ecs/environments/prod/terraform.tfvars.example"]),
+            ["ecs", "test-infra/sse-k6"],
+        )
+
+    def test_monitoring_production_var_file_selects_monitoring_and_consumers(self):
+        self.assertEqual(
+            roots.affected_roots(["monitoring/environments/prod/terraform.tfvars.example"]),
+            ["monitoring", "ecs", "test-infra/sse-k6"],
+        )
+
+    def test_production_only_roots_reject_unregistered_environments(self):
+        for directory in ["ecs", "monitoring"]:
+            with self.subTest(directory=directory), self.assertRaisesRegex(ValueError, "unknown Terraform environment"):
+                roots.affected_roots([f"{directory}/environments/dev/terraform.tfvars.example"])
+
     def test_nested_sse_k6_changes_select_only_its_own_root(self):
         self.assertEqual(
             roots.affected_roots(["test-infra/sse-k6/compute.tf"]),
