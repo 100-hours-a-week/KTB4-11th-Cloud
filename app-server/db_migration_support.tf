@@ -74,6 +74,17 @@ resource "aws_vpc_security_group_ingress_rule" "db_migration_support_ssh" {
   description       = "SSH from the administrator IP only"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "db_migration_loadgen_ssh" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.db_migration_support["loadgen"].id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 22
+  to_port           = 22
+  ip_protocol       = "tcp"
+  description       = "Public SSH to load generator; key authentication only"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "db_migration_pmm_admin" {
   for_each = var.db_migration_enabled ? var.db_migration_admin_cidrs : toset([])
 

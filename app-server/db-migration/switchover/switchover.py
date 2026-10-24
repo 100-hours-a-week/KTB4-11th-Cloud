@@ -3,8 +3,10 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from fnmatch import fnmatchcase
 import getpass
 import hashlib
+from ipaddress import ip_address, ip_network
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,8 @@ import signal
 import subprocess
 import sys
 import time
+
+from credential_store import load_passwords
 
 
 class SafetyError(RuntimeError):
@@ -118,6 +122,53 @@ def redact_secrets(value, secrets):
     return value
 
 
+def replication_source_account_audit(db, username, replica_host):
+    """Check the source-side replica account before either DB is fenced."""
+    rows = db.rows("SELECT user, host, account_locked, ssl_type FROM mysql.user WHERE user=%s", (username,))
+    accounts = []
+    for row in rows:
+        account_user = db.connection.escape(row["user"])
+        account_host = db.connection.escape(row["host"])
+        if isinstance(account_user, bytes):
+            account_user = account_user.decode("utf-8")
+        if isinstance(account_host, bytes):
+            account_host = account_host.decode("utf-8")
+        grants = db.rows(f"SHOW GRANTS FOR {account_user}@{account_host}")
+        grant_text = [str(next(iter(grant.values()))).upper() for grant in grants]
+        replication_privilege = any(
+            ("REPLICATION SLAVE" in grant or "REPLICATION REPLICA" in grant)
+            and " ON *.* " in grant
+            for grant in grant_text
+        )
+        host_pattern = str(row["host"])
+        if replica_host is None:
+            host_matches = None
+        else:
+            try:
+                host_matches = ip_address(replica_host) in ip_network(host_pattern, strict=False)
+            except ValueError:
+                host_matches = fnmatchcase(replica_host, host_pattern.replace("%", "*").replace("_", "?"))
+        summary = {
+            "user": row["user"],
+            "host": host_pattern,
+            "account_locked": row["account_locked"],
+            "ssl_type": row["ssl_type"],
+            "replica_host_matches": host_matches,
+            "has_replication_privilege": replication_privilege,
+        }
+        accounts.append(summary)
+    usable = any(
+        str(account["account_locked"]).upper() in ("N", "NO", "0")
+        and account["replica_host_matches"] is not False
+        and account["has_replication_privilege"]
+        for account in accounts
+    )
+    require(usable, f"Replication account is missing or unusable on source: "
+            + json.dumps({"user": username, "replica_host": replica_host, "accounts": accounts},
+                         ensure_ascii=False, default=str))
+    return accounts
+
+
 def replication_diagnostics(db, secrets=()):
     """Best-effort, credential-safe snapshot for replication setup failures."""
     snapshot = {}
@@ -153,7 +204,7 @@ def replication_diagnostics(db, secrets=()):
         FROM mysql.slave_relay_log_info ORDER BY Channel_name""")
     read("recent_replication_error_log", """SELECT LOGGED, PRIO, ERROR_CODE, SUBSYSTEM, DATA
         FROM performance_schema.error_log
-        WHERE SUBSYSTEM = 'Repl' OR DATA LIKE '%relay%' OR DATA LIKE '%applier%'
+        WHERE SUBSYSTEM = 'Repl' OR DATA LIKE '%%relay%%' OR DATA LIKE '%%applier%%'
         ORDER BY LOGGED DESC LIMIT 100""")
 
     return redact_secrets(snapshot, secrets)
@@ -282,6 +333,8 @@ class Switch:
         self.primary_cfg, self.standby_cfg = cfg[self.primary_name], cfg[self.standby_name]
         self.deadline = None
         self.monitor_baseline = {}
+        self.write_block_started_monotonic = None
+        self.write_block_started_at = None
 
     def guard(self):
         require(self.deadline is None or time.monotonic() < self.deadline, "Cutover time budget exceeded")
@@ -307,14 +360,56 @@ class Switch:
         actual = sorted((int(r["hostgroup_id"]), r["hostname"], int(r["port"]), r["status"]) for r in rows)
         expected = sorted((10 if n == writer_name else 20, self.cfg[n]["server_host"],
                            self.cfg[n]["server_port"], "ONLINE") for n in ("source", "target"))
-        require(actual == expected, "Unexpected/offline ProxySQL hostgroup membership")
+        expected_hostgroup = {
+            (self.cfg[n]["server_host"], self.cfg[n]["server_port"]):
+            (10 if n == writer_name else 20)
+            for n in ("source", "target")
+        }
+        actual_online = sorted(row for row in actual if row[3] == "ONLINE")
+        # ProxySQL can retain the old writer-hostgroup row as OFFLINE_HARD
+        # after read_only monitoring moves that server into the reader group.
+        # OFFLINE_HARD receives no traffic, so allow only that known stale row;
+        # all online memberships and all other statuses remain strict.
+        stale_offline_hard = [
+            row for row in actual
+            if row[3] == "OFFLINE_HARD"
+            and (row[1], row[2]) in expected_hostgroup
+            and row[0] != expected_hostgroup[(row[1], row[2])]
+        ]
+        unexpected_rows = [row for row in actual if row not in actual_online and row not in stale_offline_hard]
+        if actual_online != expected or unexpected_rows:
+            monitor_snapshot = {}
+            for name in ("source", "target"):
+                try:
+                    observation = self.monitor(self.cfg[name])
+                    monitor_snapshot[name] = {
+                        "time_start_us": observation.get("time_start_us"),
+                        "read_only": observation.get("read_only"),
+                        "error": observation.get("error"),
+                    }
+                except Exception as error:
+                    monitor_snapshot[name] = {"query_error": str(error)}
+            raise SafetyError(
+                "Unexpected/offline ProxySQL hostgroup membership: "
+                + json.dumps({"writer_expected": writer_name, "expected": expected,
+                              "actual": actual, "unexpected_rows": unexpected_rows,
+                              "allowed_stale_offline_hard": stale_offline_hard,
+                              "monitor": monitor_snapshot},
+                             ensure_ascii=False, default=str)
+            )
         for name in ("source", "target"):
             cfg = self.cfg[name]
             monitor = self.monitor(cfg)
-            require(monitor["error"] is None and str(monitor["read_only"]) == ("0" if name == writer_name else "1"),
-                    "ProxySQL monitor has not observed the expected role")
-            require(int(monitor["time_start_us"]) > self.monitor_baseline.get(name, -1),
-                    "Waiting for a fresh ProxySQL monitor observation")
+            expected_read_only = "0" if name == writer_name else "1"
+            require(monitor["error"] is None and str(monitor["read_only"]) == expected_read_only,
+                    "ProxySQL monitor role mismatch: "
+                    + json.dumps({"database": name, "expected_read_only": expected_read_only,
+                                  "observation": monitor}, ensure_ascii=False, default=str))
+            baseline = self.monitor_baseline.get(name, -1)
+            require(int(monitor["time_start_us"]) > baseline,
+                    "Waiting for a fresh ProxySQL monitor observation: "
+                    + json.dumps({"database": name, "baseline_time_start_us": baseline,
+                                  "observation": monitor}, ensure_ascii=False, default=str))
 
     def app_probe(self, endpoint, expected_uuid):
         connection = self.connect_app(endpoint)
@@ -365,6 +460,14 @@ class Switch:
             require(repl["Source_User"] == self.cfg["forward_replication"]["user"], "Forward replication username differs from config")
         else:
             require(repl["Source_User"] == self.cfg["reverse_replication"]["user"], "Reverse replication username differs from config")
+        account_audit = {
+            "forward_source_v1": replication_source_account_audit(
+                self.dbs["source"], self.cfg["forward_replication"]["user"], None),
+            "reverse_source_migration": replication_source_account_audit(
+                self.dbs["target"], self.cfg["reverse_replication"]["user"], self.cfg["source"]["server_host"]),
+        }
+        self.journal.state["replication_account_audit"] = account_audit
+        self.journal.event("replication_account_audit", accounts=account_audit)
         require(repl["Source_SSL_Allowed"] == "Yes", "Encrypted replication is required")
         require(not any(repl.get(k) for k in ("Source_SSL_CA_File", "Source_SSL_CA_Path", "Source_SSL_Cert", "Source_SSL_Key"))
                 and repl["Source_SSL_Verify_Server_Cert"] == "No",
@@ -426,6 +529,15 @@ class Switch:
         self.journal.event("fence_requested", database=label)
         db.rows("SET SESSION lock_wait_timeout=10")
         db.rows("SET PERSIST read_only=ON")
+        if label == self.primary_name:
+            # read_only=ON is the point where ordinary application writes to
+            # the current primary are rejected. Use monotonic time for the
+            # duration and UTC only for the persisted report.
+            self.write_block_started_monotonic = time.monotonic()
+            self.write_block_started_at = stamp()
+            self.journal.state["write_blocked_started_at"] = self.write_block_started_at
+            self.journal.event("write_blocked_started", database=label,
+                               boundary="after SET PERSIST read_only=ON succeeded")
         db.rows("SET PERSIST super_read_only=ON")
         self.assert_fenced(db)
         paths = db.rows("SELECT @@global.relay_log_basename AS base, @@global.relay_log_index AS idx")[0]
@@ -528,7 +640,6 @@ class Switch:
         self.preflight()
         self.deadline = time.monotonic() + self.cfg["cutover_timeout_seconds"]
         self.fence(self.standby, self.standby_name)
-        outage_start = time.monotonic()
         self.fence(self.primary, self.primary_name)
         # Prevent an old stopped channel from restarting if the old primary restarts mid-cutover.
         self.primary.rows("SET PERSIST_ONLY skip_replica_start=ON")
@@ -572,7 +683,22 @@ class Switch:
             probe = self.app_probe(self.cfg["proxy_app"], self.standby_cfg["uuid"])
             require(probe["ro"] == 0, "ProxySQL app connection is still read-only")
         self.wait(routed, self.cfg["routing_timeout_seconds"])
-        routing_seconds = round(time.monotonic() - outage_start, 3)
+        writer_ready_monotonic = time.monotonic()
+        writer_ready_at = stamp()
+        write_blocked_seconds = round(writer_ready_monotonic - self.write_block_started_monotonic, 3)
+        self.journal.state["write_availability_window"] = {
+            "started_at": self.write_block_started_at,
+            "writer_ready_at": writer_ready_at,
+            "duration_seconds": write_blocked_seconds,
+            "start_boundary": "current primary SET PERSIST read_only=ON succeeded",
+            "end_boundary": "ProxySQL roles are correct and a fresh app connection reaches the promoted DB with read_only=0",
+        }
+        # Capture the end timestamp before writing this result event or doing
+        # post-promotion replication checks, so reporting time is not counted.
+        self.journal.event("proxy_writer_ready", database=self.standby_name,
+                           write_blocked_seconds=write_blocked_seconds,
+                           write_blocked_started_at=self.write_block_started_at,
+                           writer_ready_at=writer_ready_at)
         after = self.standby.scalar("SELECT @@GLOBAL.gtid_executed")
         new_gtids = self.standby.scalar("SELECT GTID_SUBTRACT(%s,%s)", (after, boundary["Executed_Gtid_Set"]))
         self.wait_gtids(self.primary, new_gtids)
@@ -580,7 +706,7 @@ class Switch:
         self.assert_fenced(self.primary)
         self.journal.state["status"] = "complete"
         self.journal.event("complete", primary=self.standby_name, standby=self.primary_name,
-                           fence_request_to_route_ready_seconds=routing_seconds,
+                           write_blocked_seconds=write_blocked_seconds,
                            replicated_post_promotion_gtids=new_gtids)
 
 
@@ -622,6 +748,7 @@ def main():
     parser.add_argument("command", choices=["check", "capture", "switch", "rollback", "restore"],
                         help="restore is a backwards-compatible alias for rollback")
     parser.add_argument("--config", required=True)
+    parser.add_argument("--credentials-file", help="owner-only JSON file created by credential_store.py")
     parser.add_argument("--out", required=True, help="New directory; never overwrites an earlier run")
     parser.add_argument("--capture-dir", help="Successful capture required by switch")
     parser.add_argument("--switch-dir", help="Successful switch required by rollback")
@@ -642,15 +769,20 @@ def main():
     if prior:
         require(prior["identities"] == {n: cfg[n]["uuid"] for n in ("source", "target")}, "Record belongs to different databases")
         require(prior["schema"] == cfg["schema"], "Record belongs to a different schema")
+    names = ["source", "target", "proxy_admin", "proxy_app"]
+    if args.command == "switch" or rollback:
+        names += ["forward_replication" if rollback else "reverse_replication"]
+    required_passwords = [cfg[name]["password_env"] for name in names]
+    saved_passwords = load_passwords(args.credentials_file, required_passwords) if args.credentials_file else {}
     journal = Journal(args.out, "rollback" if rollback else args.command)
     passwords, dbs = {}, {}
     try:
-        names = ["source", "target", "proxy_admin", "proxy_app"]
-        if args.command == "switch" or rollback:
-            names += ["forward_replication" if rollback else "reverse_replication"]
         for name in names:
             env = cfg[name]["password_env"]
-            passwords[env] = os.environ.get(env) or getpass.getpass(f"{name} ({cfg[name]['user']}) password: ")
+            password = saved_passwords.get(env) if args.credentials_file else os.environ.get(env)
+            if not password and not args.credentials_file:
+                password = getpass.getpass(f"{name} ({cfg[name]['user']}) password: ")
+            passwords[env] = password
             require(bool(passwords[env]), "Empty passwords are not accepted")
         for name in ("source", "target", "proxy_admin"):
             dbs[name] = DB(cfg[name], passwords[cfg[name]["password_env"]], cfg["query_timeout_seconds"])
