@@ -41,9 +41,9 @@ variable "observability_alarm_actions" {
 }
 
 # Backend는 평일 08:40~15:40 최소 3개, 그 외 최소 2개를 유지한다.
-# market-http는 단일 Task 부하 테스트 동안 예약 확장 대상에서 제외한다.
+# market-http는 min=2/max=3으로 운영하며 장전 예약 확장은 별도로 활성화하지 않는다.
 variable "service_preopen_scaling" {
-  description = "Paired schedules in Asia/Seoul; backend defaults to minimum 3 at 08:40 and minimum 2 at 15:40 on weekdays; market-http is excluded during single-task load testing"
+  description = "Paired schedules in Asia/Seoul; backend defaults to minimum 3 at 08:40 and minimum 2 at 15:40 on weekdays; market-http has no scheduled scaling by default"
   type = map(object({
     min_capacity     = number
     preopen_schedule = string
@@ -61,7 +61,7 @@ variable "service_preopen_scaling" {
     condition = alltrue([
       for service, config in var.service_preopen_scaling :
       contains(["backend", "market-http"], service) &&
-      contains([3, 4], config.min_capacity) &&
+      (service == "market-http" ? config.min_capacity == 3 : contains([3, 4], config.min_capacity)) &&
       can(regex("^cron\\(.+\\)$", config.preopen_schedule)) &&
       can(regex("^cron\\(.+\\)$", config.restore_schedule)) &&
       config.preopen_schedule != config.restore_schedule &&
@@ -69,7 +69,7 @@ variable "service_preopen_scaling" {
         config.min_capacity == 3 && config.preopen_schedule == "cron(40 8 ? * MON-FRI *)"
       ))
     ])
-    error_message = "Use backend/market-http keys, minimum 3 or 4, and distinct cron schedules; backend preopen must be weekdays at 08:40 with minimum 3."
+    error_message = "Use backend/market-http keys and distinct cron schedules; market-http minimum must be 3 (its maximum); backend preopen must be weekdays at 08:40 with minimum 3."
   }
 }
 
@@ -361,9 +361,14 @@ variable "market_http_task_memory" {
 }
 
 variable "market_http_desired_count" {
-  description = "Number of market-http tasks (fixed to one during single-task load testing)"
+  description = "Initial number of market-http tasks; Application Auto Scaling manages the running desired count within 2 to 3"
   type        = number
-  default     = 1
+  default     = 2
+
+  validation {
+    condition     = contains([2, 3], var.market_http_desired_count)
+    error_message = "market_http_desired_count must be 2 or 3, within the service scaling range."
+  }
 }
 
 # ALB 경로 접두사. 앱은 루트 경로(/prices, /bars, ...)를 제공하므로 ALB가 접두사를 제거해 전달한다.
