@@ -30,12 +30,12 @@ moved {
 resource "aws_appautoscaling_target" "market_http" {
   count = local.ai_market_enabled ? 1 : 0
 
-  # 단일 Task 처리 용량을 측정하는 동안 자동 확장을 제한한다.
+  # 단일 Task 검증 이후의 운영 범위: 평상시 2개, 자동 확장 최대 3개.
   service_namespace  = "ecs"
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.market_http[0].name}"
   scalable_dimension = "ecs:service:DesiredCount"
-  min_capacity       = 1
-  max_capacity       = 1
+  min_capacity       = 2
+  max_capacity       = 3
 }
 
 locals {
@@ -73,7 +73,8 @@ resource "aws_appautoscaling_policy" "market_http_connections" {
   scalable_dimension = aws_appautoscaling_target.market_http[0].scalable_dimension
 
   target_tracking_scaling_policy_configuration {
-    target_value       = 400
+    # 서비스에 속한 Task별 연결 수 표본의 평균. Task별 강제 접속 상한은 아니다.
+    target_value       = 1000
     scale_out_cooldown = 60
     scale_in_cooldown  = 300
 
@@ -96,7 +97,7 @@ resource "aws_appautoscaling_policy" "market_http_connections" {
   }
 }
 
-# 두 서비스의 선확장과 최소치 복귀를 한 쌍으로 관리한다.
+# 설정된 서비스의 선확장과 최소치 복귀를 한 쌍으로 관리한다.
 resource "aws_appautoscaling_scheduled_action" "preopen" {
   for_each = {
     for service, config in var.service_preopen_scaling : service => config
@@ -112,7 +113,7 @@ resource "aws_appautoscaling_scheduled_action" "preopen" {
 
   scalable_target_action {
     min_capacity = each.value.min_capacity
-    max_capacity = 4
+    max_capacity = local.service_scaling_targets[each.key].max_capacity
   }
 }
 
@@ -128,6 +129,6 @@ resource "aws_appautoscaling_scheduled_action" "restore" {
 
   scalable_target_action {
     min_capacity = 2
-    max_capacity = 4
+    max_capacity = local.service_scaling_targets[each.key].max_capacity
   }
 }

@@ -236,8 +236,9 @@ resource "aws_ecs_service" "market_http" {
   enable_ecs_managed_tags = true
 
   lifecycle {
-    # 부하 테스트용 desired_count=1을 기존 서비스에도 반영한다.
-    ignore_changes = [task_definition]
+    # 배포 파이프라인의 Task 정의와 자동 확장이 조정한 desired_count를 유지한다.
+    # 기존 단일 Task 서비스는 scaling target의 min_capacity=2로 복귀한다.
+    ignore_changes = [task_definition, desired_count]
   }
 
   depends_on = [
