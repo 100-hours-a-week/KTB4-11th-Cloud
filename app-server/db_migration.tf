@@ -190,6 +190,13 @@ data "aws_iam_policy_document" "db_migration_switchover_runner" {
       "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:session/*",
     ]
   }
+
+  statement {
+    sid       = "InvokeProductionDbWriteReplayLambda"
+    effect    = "Allow"
+    actions   = ["lambda:InvokeFunction"]
+    resources = ["arn:${data.aws_partition.monitoring.partition}:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:stockspoon-v2-prod-db-write-replay-forwarder"]
+  }
 }
 
 resource "aws_iam_role_policy" "db_migration_switchover_runner" {
