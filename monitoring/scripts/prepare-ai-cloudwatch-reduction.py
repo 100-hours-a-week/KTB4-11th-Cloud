@@ -24,6 +24,10 @@ def reduce_config(current):
     dimensions = metrics.get("append_dimensions", {})
     if set(dimensions) != {"InstanceId", "InstanceType"}:
         raise ValueError("Unexpected dimensions; preserve alarm identities by explicit review")
+    known = {"cpu", "mem", "disk", "net", "diskio", "netstat", "processes", "swap"}
+    unknown = set(metrics.get("metrics_collected", {})) - known
+    if unknown:
+        raise ValueError("Unreviewed collectors must be preserved; review before reduction: " + ", ".join(sorted(unknown)))
     metrics["metrics_collected"] = {
         "cpu": {"measurement": ["usage_active"], "totalcpu": True},
         "mem": {"measurement": ["used_percent", "available_percent"]},

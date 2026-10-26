@@ -48,6 +48,14 @@ class AiCloudWatchReductionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             reduction.reduce_config(current)
 
+    def test_rejects_unknown_collectors_instead_of_disabling_custom_collection(self):
+        current = self.current()
+        current["metrics"]["metrics_collected"]["statsd"] = {"service_address": ":8125"}
+        original = copy.deepcopy(current)
+        with self.assertRaisesRegex(ValueError, "Unreviewed collectors"):
+            reduction.reduce_config(current)
+        self.assertEqual(current, original)
+
     def test_live_apply_rejects_wrong_instance_before_reading_or_writing_config(self):
         with patch.object(reduction.os, "geteuid", return_value=0), \
              patch.object(reduction, "instance_id", return_value="i-wrong"), \
@@ -57,9 +65,7 @@ class AiCloudWatchReductionTest(unittest.TestCase):
             run.assert_not_called()
 
     def test_ai_metrics_missing_rule_does_not_depend_on_ecs_cluster(self):
-        doc = json.loads((ROOT / "config/grafana/provisioning/alerting/rules.json").read_text())
-        rule = next(r for g in doc["groups"] for r in g["rules"]
-                    if r["uid"] == "stockspoon-prod-ai-metrics-missing")
+        rule = json.loads((ROOT / "alerts/ai-host.json").read_text())
         expr = rule["data"][0]["model"]["expr"]
         self.assertIn('cluster="stockspoon-v1-ai"', expr)
         self.assertIn('host_role="ai"', expr)
