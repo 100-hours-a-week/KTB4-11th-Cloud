@@ -49,6 +49,15 @@ class EnvironmentDashboardTest(unittest.TestCase):
             self.assertEqual(dashboard['uid'], 'stockspoon-dev-' + service)
             self.assertEqual(dashboard['templating']['list'], [])
             for panel in dashboard['panels']:
+                if service == 'backend' and panel['id'] in [6, 7]:
+                    self.assertEqual(panel['datasource']['uid'], 'prometheus')
+                    self.assertIn('호스트', panel['title'])
+                    self.assertIn('컨테이너', panel['description'])
+                    for target in panel['targets']:
+                        self.assertIn('environment="dev"', target['expr'])
+                        self.assertIn('host_role="app"', target['expr'])
+                        self.assertIn('cluster="stockspoon-v2-dev"', target['expr'])
+                    continue
                 self.assertEqual(panel['datasource']['uid'], 'loki')
                 for target in panel['targets']:
                     self.assertIn('environment="dev"', target['expr'])

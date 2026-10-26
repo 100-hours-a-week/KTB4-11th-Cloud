@@ -186,6 +186,66 @@
         "showTime": true,
         "sortOrder": "Descending"
       }
+    },
+    {
+      "id": 6,
+      "title": "개발 APP 호스트 CPU",
+      "description": "개발 APP EC2 전체 CPU입니다. BE 컨테이너만의 사용량이 아니며 같은 호스트의 다른 프로세스도 포함합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - avg by(instance) (rate(node_cpu_seconds_total{environment=\"dev\",host_role=\"app\",cluster=\"stockspoon-v2-dev\",mode=\"idle\"}[$__rate_interval])))",
+          "legendFormat": "{{instance}} {{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "개발 APP 호스트 메모리",
+      "description": "개발 APP EC2 전체 메모리입니다. BE 컨테이너 전용 지표가 아닙니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{environment=\"dev\",host_role=\"app\",cluster=\"stockspoon-v2-dev\"} / node_memory_MemTotal_bytes{environment=\"dev\",host_role=\"app\",cluster=\"stockspoon-v2-dev\"})",
+          "legendFormat": "{{instance}} {{task_id}}",
+          "range": true
+        }
+      ]
     }
   ],
   "description": "개발 BE 전용 로그. 로그 발생률은 요청량이 아닙니다. 공유 EC2 자원은 개발 호스트에서 확인하세요."

@@ -78,6 +78,43 @@
           ]
         }
       ]
+    },
+    {
+      "interval": "30s",
+      "input_series": [
+        {
+          "series": "http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id=\"a\",uri=\"/api/items\",status=\"200\"}",
+          "values": "0+30x12"
+        },
+        {
+          "series": "http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id=\"b\",uri=\"/api/items\",status=\"200\"}",
+          "values": "0+27x12"
+        },
+        {
+          "series": "http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id=\"b\",uri=\"/api/items\",status=\"500\"}",
+          "values": "0+3x12"
+        },
+        {
+          "series": "http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id=\"idle\",uri=\"/api/items\",status=\"200\"}",
+          "values": "0x12"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "expr": "100 * (sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\".*\",uri!~\"/actuator.*\",status=~\"5..\"}[2m])) or on(task_id) (0 * sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\".*\",uri!~\"/actuator.*\"}[2m])))) / (sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\".*\",uri!~\"/actuator.*\"}[2m])) > 0)",
+          "eval_time": "5m",
+          "exp_samples": [
+            {
+              "labels": "{task_id=\"a\"}",
+              "value": 0
+            },
+            {
+              "labels": "{task_id=\"b\"}",
+              "value": 10
+            }
+          ]
+        }
+      ]
     }
   ],
   "fuzzy_compare": true
