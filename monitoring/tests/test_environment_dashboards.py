@@ -41,7 +41,7 @@ class EnvironmentDashboardTest(unittest.TestCase):
         uids = [d['uid'] for d in dashboards]
         self.assertEqual(len(set(uids)), len(uids))
         self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb'} <= set(uids))
-        self.assertEqual(len(dashboards), 9)
+        self.assertEqual(len(dashboards), 10)
 
     def test_dedicated_development_dashboards_cannot_include_other_services(self):
         for service in ['frontend', 'backend']:

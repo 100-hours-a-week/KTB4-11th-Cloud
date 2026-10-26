@@ -242,6 +242,109 @@ prometheus.relabel "market_metrics" {
   }
 }
 
+discovery.aws "backend_tasks" {
+  role             = "ecs"
+  region           = sys.env("AWS_REGION")
+  clusters         = [sys.env("ECS_CLUSTER_ARN")]
+  port             = 8080
+  refresh_interval = "30s"
+}
+
+discovery.relabel "backend_metrics" {
+  targets = discovery.aws.backend_tasks.targets
+  rule {
+    target_label = "__tmp_sse_enabled"
+    replacement = sys.env("BACKEND_PROMETHEUS_ENABLED")
+  }
+  rule {
+    source_labels = ["__tmp_sse_enabled"]
+    regex = "true"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_service"]
+    regex = sys.env("BACKEND_SERVICE")
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_last_status", "__meta_ecs_desired_status"]
+    regex = "RUNNING;RUNNING"
+    action = "keep"
+  }
+  // Each daemon scrapes only tasks on its own EC2 host.
+  rule {
+    target_label = "__tmp_host_name"
+    replacement = constants.hostname
+  }
+  rule {
+    source_labels = ["__tmp_host_name"]
+    regex = "ip-([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)(.*)"
+    target_label = "__tmp_host_ip"
+    replacement = "$1.$2.$3.$4"
+  }
+  rule {
+    source_labels = ["__meta_ecs_ec2_instance_private_ip"]
+    target_label = "__tmp_host_ip"
+    action = "keepequal"
+  }
+  rule {
+    source_labels = ["__meta_ecs_ip_address"]
+    regex = "([0-9.]+)"
+    replacement = "$1:" + sys.env("BACKEND_PORT")
+    target_label = "__address__"
+  }
+  rule {
+    source_labels = ["__address__"]
+    regex = "[0-9.]+:[0-9]+"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_task_arn"]
+    regex = ".*/([^/]+)"
+    replacement = "$1"
+    target_label = "task_id"
+  }
+  rule {
+    source_labels = ["task_id"]
+    regex = ".+"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_ecs_service"]
+    target_label = "ecs_service"
+  }
+  rule {
+    target_label = "service_name"
+    replacement = "backend"
+  }
+}
+
+prometheus.scrape "backend_metrics" {
+  targets = discovery.relabel.backend_metrics.output
+  scrape_interval = "15s"
+  scrape_timeout = "5s"
+  metrics_path = "/actuator/prometheus"
+  // Existing BE security reads access_token cookies, not Bearer headers.
+  http_headers = {
+    "Cookie" = [sys.env("BACKEND_METRICS_COOKIE")],
+  }
+  follow_redirects = false
+  forward_to = [prometheus.relabel.backend_metrics.receiver]
+}
+
+prometheus.relabel "backend_metrics" {
+  forward_to = [prometheus.remote_write.server.receiver]
+  rule {
+    source_labels = ["__name__"]
+    regex = "http_server_requests_seconds_(bucket|sum|count|max)|tomcat_threads_(busy|current)_threads|tomcat_threads_config_max_threads|hikaricp_connections(_(active|idle|pending|max|min|timeout_total|acquire_seconds_(sum|count|max)))?|up"
+    action = "keep"
+  }
+  rule {
+    target_label = "job"
+    replacement = "backend-metrics"
+  }
+}
+
 prometheus.remote_write "server" {
   external_labels = {
     cluster = sys.env("ECS_CLUSTER"),
