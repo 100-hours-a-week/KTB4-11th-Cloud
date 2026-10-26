@@ -1,6 +1,6 @@
 {
   "uid": "stockspoon-ecs-sse",
-  "title": "Stockspoon 운영 ECS·SSE",
+  "title": "ECS 시세 서버 모니터링",
   "schemaVersion": 39,
   "version": 1,
   "editable": false,

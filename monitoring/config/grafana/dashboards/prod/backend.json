@@ -1,6 +1,6 @@
 {
   "uid": "stockspoon-prod-backend",
-  "title": "Stockspoon 운영 Backend 병목 분석",
+  "title": "ECS BE 모니터링",
   "schemaVersion": 39,
   "version": 1,
   "editable": false,
