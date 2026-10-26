@@ -158,14 +158,15 @@ resource "aws_lb_target_group" "backend_green" {
   deregistration_delay = var.backend_deregistration_delay_seconds
 
   health_check {
-    enabled             = true
-    protocol            = "HTTP"
-    path                = var.backend_health_check_path
-    matcher             = "200"
-    interval            = 10
-    timeout             = 5
+    enabled  = true
+    protocol = "HTTP"
+    path     = var.backend_health_check_path
+    matcher  = "200"
+    # Check readiness sooner; preserve the nominal 20s unhealthy detection window.
+    interval            = 5
+    timeout             = 3
     healthy_threshold   = 2
-    unhealthy_threshold = 2
+    unhealthy_threshold = 4
   }
 
   tags = {
