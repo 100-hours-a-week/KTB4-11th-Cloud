@@ -374,7 +374,9 @@ sudo docker compose --env-file /opt/stockspoon-plg/.env \
 ```
 
 Grafana 관리자 비밀번호는 `/opt/stockspoon-plg/grafana-admin-password`에 root 전용으로
-저장된다. 로컬 Mac에서 SSH 터널을 연 뒤 `http://localhost:3000`으로 접속한다.
+저장된다. 2026-10-26 이후 HTTPS를 활성화한 호스트는 `8-6`의 public IP URL로 접속한다.
+아래 HTTP 터널은 HTTPS 활성화 전 초기 점검용이다. HTTPS 활성화 후에는 세션 쿠키가
+Secure 속성을 사용하므로 브라우저 로그인에는 HTTPS URL을 사용한다.
 
 ```bash
 ssh -i "$REHEARSAL_KEY" -N \
@@ -434,7 +436,8 @@ sum(count_over_time({host="v1", job="mysql-general"} |~ "(?i)(INSERT|UPDATE|DELE
 ```
 
 ```promql
-mysql_slave_status_seconds_behind_master
+mysql_up{job=~"mysql-(v1|migration)",db_node!=""}
+mysql_slave_status_seconds_behind_source or mysql_slave_status_seconds_behind_master
 node_memory_MemAvailable_bytes
 ```
 
@@ -490,15 +493,171 @@ echo $! > /run/stockspoon-mysqlbinlog-reader.pid
 들어가므로 접근 권한과 실험 종료 후 수집 프로세스 중지를 관리한다.
 
 백엔드 로그는 API 경로별 상태와 `requestId`를 보여주고, MySQL general log는 DB에 도착한
-SQL을 보여준다. Prometheus MySQL exporter는 현재 이관 DB의 global status 및 replica 지표를
-5초 간격으로 수집한다. V1 MySQL은 현재 Docker 호스트 포트가 공개되지 않아 mysqld exporter를
-붙이지 않으며, V1의 접수 SQL은 general log 파일을 사용한다.
+SQL을 보여준다. Prometheus MySQL exporter는 V1과 이관 DB의 global status 및 복제 지표를
+5초 간격으로 수집한다. V1은 기존 private 3306 중계 경로로 접근하며 같은 exporter의
+다중 대상 `/probe` 기능을 사용한다. V1의 접수 SQL은 general log 파일에서 별도로 확인한다.
 
 General log에 SQL 값이 포함될 수 있고 DB I/O와 로그 저장량도 늘어난다. Loki와 Prometheus는
 72시간 보관으로 설정했다. 이 구성은 요청이 실패한 이유를 자동 판정하거나 실패한 쓰기를
 재처리하지 않는 관측용 구성이다. 앱 로그와 SQL 로그는 시간대별 비교는 가능하지만,
 현재 로그 형식만으로 API `requestId`와 MySQL 세션을 직접 연결하지는 못한다.
 애플리케이션 밖에서 DB에 도착하지 않은 요청의 SQL 원문은 MySQL 로그에도 없다.
+
+### 8-5. 양쪽 MySQL 지표 수집 — 2026-10-24 적용
+
+현재 PLG 모니터링 호스트의 Prometheus에 다음 두 DB를 등록했다. `db_node`는 서버 식별자이며
+switchover 이후에도 유지한다. 현재 쓰기 허용 여부는 `mysql_global_variables_read_only`로
+확인한다. 기존 `db_role=migration-replica` label은 이전 쿼리 호환성을 위해 남겨 두었으며,
+새 대시보드는 이 label을 역할 판단에 사용하지 않는다.
+
+| 노드 | Prometheus job | 현재 역할 | 확인 결과 |
+| --- | --- | --- | --- |
+| V1, `10.0.1.246:3306` | `mysql-v1` | Primary | `mysql_up=1`, `read_only=0` |
+| 이관 DB, `10.0.1.217:3306` | `mysql-migration` | Replica | `mysql_up=1`, `read_only=1`, I/O·SQL 스레드 1, native lag 0초 |
+
+적용 전 replica exporter는 HTTP 수집 자체는 성공했지만 DB 인증이 거절되어 `mysql_up=0`이었다.
+복제된 MySQL 계정이 Docker 네트워크에서만 접속하도록 제한되어 있어 모니터링 호스트의
+`10.0.1.85` 접속을 허용하지 못했다. Primary에 기존 모니터링 계정과 같은 인증정보를 사용하는
+`pmm@10.0.1.85` 계정을 만들고 정상 복제로 전달했다. 이 계정에는 TLS 연결, 최대 연결 3개,
+`SELECT`, `PROCESS`, `REPLICATION CLIENT` 권한만 부여했다. 비밀번호와 인증 해시는 문서·로그에
+기록하지 않는다. 새 replica를 다시 구축하면 이 계정과 접속 경로를 확인한다.
+
+Grafana의 `Database` 폴더에 `MySQL · Primary & Replica` 대시보드를 추가했다.
+경로는 `/d/stockspoon-mysql-replication`이다. 연결 상태, read-only, 연결·실행 스레드,
+복제 I/O·SQL 스레드, native lag, 오류 번호, QPS, slow query 및 버퍼풀 지표를 표시한다.
+복제 채널이 없는 Primary에서는 복제 패널에 해당 노드의 값이 없는 것이 정상이다.
+
+대시보드는 `grafana/provisioning/dashboards/mysql.yaml`과 하위 JSON으로 재배포할 수 있다.
+Grafana가 이미 실행 중이면 관리자 인증으로 `POST /api/admin/provisioning/dashboards/reload`를
+호출해 새 provider를 반영한다. 비밀번호를 터미널 인자나 출력에 노출하지 않는다.
+Prometheus는 `promtool check config` 검증 후 `POST /-/reload`로 반영했다. 적용 전 설정은
+모니터링 호스트의 `/opt/stockspoon-plg/backups/mysql-monitoring-20261024T024111Z/`에 보관했다.
+
+검증 시 양쪽 `mysql_up`의 2분 최솟값이 모두 1이었고, Grafana를 통한 12개 패널의
+13개 쿼리가 모두 실제 데이터를 반환했다. 이 변경에는 heartbeat와 새 알림 규칙은 포함하지 않는다.
+
+### 8-6. Grafana public IP HTTPS 접속 — 2026-10-26 적용
+
+모니터링 EC2의 `https://3.35.13.60/d/stockspoon-mysql-replication`에서 기존 Grafana
+계정으로 접속한다. 사용자명은 `admin`이며 비밀번호는 기존 파일을 유지했다. 새 Nginx
+컨테이너가 외부 `443/tcp`의 TLS를 처리하고 내부 Grafana로 전달한다. Grafana `3000`과
+Prometheus `9090`은 계속 호스트 loopback에만 연결한다.
+
+EC2 보안그룹의 443 인바운드는 `db_migration_admin_cidrs`와
+`db_migration_pmm_ssh_cidrs`에 있는 관리자 IPv4 `/32`만 허용한다. 외부 네트워크의 IP가
+바뀌면 해당 관리 목록도 갱신해야 한다. 추가한 네 규칙은 Terraform state에 import했다.
+
+Public IP를 SAN에 포함한 자체 서명 인증서를 사용하므로 브라우저에 인증서 경고가 표시된다.
+인증서와 키는 `/opt/stockspoon-plg/https/tls/`에 있고, 개인 키는 root 및 프록시 그룹만
+읽을 수 있다. 도메인과 공인 인증서를 도입하면 경고 없는 HTTPS로 전환할 수 있다.
+공인 IP가 바뀌면 다음 명령으로 인증서와 Grafana 외부 URL을 갱신한다.
+
+```bash
+sudo bash /opt/stockspoon-plg/enable_grafana_https.sh <새-public-IPv4>
+```
+
+재배포용 소스는 `compose.https.yaml`, `https/nginx.conf`, `enable_grafana_https.sh`다.
+`install.sh`는 `https/public.env`가 있으면 HTTPS Compose override도 함께 적용한다.
+처음 활성화할 때는 이 세 파일을 서버의 `/opt/stockspoon-plg/`에 배치한 뒤 위 명령을 실행한다.
+TLS 키와 인증서, 서버별 `public.env`는 Git에서 제외한다.
+
+외부 HTTPS 로그인 페이지 200, 미인증 대시보드 API 401, 기존 계정 로그인 200 및
+Secure·HttpOnly 세션 쿠키를 확인했다. 인증된 세션으로 DB 대시보드의 12개 패널을 조회했다.
+프록시는 UID/GID 101, 읽기 전용 파일시스템, 권한 추가 금지 및 메모리 제한 64 MiB로 실행한다.
+HTTPS 적용 전 설정 백업은 `/opt/stockspoon-plg/backups/grafana-https-20261025T232836Z/`에 있다.
+
+2026-10-26 재점검에서 양쪽 DB 모두 24시간 표본이 각각 17,280개였으며
+`min_over_time(mysql_up[24h])=1`이었다. 수집은 정상이며, Prometheus 및 Grafana의 새 알림
+규칙과 heartbeat 지표는 아직 없었다. 현재 live scrape 목록에는 ProxySQL도 등록되어 있지 않다.
+
+### 8-7. 시간 동기화 · heartbeat 복제 지연 · DB/ProxySQL 알림 — 2026-10-26 적용
+
+**시간 동기화.** 모니터링 호스트는 시스템 시계가 동기화되지 않은 상태로 약 11.3초 늦었고,
+이관 DB도 약 10일 전부터 동기화가 끊겨 있었다(V1 대비 약 50ms). Ubuntu 26.04 chrony는
+Ubuntu NTS 서버를 인증 소스로 우선하는데, 두 호스트의 egress가 NTS를 허용하지 않아
+비인증인 Amazon Time Sync(`169.254.169.123`)를 `W`(인증 소스 대기) 상태로 선택하지 않았다.
+두 호스트에 `chrony/10-stockspoon-aws-time-sync.conf`(`authselectmode ignore`)를
+`/etc/chrony/conf.d/`로 배치하고 chrony를 재시작했다. 모니터링 호스트는 재시작 시 시계가
+앞으로 약 11초 step되어 Prometheus 표본에 약 11초 공백이 있다. 적용 후 세 호스트 모두
+`169.254.169.123`을 기준으로 동기화되었고 모니터링 호스트와 DB 호스트 시계 차이는 약 10ms다.
+V1은 NTS에 접근 가능해 변경하지 않았다. user_data 변경은 다음 apply에서 인스턴스 재시작을
+유발할 수 있어 반영하지 않았으므로, 호스트를 새로 만들면 이 파일을 다시 배치한다.
+
+```bash
+sudo install -m 0644 10-stockspoon-aws-time-sync.conf /etc/chrony/conf.d/
+sudo systemctl restart chrony
+chronyc tracking   # Reference ID가 169.254.169.123, Leap status Normal
+```
+
+**Heartbeat.** switchover 스크립트는 애플리케이션 스키마가 `stockspoon` 하나이고 InnoDB 기본
+테이블만 있어야 하므로, 별도 스키마 대신 `stockspoon.monitoring_heartbeat`
+(pt-heartbeat 형식, InnoDB)를 V1 Primary에 만들고 복제로 전달했다. 기존 앱 테이블 16개는 변경하지 않았다.
+
+| 항목 | 값 |
+| --- | --- |
+| writer | 모니터링 호스트의 `migration-heartbeat-v1`, `migration-heartbeat-migration` (`percona/percona-toolkit:3.7.2`, 1초 간격, `--utc`) |
+| 계정 | `heartbeat@10.0.1.85`, `heartbeat@172.18.0.%`. TLS 필수, 최대 연결 2, 해당 테이블 `SELECT/INSERT/UPDATE/DELETE`와 `REPLICATION CLIENT`만 부여 |
+| 비밀번호 | 모니터링 호스트 `/opt/stockspoon-plg/secrets/mysql-heartbeat-password` (root 전용) |
+| 수집 | mysqld exporter `--collect.heartbeat*`, 기록 규칙 `mysql:heartbeat_lag_seconds` |
+
+V1의 외부 3306 접속은 V1 호스트의 `v1-db-repl-proxy` 컨테이너(172.18.0.4)를 거쳐 들어오므로,
+기존 `pmm@172.18.0.%`와 같이 V1 경로용 계정을 따로 두었다. 두 writer 모두 `--check-read-only`로
+실행하므로 read-only 노드에는 쓰지 않는다. switchover 후에는 새 Primary 쪽 writer가 자동으로 기록한다.
+heartbeat 계정에는 SUPER/CONNECTION_ADMIN이 없어 switchover가 `read_only=ON`으로 동결하는 순간
+기록도 멈추므로, 동결 후 체크섬 비교에 영향을 주지 않는다.
+
+지연 값은 대상 DB의 UTC 현재 시각에서 writer가 기록한 UTC 시각을 뺀 값이며, 가장 최근 행을 기준으로 한다.
+writer 주기 때문에 정상 상태에서도 0~1초 값이 나온다. `ts`는 모니터링 호스트 시계로 기록되므로
+위 시간 동기화가 이 측정의 전제다. 2026-10-26 적용 직후 측정값은 V1 1.0초, 이관 DB 0.8초였다.
+
+**ProxySQL.** Cloud Map `proxysql-fargate.stockspoon-v2.internal`의 A 레코드를 `dns_sd_configs`로
+수집해 Fargate task가 바뀌거나 늘어도 task별로 수집한다. 적용 시 대상은 `10.0.11.176:6070` 하나였고,
+hostgroup 10(writer) V1, hostgroup 20(reader) 이관 DB 모두 ONLINE이었다.
+
+**알림.** `prometheus-rules/db-alerts.yml`에 기록 규칙 1개와 알림 16개를 두었다. MySQL 수집 실패,
+쓰기 가능 노드 수가 1이 아님, 복제 스레드 중지, read-only인데 복제 채널 없음, heartbeat 지연
+10초/60초, Primary heartbeat 기록 중단, heartbeat 수집 실패, 연결 수 80% 초과, ProxySQL 수집
+실패·대상 없음·writer ONLINE 없음·backend 비정상·풀 획득 실패, DB 호스트 시간 비동기화와
+모니터링 호스트 시계 차이 1초 초과를 감시한다. 알림 전송은 8-8의 Alertmanager가 담당한다.
+
+Grafana `MySQL · Primary & Replica` 대시보드에 `Heartbeat 복제 지연`, `ProxySQL (Fargate)` 행을
+추가했다(총 21개 패널). 적용 시 `promtool check config`로 규칙 17개를 검증했고, 전체 패널 쿼리가 데이터를
+반환했으며 발화 중인 알림은 없었다. 적용 전 설정은
+`/opt/stockspoon-plg/backups/db-alerts-heartbeat-20261026T000023Z/`에 보관했다.
+
+Mac에서 파일을 `tar`로 옮길 때는 `COPYFILE_DISABLE=1`을 지정한다. macOS 메타데이터 파일
+`._*`가 `prometheus-rules/`에 들어가면 Prometheus 규칙 로드가 실패한다.
+
+### 8-8. Discord 알림 전송 — 2026-10-26 적용
+
+모니터링 호스트에 `migration-alertmanager`(`prom/alertmanager:v0.28.1`, loopback `9093`)를 추가하고
+Prometheus `alerting` 대상으로 연결했다. 설정은 `alertmanager/alertmanager.yml`이다.
+
+| 항목 | 값 |
+| --- | --- |
+| Webhook | SSM SecureString `/stockspoon/v1/db-migration/discord-webhook` (`alias/aws/ssm`, Standard) |
+| 서버 파일 | `/opt/stockspoon-plg/alertmanager/secrets/discord-webhook`, `root:65534` `0440`, Git 제외 |
+| 묶음 | `alertname`, `db_node`, `instance` 기준. 첫 전송 30초 대기, 같은 묶음 갱신 5분, 반복 4시간 |
+| 해결 알림 | 전송 (`send_resolved: true`) |
+| 억제 | `MySQLDown` 중 같은 노드의 warning, `MySQLHeartbeatLagCritical` 중 같은 노드의 `MySQLHeartbeatLagHigh` |
+
+Webhook URL은 Terraform state에 남지 않도록 사람이 직접 SSM에 저장했다. 모니터링 호스트 역할에 붙은
+`AmazonSSMManagedInstanceCore`가 `ssm:GetParameter`를 허용하므로 IAM 변경은 하지 않았다. 이 역할은 부하기
+호스트와 공유한다. `install.sh`가 설치 시 파라미터를 읽어 파일을 만들며, 파라미터가 없으면 설치가 중단된다.
+Webhook을 바꾸면 SSM 값을 갱신한 뒤 `install.sh`를 다시 실행하거나 파일을 갱신하고
+`curl -XPOST http://127.0.0.1:9093/-/reload`를 호출한다.
+
+```bash
+read -rs DISCORD_WEBHOOK && aws ssm put-parameter --region ap-northeast-2 \
+  --name /stockspoon/v1/db-migration/discord-webhook --type SecureString \
+  --value "$DISCORD_WEBHOOK" --overwrite && unset DISCORD_WEBHOOK
+```
+
+적용 시 Alertmanager에 직접 넣은 `DiscordIntegrationTest` 알림이 Discord로 전송되었고
+(`alertmanager_notifications_total{integration="discord"}=1`, 실패 0), 이후 해결 알림도 확인했다.
+Prometheus 설정은 단일 파일 bind mount이므로 `prometheus.yml`을 교체(`mv`)한 뒤에는 `/-/reload`가 아니라
+컨테이너를 다시 만들어야 새 파일이 보인다. 적용 전 설정은
+`/opt/stockspoon-plg/backups/discord-alerts-20261026T003913Z/`에 보관했다.
 
 ## 공식 문서
 

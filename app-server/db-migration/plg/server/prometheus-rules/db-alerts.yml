@@ -1,0 +1,179 @@
+# DB 노드 이름(db_node)은 switchover 후에도 유지되고, 역할은 read_only 값으로 판단한다.
+# Alertmanager는 없으므로 상태는 Prometheus /alerts와 Grafana Alerting 목록에서 확인한다.
+groups:
+  - name: stockspoon-db-recording
+    rules:
+      # pt-heartbeat가 쓴 행 중 가장 최근 행 기준 지연이다. stored는 writer 컨테이너
+      # (모니터링 호스트)의 UTC 시계, now는 대상 DB의 UTC 시계이므로 두 호스트가 모두
+      # 시간 동기화되어 있어야 한다. 아래 stockspoon-db-clock 그룹이 이를 감시한다.
+      # 행이 여러 개면(switchover 전후 server_id) 가장 최근 행이 현재 Primary 기준이다.
+      - record: mysql:heartbeat_lag_seconds
+        expr: |
+          min by (job, instance, db_node) (
+            mysql_heartbeat_now_timestamp_seconds{job=~"mysql-(v1|migration)"}
+            - mysql_heartbeat_stored_timestamp_seconds{job=~"mysql-(v1|migration)"}
+          )
+
+  - name: stockspoon-mysql
+    rules:
+      - alert: MySQLDown
+        expr: mysql_up{job=~"mysql-(v1|migration)"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.db_node }} MySQL 수집 실패"
+          description: "exporter가 {{ $labels.db_node }}({{ $labels.instance }})에 1분 이상 접속하지 못했다."
+
+      - alert: MySQLWritableNodeCountNotOne
+        expr: (count(mysql_global_variables_read_only{job=~"mysql-(v1|migration)"} == 0) or vector(0)) != 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "쓰기 가능한 DB 노드 수가 {{ $value }}개"
+          description: "read_only=0 노드가 정확히 1개가 아니다. 0개면 쓰기 중단, 2개면 split-brain 가능성. switchover 동결 구간은 1분 안에 끝나야 한다."
+
+      - alert: MySQLReplicationThreadStopped
+        expr: |
+          mysql_slave_status_replica_io_running{job=~"mysql-(v1|migration)"} == 0
+          or mysql_slave_status_replica_sql_running{job=~"mysql-(v1|migration)"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.db_node }} 복제 스레드 중지"
+          description: "I/O 또는 SQL 복제 스레드가 1분 이상 멈췄다. last_io_errno/last_sql_errno 패널을 확인한다."
+
+      - alert: MySQLReadOnlyNodeWithoutReplication
+        expr: |
+          mysql_global_variables_read_only{job=~"mysql-(v1|migration)"} == 1
+          unless on (job, instance) mysql_slave_status_replica_sql_running{job=~"mysql-(v1|migration)"}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.db_node }} read-only인데 복제 채널 없음"
+          description: "switchover 후 이전 Primary가 새 Primary를 따라가지 않으면 이 상태가 된다."
+
+      - alert: MySQLHeartbeatLagHigh
+        expr: |
+          mysql:heartbeat_lag_seconds > 10
+          and on (job, instance) mysql_global_variables_read_only == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.db_node }} heartbeat 복제 지연 {{ $value | humanizeDuration }}"
+          description: "replica에 반영된 최신 heartbeat가 10초 이상 늦다."
+
+      - alert: MySQLHeartbeatLagCritical
+        expr: |
+          mysql:heartbeat_lag_seconds > 60
+          and on (job, instance) mysql_global_variables_read_only == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.db_node }} heartbeat 복제 지연 {{ $value | humanizeDuration }}"
+          description: "replica에 반영된 최신 heartbeat가 60초 이상 늦다. switchover를 진행하지 않는다."
+
+      - alert: MySQLHeartbeatWriterStale
+        expr: |
+          mysql:heartbeat_lag_seconds > 30
+          and on (job, instance) mysql_global_variables_read_only == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.db_node }}(Primary) heartbeat 기록 중단"
+          description: "Primary 자신의 heartbeat가 30초 이상 갱신되지 않았다. migration-heartbeat-* 컨테이너와 heartbeat 계정을 확인한다. 이 동안 replica 지연 값은 신뢰할 수 없다."
+
+      - alert: MySQLHeartbeatCollectorFailing
+        expr: mysql_exporter_collector_success{job=~"mysql-(v1|migration)",collector="collect.heartbeat"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.db_node }} heartbeat 수집 실패"
+          description: "exporter가 stockspoon.monitoring_heartbeat를 읽지 못했다."
+
+      - alert: MySQLConnectionsHigh
+        expr: |
+          mysql_global_status_threads_connected{job=~"mysql-(v1|migration)"}
+          / mysql_global_variables_max_connections{job=~"mysql-(v1|migration)"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.db_node }} 연결 수가 max_connections의 {{ $value | humanizePercentage }}"
+          description: "연결 수가 5분 이상 max_connections의 80%를 넘었다."
+
+  - name: stockspoon-proxysql
+    rules:
+      - alert: ProxySQLScrapeDown
+        expr: up{job="proxysql-fargate"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ProxySQL {{ $labels.instance }} 지표 수집 실패"
+          description: "ProxySQL 6070 지표 엔드포인트가 1분 이상 응답하지 않았다."
+
+      - alert: ProxySQLTargetMissing
+        expr: absent(up{job="proxysql-fargate"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ProxySQL 수집 대상 없음"
+          description: "Cloud Map proxysql-fargate.stockspoon-v2.internal에서 task IP를 찾지 못했다."
+
+      - alert: ProxySQLNoOnlineWriter
+        expr: |
+          sum by (instance) (proxysql_connpool_conns_status{job="proxysql-fargate",hostgroup="10"} == bool 1) < 1
+          or (up{job="proxysql-fargate"} == 1 unless on (instance) proxysql_connpool_conns_status{hostgroup="10"})
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "ProxySQL {{ $labels.instance }} writer hostgroup 10에 ONLINE 서버 없음"
+          description: "애플리케이션 쓰기가 실패한다. 두 DB의 read_only 값과 ProxySQL read_only 모니터 로그를 확인한다."
+
+      - alert: ProxySQLBackendNotOnline
+        expr: proxysql_connpool_conns_status{job="proxysql-fargate"} != 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ProxySQL backend {{ $labels.endpoint }}(hg {{ $labels.hostgroup }}) 상태 {{ $value }}"
+          description: "1=ONLINE, 2=SHUNNED, 3=OFFLINE_SOFT, 4=OFFLINE_HARD."
+
+      - alert: ProxySQLConnPoolFailures
+        expr: sum by (instance) (increase(proxysql_connpool_get_conn_failure_total{job="proxysql-fargate"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ProxySQL {{ $labels.instance }} 커넥션 풀 획득 실패"
+          description: "최근 5분 동안 backend 연결을 얻지 못한 요청이 {{ $value }}건 있다."
+
+  - name: stockspoon-db-clock
+    rules:
+      - alert: DBHostClockNotSynchronised
+        expr: node_timex_sync_status == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.node_role }} 시간 동기화 안 됨"
+          description: "chrony가 동기화 소스를 선택하지 못했다. OPERATIONS.md 8-7의 chrony 설정을 확인한다."
+
+      - alert: ClockSkewFromMonitoringHost
+        expr: abs(node_time_seconds - timestamp(node_time_seconds)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.node_role }}와 모니터링 호스트 시계 차이 {{ $value | humanizeDuration }}"
+          description: "모니터링 호스트에는 node exporter가 없으므로 이 차이로 모니터링 호스트 시계 이상을 함께 감지한다. heartbeat ts가 이 호스트 시계로 기록된다."
