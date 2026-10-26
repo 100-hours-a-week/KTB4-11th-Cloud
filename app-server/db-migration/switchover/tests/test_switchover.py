@@ -2,10 +2,13 @@
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
 spec = importlib.util.spec_from_file_location("switchover", Path(__file__).parents[1] / "switchover.py")
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
@@ -119,6 +122,36 @@ class Database:
         return 1
 
 
+class ReplicationAccountAuditTests(unittest.TestCase):
+    def fake_db(self, account_rows, grant_rows=None):
+        db = Mock()
+        db.connection.escape.side_effect = lambda value: "'" + value.replace("'", "\\'") + "'"
+        db.rows.side_effect = [account_rows] + (grant_rows or [])
+        return db
+
+    def test_replication_account_requires_unlocked_matching_host_and_global_privilege(self):
+        db = self.fake_db(
+            [dict(user="switchover_reverse", host="10.0.1.%", account_locked="N", ssl_type="ANY")],
+            [[{"grants": "GRANT REPLICATION SLAVE ON *.* TO `switchover_reverse`@`10.0.1.%`"}]],
+        )
+        audit = m.replication_source_account_audit(db, "switchover_reverse", "10.0.1.246")
+        self.assertTrue(audit[0]["replica_host_matches"])
+        self.assertTrue(audit[0]["has_replication_privilege"])
+
+    def test_missing_replication_account_fails_with_safe_account_diagnostics(self):
+        db = self.fake_db([])
+        with self.assertRaisesRegex(m.SafetyError, "switchover_reverse.*10.0.1.246"):
+            m.replication_source_account_audit(db, "switchover_reverse", "10.0.1.246")
+
+    def test_locked_or_wrong_host_account_is_rejected(self):
+        db = self.fake_db(
+            [dict(user="switchover_reverse", host="10.0.2.246", account_locked="Y", ssl_type="ANY")],
+            [[{"grants": "GRANT REPLICATION SLAVE ON *.* TO `switchover_reverse`@`10.0.2.246`"}]],
+        )
+        with self.assertRaises(m.SafetyError):
+            m.replication_source_account_audit(db, "switchover_reverse", "10.0.1.246")
+
+
 class SwitchTests(unittest.TestCase):
     def setUp(self):
         self.events = []
@@ -151,6 +184,13 @@ class SwitchTests(unittest.TestCase):
         self.assertEqual((self.a.ro, self.a.sro, self.b.ro, self.b.sro), (1, 1, 0, 0))
         self.assertEqual(self.journal.state["target_only_gtids_at_switch"], EXTRA)
         self.assertEqual(self.journal.state["status"], "complete")
+        window = self.journal.state["write_availability_window"]
+        self.assertGreaterEqual(window["duration_seconds"], 0)
+        self.assertEqual(window["start_boundary"], "current primary SET PERSIST read_only=ON succeeded")
+        self.assertEqual(window["end_boundary"],
+                         "ProxySQL roles are correct and a fresh app connection reaches the promoted DB with read_only=0")
+        self.assertLess(self.index("journal", "write_blocked_started"),
+                        self.index("journal", "proxy_writer_ready"))
         self.assertLess(self.index("journal", "data_verified"), self.index("source", "START REPLICA"))
         self.assertLess(self.index("journal", "data_verified"), self.index("target", "RESET REPLICA ALL"))
         self.assertLess(self.index("journal", "data_verified"), self.index("source", "RESET REPLICA ALL"))
@@ -173,6 +213,26 @@ class SwitchTests(unittest.TestCase):
                              for e in self.events))
         self.assertEqual(sum(e[1] == "RESET REPLICA ALL" for e in self.events), 2)
         self.assertEqual(sum(e[:2] == ("journal", "replica_metadata_reset_complete") for e in self.events), 2)
+
+    def test_write_blocked_duration_stops_before_ready_result_is_recorded(self):
+        timings = {}
+
+        def record_event(phase, **values):
+            if phase == "write_blocked_started":
+                timings["start_marker"] = time.monotonic()
+            elif phase == "proxy_writer_ready":
+                # Simulate slow result serialization after the end timestamp
+                # has been captured. It must not inflate the reported window.
+                time.sleep(0.2)
+                timings["ready_event_return"] = time.monotonic()
+            self.events.append(("journal", phase, values))
+
+        self.journal.event.side_effect = record_event
+        self.flow.run()
+
+        duration = self.journal.state["write_availability_window"]["duration_seconds"]
+        recording_delay = timings["ready_event_return"] - timings["start_marker"] - duration
+        self.assertGreaterEqual(recording_delay, 0.15)
 
     def test_lag_timeout_keeps_both_fenced_and_never_promotes(self):
         self.b.catchup = 1
@@ -264,9 +324,11 @@ class ConsistencyTests(unittest.TestCase):
 
     def test_replication_diagnostics_redacts_passwords_and_keeps_queryable_error(self):
         db = Mock()
+        error_log_queries = []
 
         def rows(sql, params=()):
             if "performance_schema.error_log" in sql:
+                error_log_queries.append(sql)
                 return [{"ERROR_CODE": "MY-013124", "DATA": "auth secret-value"}]
             if sql == "SHOW REPLICA STATUS":
                 return [{"Last_SQL_Errno": 1872, "Last_SQL_Error": "applier metadata failed"}]
@@ -276,6 +338,8 @@ class ConsistencyTests(unittest.TestCase):
         result = m.replication_diagnostics(db, ["secret-value"])
         self.assertEqual(result["show_replica_status"][0]["Last_SQL_Errno"], 1872)
         self.assertEqual(result["recent_replication_error_log"][0]["DATA"], "auth [REDACTED]")
+        self.assertIn("DATA LIKE '%%relay%%'", error_log_queries[0])
+        self.assertIn("DATA LIKE '%%applier%%'", error_log_queries[0])
 
     def test_proxy_active_rule_count_accepts_text_zero(self):
         proxy = Mock()
@@ -326,8 +390,57 @@ class ConsistencyTests(unittest.TestCase):
         proxy = Mock()
         proxy.rows.return_value = [dict(hostgroup_id=10, hostname=n, port=3306, status="ONLINE") for n in cfg]
         flow = m.Switch(cfg, {"source": Mock(), "target": Mock(), "proxy_admin": proxy}, Mock(), {}, Mock())
-        with self.assertRaisesRegex(m.SafetyError, "hostgroup"):
+        with self.assertRaises(m.SafetyError) as raised:
             flow.routes("source")
+        self.assertIn("Unexpected/offline ProxySQL hostgroup membership", str(raised.exception))
+        self.assertIn('"writer_expected": "source"', str(raised.exception))
+        self.assertIn('"actual": [[10, "source", 3306, "ONLINE"], [10, "target", 3306, "ONLINE"]]',
+                      str(raised.exception))
+
+    def test_both_fenced_accepts_stale_offline_hard_old_writer_row(self):
+        cfg = {n: dict(server_host=n, server_port=3306) for n in ("source", "target")}
+        proxy = Mock()
+        proxy.rows.return_value = [
+            dict(hostgroup_id=10, hostname="source", port=3306, status="OFFLINE_HARD"),
+            dict(hostgroup_id=20, hostname="source", port=3306, status="ONLINE"),
+            dict(hostgroup_id=20, hostname="target", port=3306, status="ONLINE"),
+        ]
+        flow = m.Switch(cfg, {"source": Mock(), "target": Mock(), "proxy_admin": proxy}, Mock(), {}, Mock())
+        flow.monitor = Mock(side_effect=[
+            dict(time_start_us=101, read_only=1, error=None),
+            dict(time_start_us=101, read_only=1, error=None),
+        ])
+
+        flow.routes(None)
+
+    def test_promoted_route_accepts_stale_offline_hard_old_writer_row(self):
+        cfg = {n: dict(server_host=n, server_port=3306) for n in ("source", "target")}
+        proxy = Mock()
+        proxy.rows.return_value = [
+            dict(hostgroup_id=10, hostname="source", port=3306, status="OFFLINE_HARD"),
+            dict(hostgroup_id=20, hostname="source", port=3306, status="ONLINE"),
+            dict(hostgroup_id=10, hostname="target", port=3306, status="ONLINE"),
+        ]
+        flow = m.Switch(cfg, {"source": Mock(), "target": Mock(), "proxy_admin": proxy}, Mock(), {}, Mock())
+        flow.monitor = Mock(side_effect=[
+            dict(time_start_us=101, read_only=1, error=None),
+            dict(time_start_us=101, read_only=0, error=None),
+        ])
+
+        flow.routes("target")
+
+    def test_unknown_offline_hard_row_is_rejected(self):
+        cfg = {n: dict(server_host=n, server_port=3306) for n in ("source", "target")}
+        proxy = Mock()
+        proxy.rows.return_value = [
+            dict(hostgroup_id=20, hostname="source", port=3306, status="ONLINE"),
+            dict(hostgroup_id=20, hostname="target", port=3306, status="ONLINE"),
+            dict(hostgroup_id=10, hostname="unexpected", port=3306, status="OFFLINE_HARD"),
+        ]
+        flow = m.Switch(cfg, {"source": Mock(), "target": Mock(), "proxy_admin": proxy}, Mock(), {}, Mock())
+
+        with self.assertRaisesRegex(m.SafetyError, "Unexpected/offline ProxySQL hostgroup membership"):
+            flow.routes(None)
 
     def test_stale_monitor_observation_cannot_complete_cutover(self):
         cfg = {n: dict(server_host=n, server_port=3306) for n in ("source", "target")}

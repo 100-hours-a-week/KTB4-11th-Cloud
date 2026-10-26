@@ -28,7 +28,7 @@
   },
   "query_timeout_seconds": 15,
   "sync_timeout_seconds": 30,
-  "routing_timeout_seconds": 20,
+  "routing_timeout_seconds": 60,
   "cutover_timeout_seconds": 180,
   "aws": {
     "region": "ap-northeast-2",

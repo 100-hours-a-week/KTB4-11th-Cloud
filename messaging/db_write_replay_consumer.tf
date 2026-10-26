@@ -96,15 +96,16 @@ data "archive_file" "db_write_replay_forwarder" {
 }
 
 resource "aws_lambda_function" "db_write_replay_forwarder" {
-  function_name    = local.db_write_replay_consumer_name
-  description      = "Manually drains FIFO DB write replay messages through ProxySQL"
-  role             = aws_iam_role.db_write_replay_forwarder.arn
-  runtime          = "python3.12"
-  handler          = "db_write_replay_forwarder.handler"
-  filename         = data.archive_file.db_write_replay_forwarder.output_path
-  source_code_hash = data.archive_file.db_write_replay_forwarder.output_base64sha256
-  timeout          = 900
-  memory_size      = 512
+  function_name                  = local.db_write_replay_consumer_name
+  description                    = "Replays BE business commands and legacy SQL through ProxySQL after promotion"
+  role                           = aws_iam_role.db_write_replay_forwarder.arn
+  runtime                        = "python3.12"
+  handler                        = "db_write_replay_forwarder.handler"
+  filename                       = data.archive_file.db_write_replay_forwarder.output_path
+  source_code_hash               = data.archive_file.db_write_replay_forwarder.output_base64sha256
+  timeout                        = 900
+  memory_size                    = 512
+  reserved_concurrent_executions = 1
 
   vpc_config {
     subnet_ids         = data.terraform_remote_state.shared.outputs.private_subnet_ids

@@ -11,6 +11,37 @@ import tempfile
 import time
 
 
+def port_is_open(host, port, timeout=0.5):
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def plan_forwards(cfg, forwards, listener=port_is_open):
+    """Reuse accepting local endpoints and start only the missing forwards."""
+    reused, to_start = [], []
+    for name, remote_port in forwards:
+        endpoint = cfg[name]
+        if endpoint["host"] != "127.0.0.1":
+            raise RuntimeError("ProxySQL tunnel endpoints must use 127.0.0.1")
+        local_port = int(endpoint["port"])
+        if listener("127.0.0.1", local_port):
+            reused.append(name)
+            continue
+        try:
+            with socket.socket() as sock:
+                sock.bind(("127.0.0.1", local_port))
+        except OSError as error:
+            raise RuntimeError(
+                f"Local ProxySQL port {local_port} is occupied but not accepting connections; "
+                "inspect the listener before retrying"
+            ) from error
+        to_start.append((name, remote_port))
+    return reused, to_start
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
@@ -55,18 +86,15 @@ def main():
             raise RuntimeError(f"Cannot reach {name} MySQL at {endpoint['host']}:{endpoint['port']} from this EC2: {error}") from error
 
     forwards = [("proxy_admin", 6032), ("proxy_app", 6033)]
-    for name, _ in forwards:
-        endpoint = cfg[name]
-        if endpoint["host"] != "127.0.0.1":
-            raise RuntimeError("ProxySQL tunnel endpoints must use 127.0.0.1")
-        with socket.socket() as sock:
-            sock.bind(("127.0.0.1", int(endpoint["port"])))
+    reused, to_start = plan_forwards(cfg, forwards)
+    for name in reused:
+        print(f"REUSING: {name} at 127.0.0.1:{cfg[name]['port']}", flush=True)
 
     log_dir = Path(tempfile.mkdtemp(prefix="db-switchover-ec2-tunnels-"))
     processes = []
     print(f"Task: {task_arn}\nSSM logs: {log_dir}", flush=True)
     try:
-        for name, remote_port in forwards:
+        for name, remote_port in to_start:
             endpoint = cfg[name]
             parameters = {"portNumber": [str(remote_port)],
                           "localPortNumber": [str(endpoint["port"])]}
@@ -80,7 +108,7 @@ def main():
                 processes.append(process)
 
         deadline = time.monotonic() + 45
-        pending = {name for name, _ in forwards}
+        pending = {name for name, _ in to_start}
         while pending:
             if any(process.poll() is not None for process in processes):
                 raise RuntimeError(f"ProxySQL SSM port-forward failed; inspect {log_dir}")
@@ -95,10 +123,15 @@ def main():
                 raise RuntimeError(f"ProxySQL tunnels not ready: {sorted(pending)}; inspect {log_dir}")
             time.sleep(0.5)
 
+        if not to_start:
+            print("No new SSM sessions needed; existing local endpoints will be reused.", flush=True)
         print("READY: keep this terminal open. Run switchover.py in another terminal on this EC2.", flush=True)
         while True:
             if any(process.poll() is not None for process in processes) or stable_task()[0] != task_arn:
                 raise RuntimeError("ProxySQL task changed or tunnel ended; closing the port forwards")
+            closed = [name for name in reused if not port_is_open("127.0.0.1", cfg[name]["port"])]
+            if closed:
+                raise RuntimeError(f"Reused ProxySQL endpoint closed: {', '.join(closed)}")
             time.sleep(5)
     finally:
         for process in processes:

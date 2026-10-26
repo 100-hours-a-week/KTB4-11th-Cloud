@@ -25,6 +25,7 @@ else
     -r "${script_dir}/db_write_replay_requirements.txt"
 fi
 cp "${script_dir}/db_write_replay_forwarder.py" "${build_dir}/"
+cp "${script_dir}/db_write_business_commands.py" "${build_dir}/"
 rm -f "${build_dir}/.lock"
 find "${build_dir}" -type d -name __pycache__ -prune -exec rm -rf {} +
 find "${build_dir}" -type f -name '*.pyc' -delete

@@ -1,3 +1,22 @@
+resource "aws_vpc_security_group_ingress_rule" "db_migration_grafana_https" {
+  for_each = var.db_migration_enabled && var.db_migration_grafana_https_enabled ? setunion(
+    var.db_migration_admin_cidrs,
+    var.db_migration_pmm_ssh_cidrs,
+  ) : toset([])
+
+  security_group_id = aws_security_group.db_migration_support["pmm"].id
+  cidr_ipv4         = each.value
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "Grafana HTTPS from the administrator IP only"
+}
+
+output "db_migration_grafana_url" {
+  description = "Administrator-only Grafana HTTPS URL; configure the proxy with enable_grafana_https.sh"
+  value       = var.db_migration_enabled && var.db_migration_grafana_https_enabled ? "https://${aws_instance.db_migration_support["pmm"].public_ip}/" : null
+}
+
 resource "aws_vpc_security_group_ingress_rule" "db_migration_loki_from_app" {
   count = var.db_migration_enabled ? 1 : 0
 
