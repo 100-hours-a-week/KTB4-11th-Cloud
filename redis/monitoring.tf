@@ -30,13 +30,13 @@ resource "aws_cloudwatch_metric_alarm" "storage_usage_high" {
 
 resource "aws_cloudwatch_metric_alarm" "ecpu_usage_high" {
   alarm_name          = "${local.alarm_prefix}-ecpu-usage-high"
-  alarm_description   = "The V2 ${var.environment} Valkey cache consumed at least 75 percent of its configured ECPU per-second maximum over one minute."
+  alarm_description   = "The V2 ${var.environment} Valkey cache consumed at least 75 percent of its configured ECPU per-second maximum in at least 3 of the last 5 one-minute periods."
   namespace           = "AWS/ElastiCache"
   metric_name         = "ElastiCacheProcessingUnits"
   statistic           = "Sum"
   period              = 60
-  evaluation_periods  = 1
-  datapoints_to_alarm = 1
+  evaluation_periods  = 5
+  datapoints_to_alarm = 3
   threshold           = local.ecpu_alarm_threshold_per_min
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
