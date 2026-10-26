@@ -379,6 +379,66 @@
           "range": true
         }
       ]
+    },
+    {
+      "id": 12,
+      "title": "태스크별 메모리 Working Set",
+      "description": "기존 cAdvisor의 컨테이너 Working Set입니다. JVM heap 또는 DB 메모리 지표가 아닙니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (container_memory_working_set_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=\"stockspoon-v2-prod-backend\",task_id!=\"\",task_id=~\"${task:regex}\"}) / 1024 / 1024",
+          "legendFormat": "{{instance}} {{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "태스크별 앱 HTTP 5xx 비율",
+      "description": "완료된 앱 요청 중 5xx 비율입니다. 요청이 0이거나 메트릭이 없으면 정상 0으로 표시하지 않습니다. Actuator와 ALB 자체 오류는 제외합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\",status=~\"5..\"}[$__rate_interval])) or on(task_id) (0 * sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval])))) / (sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval])) > 0)",
+          "legendFormat": "{{instance}} {{task_id}}",
+          "range": true
+        }
+      ]
     }
   ]
 }

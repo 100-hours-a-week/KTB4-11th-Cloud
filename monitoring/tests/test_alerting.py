@@ -51,8 +51,8 @@ class AlertingTest(unittest.TestCase):
             for _ in range(2):
                 alerting.render(provisioning, URLS['prod'], URLS['dev-app'], URLS['dev-ai'], PROD_URLS, DEV_URLS)
                 rules = self.rules(provisioning)
-                self.assertEqual(len(rules), 41)
-                self.assertEqual(len({r['uid'] for r in rules}), 41)
+                self.assertEqual(len(rules), 42)
+                self.assertEqual(len({r['uid'] for r in rules}), 42)
                 for rule in rules:
                     self.assertFalse(rule['isPaused'])
                     self.assertEqual(rule['notification_settings']['receiver'], alerting.RECEIVERS[self.route(rule)])

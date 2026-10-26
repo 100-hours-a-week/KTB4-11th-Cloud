@@ -184,8 +184,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(stream) (rate(market_http_sse_connections_started_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{stream}} 시작",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_connections_started_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}} 시작",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -194,8 +194,8 @@
         },
         {
           "refId": "B",
-          "expr": "sum by(stream,reason) (rate(market_http_sse_connections_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{stream}} 종료 / {{reason}}",
+          "expr": "sum by(task_id,stream,reason) (rate(market_http_sse_connections_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}} 종료 / {{reason}}",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -249,8 +249,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(stream) (rate(market_http_sse_events_sent_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{stream}}",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_events_sent_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}}",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -304,8 +304,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(stream) (rate(market_http_sse_events_sent_bytes_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
-          "legendFormat": "{{stream}}",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_events_sent_bytes_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}}",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -359,8 +359,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{stream}} p95",
+          "expr": "histogram_quantile(0.95, sum by(le,task_id,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}} {{stream}} p95",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -369,8 +369,8 @@
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{stream}} p99",
+          "expr": "histogram_quantile(0.99, sum by(le,task_id,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}} {{stream}} p99",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -424,8 +424,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(state) (market_http_valkey_pool_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
-          "legendFormat": "{{state}}",
+          "expr": "sum by(task_id,state) (market_http_valkey_pool_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{state}}",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -447,13 +447,13 @@
         "overrides": [
           {
             "matcher": {
-              "id": "byName",
-              "options": "acquiring"
+              "id": "byRegexp",
+              "options": ".* acquiring$"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "acquiring · 연결 획득 중 요청"
+                "value": "${__field.labels.task_id} acquiring · 연결 획득 중 요청"
               }
             ]
           }
@@ -492,8 +492,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by(le,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{result}} p95",
+          "expr": "histogram_quantile(0.95, sum by(le,task_id,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}} {{result}} p95",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -502,8 +502,8 @@
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by(le,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
-          "legendFormat": "{{result}} p99",
+          "expr": "histogram_quantile(0.99, sum by(le,task_id,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}} {{result}} p99",
           "range": true,
           "datasource": {
             "type": "prometheus",
@@ -557,8 +557,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(market_http_valkey_pool_acquire_timeouts_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
-          "legendFormat": "타임아웃",
+          "expr": "sum by(task_id) (rate(market_http_valkey_pool_acquire_timeouts_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} 타임아웃",
           "range": true,
           "datasource": {
             "type": "prometheus",

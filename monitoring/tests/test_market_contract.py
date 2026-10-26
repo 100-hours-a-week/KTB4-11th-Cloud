@@ -51,7 +51,7 @@ class MarketContractTest(unittest.TestCase):
         pool = next(p for p in dashboard['panels'] if any(
             'market_http_valkey_pool_connections{' in target.get('expr', '') for target in p['targets']))
         self.assertEqual(pool['datasource']['uid'], 'prometheus')
-        self.assertIn('sum by(state)', pool['targets'][0]['expr'])
+        self.assertIn('sum by(task_id,state)', pool['targets'][0]['expr'])
         self.assertIn('in_use', json.dumps(pool))
         self.assertIn('available', json.dumps(pool))
         self.assertIn('acquiring', json.dumps(pool))
@@ -114,8 +114,8 @@ class MarketContractTest(unittest.TestCase):
         self.assertIn('market_http_sse_connections{', panels[1]['targets'][0]['expr'])
         self.assertEqual(set(range(30, 41)) - panels.keys(), set())
         self.assertTrue(all('or vector(0)' not in t['expr'] for p in document['panels'] for t in p['targets'] if 'expr' in t))
-        self.assertIn('le,stream', panels[33]['targets'][0]['expr'])
-        self.assertIn('le,result', panels[35]['targets'][0]['expr'])
+        self.assertIn('le,task_id,stream', panels[33]['targets'][0]['expr'])
+        self.assertIn('le,task_id,result', panels[35]['targets'][0]['expr'])
 
 
 if __name__ == '__main__':
