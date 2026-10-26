@@ -1,4 +1,12 @@
-"""Manually drains queued JDBC transactions through the ProxySQL writer endpoint."""
+"""Drain BE commands after a successful promotion invokes this Lambda.
+
+Manual invocation: {"maxMessages": 100, "maxRuntimeSeconds": 840}.
+Schema 3 dispatches typed business commands; schema 2 retains legacy SQL replay.
+The caller owns promotion readiness. No SQS event-source mapping is required.
+The caller must inspect status: blocked retains the failed FIFO head and stops;
+message_limit/runtime_limit mean another invocation may be needed to finish.
+db_write_replay_receipts.sql must already be applied on the replicated database.
+"""
 
 import base64
 import json
@@ -6,6 +14,8 @@ import os
 import time
 import uuid
 from decimal import Decimal
+
+from db_write_business_commands import CommandExecutor, ReplayBlocked, validate_envelope
 
 
 _sqs = None
@@ -200,7 +210,82 @@ def _execute_statement(cursor, statement):
                 cursor.fetchall()
 
 
+def _connect_database(dictionary=False):
+    import pymysql
+
+    username, password = _database_auth()
+    options = dict(
+        host=os.environ["DB_WRITE_REPLAY_PROXYSQL_HOST"],
+        port=int(os.environ.get("DB_WRITE_REPLAY_PROXYSQL_PORT", "6033")),
+        user=username,
+        password=password,
+        database=os.environ.get("DB_WRITE_REPLAY_DATABASE", "stockspoon"),
+        connect_timeout=5,
+        read_timeout=30,
+        write_timeout=30,
+        autocommit=False,
+        charset="utf8mb4",
+        init_command="SET time_zone = '+00:00'",
+    )
+    if dictionary:
+        options["cursorclass"] = pymysql.cursors.DictCursor
+    return pymysql.connect(**options)
+
+
+def _rollback(connection):
+    try:
+        connection.rollback()
+    except Exception as error:
+        print(json.dumps({"event": "db_write_replay_rollback_unconfirmed", "errorType": type(error).__name__,
+                          "errorCode": _safe_error_code(error)}))
+
+
+def _close(connection):
+    try:
+        connection.close()
+    except Exception:
+        # A close error must not hide a confirmed commit or the original failure.
+        pass
+
+
 def _execute_transaction(envelope):
+    if isinstance(envelope, dict) and type(envelope.get("schemaVersion")) is int and envelope["schemaVersion"] == 3:
+        return _execute_business_command(envelope)
+    return _execute_sql_transaction(envelope)
+
+
+def _execute_business_command(envelope):
+    # Validate safety and command routing before even opening a database connection.
+    command = validate_envelope(envelope)
+    import pymysql
+
+    connection = _connect_database(dictionary=True)
+    try:
+        connection.begin()
+        with connection.cursor() as cursor:
+            try:
+                # Retain the existing requestId receipt. Full client-key idempotency
+                # and reconciliation of the original BE commit are separate work.
+                cursor.execute("INSERT INTO db_write_replay_receipts (request_id,transaction_id) VALUES (%s,%s)",
+                               (command.request_id, command.transaction_id))
+            except pymysql.err.IntegrityError as error:
+                if error.args and error.args[0] == 1062:
+                    _rollback(connection)
+                    return "duplicate"
+                raise
+            identifiers = CommandExecutor(cursor).execute(command)
+        connection.commit()
+        print(json.dumps({"event": "db_write_business_command_committed", "requestId": command.request_id,
+                          "commandType": command.kind, "result": identifiers}))
+        return "applied"
+    except Exception:
+        _rollback(connection)
+        raise
+    finally:
+        _close(connection)
+
+
+def _execute_sql_transaction(envelope):
     if not isinstance(envelope, dict) or envelope.get("schemaVersion") != 2:
         raise ValueError("Unsupported DB write replay message schema")
     if envelope.get("operation") != "SQL_TRANSACTION":
@@ -216,19 +301,7 @@ def _execute_transaction(envelope):
 
     import pymysql
 
-    username, password = _database_auth()
-    connection = pymysql.connect(
-        host=os.environ["DB_WRITE_REPLAY_PROXYSQL_HOST"],
-        port=int(os.environ.get("DB_WRITE_REPLAY_PROXYSQL_PORT", "6033")),
-        user=username,
-        password=password,
-        database=os.environ.get("DB_WRITE_REPLAY_DATABASE", "stockspoon"),
-        connect_timeout=5,
-        read_timeout=30,
-        write_timeout=30,
-        autocommit=False,
-        charset="utf8mb4",
-    )
+    connection = _connect_database()
     try:
         connection.begin()
         try:
@@ -239,59 +312,61 @@ def _execute_transaction(envelope):
                     (request_id, str(envelope.get("transactionId", ""))[:64]),
                 )
         except pymysql.err.IntegrityError as error:
-            connection.rollback()
             if error.args and error.args[0] == 1062:
+                _rollback(connection)
                 return "duplicate"
             raise
-        try:
-            with connection.cursor() as cursor:
-                for statement in statements:
-                    _execute_statement(cursor, statement)
-            connection.commit()
-            return "applied"
-        except Exception:
-            connection.rollback()
-            raise
+        with connection.cursor() as cursor:
+            for statement in statements:
+                _execute_statement(cursor, statement)
+        connection.commit()
+        return "applied"
     except Exception:
-        connection.rollback()
+        _rollback(connection)
         raise
     finally:
-        connection.close()
+        _close(connection)
 
 
 def _positive_int(event, key, default, maximum):
     value = event.get(key, default) if isinstance(event, dict) else default
-    if isinstance(value, bool):
+    if type(value) is not int:
         raise ValueError(f"{key} must be an integer")
-    try:
-        value = int(value)
-    except (TypeError, ValueError) as error:
-        raise ValueError(f"{key} must be an integer") from error
     if value < 1 or value > maximum:
         raise ValueError(f"{key} must be between 1 and {maximum}")
     return value
 
 
 def _safe_error_code(error):
+    if isinstance(error, ReplayBlocked):
+        return error.code
     arguments = getattr(error, "args", ())
-    return arguments[0] if arguments and isinstance(arguments[0], (str, int)) else None
+    # Exception strings can contain SQL and bindings. MySQL numeric codes are safe.
+    return arguments[0] if arguments and type(arguments[0]) is int else None
 
 
 def handler(event, context):
     """Drain messages only when explicitly invoked; there is no SQS event mapping."""
+    if event is None:
+        event = {}
+    if not isinstance(event, dict) or "Records" in event:
+        raise ReplayBlocked("MANUAL_INVOCATION_REQUIRED")
     max_messages = _positive_int(event, "maxMessages", 100, 1000)
     max_runtime_seconds = _positive_int(event, "maxRuntimeSeconds", 840, 840)
+    wait_seconds = _positive_int(event, "waitTimeSeconds", 2, 20)
+    empty_limit = _positive_int(event, "emptyReceivesBeforeStop", 2, 10)
     sqs, _ = _aws_clients()
     queue_url = os.environ["DB_WRITE_REPLAY_QUEUE_URL"]
     started_at = time.monotonic()
     processed = 0
     applied = 0
     duplicates = 0
+    empty_receives = 0
 
     while processed < max_messages:
         remaining_ms = context.get_remaining_time_in_millis()
         elapsed = time.monotonic() - started_at
-        if remaining_ms <= 15_000 or elapsed >= max_runtime_seconds:
+        if remaining_ms <= (wait_seconds + 65) * 1000 or elapsed + wait_seconds + 65 >= max_runtime_seconds:
             return {
                 "status": "runtime_limit",
                 "processed": processed,
@@ -302,25 +377,36 @@ def handler(event, context):
         response = sqs.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
-            WaitTimeSeconds=0,
+            WaitTimeSeconds=wait_seconds,
             VisibilityTimeout=900,
             MessageSystemAttributeNames=["ApproximateReceiveCount"],
         )
         messages = response.get("Messages", [])
         if not messages:
+            # Wait across a brief empty interval for BE requests still finishing
+            # their SendMessage call as the switch script invokes this Lambda.
+            empty_receives += 1
+            if empty_receives < empty_limit:
+                continue
             return {
                 "status": "queue_empty",
                 "processed": processed,
                 "applied": applied,
                 "duplicates": duplicates,
             }
+        empty_receives = 0
 
         message = messages[0]
         message_id = message.get("MessageId", "unknown")
         request_id = "unknown"
         try:
-            envelope = json.loads(message["Body"])
-            request_id = str(envelope.get("requestId", "unknown"))[:64]
+            envelope = json.loads(message["Body"], parse_constant=_invalid_json_number)
+            if not isinstance(envelope, dict):
+                raise ReplayBlocked("INVALID_ENVELOPE")
+            try:
+                request_id = str(uuid.UUID(envelope.get("requestId")))
+            except (ValueError, TypeError, AttributeError):
+                request_id = "invalid"
             result = _execute_transaction(envelope)
             sqs.delete_message(
                 QueueUrl=queue_url,
@@ -336,6 +422,7 @@ def handler(event, context):
                 "requestId": request_id,
                 "sqsMessageId": message_id,
                 "result": result,
+                "operation": envelope.get("operation"),
                 "processed": processed,
             }))
         except Exception as error:
@@ -384,3 +471,7 @@ def handler(event, context):
         "applied": applied,
         "duplicates": duplicates,
     }
+
+
+def _invalid_json_number(_value):
+    raise ReplayBlocked("INVALID_JSON_NUMBER")

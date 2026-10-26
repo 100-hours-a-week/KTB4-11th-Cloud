@@ -53,10 +53,12 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # Keep Go GC below mem_limit; 384m was OOM-killed while a 21-panel dashboard refreshed every 10s.
+      GOMEMLIMIT: 640MiB
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    mem_limit: 384m
+    mem_limit: 768m
     logging:
       driver: json-file
       options:
