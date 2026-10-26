@@ -190,7 +190,7 @@ variable "db_migration_root_volume_size_gib" {
 variable "db_migration_ssh_allowed_cidrs" {
   description = "Additional SSH IPv4 CIDRs for the migration EC2, combined with db_migration_admin_cidrs"
   type        = set(string)
-  default     = []
+  default     = ["0.0.0.0/0"]
 
   validation {
     condition     = alltrue([for cidr in var.db_migration_ssh_allowed_cidrs : can(cidrnetmask(cidr))])
