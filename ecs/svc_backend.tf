@@ -38,12 +38,14 @@ locals {
     # SSM에는 빈 값을 저장할 수 없음
     var.backend_kakao_client_secret_enabled ? [] : [{ name = "KAKAO_CLIENT_SECRET", value = "" }],
     local.telemetry_otlp_environment,
+    var.telemetry_backend_prometheus_enabled ? [{ name = "HTTP_REQUEST_HISTOGRAM_ENABLED", value = "true" }] : [],
     var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "backend" }] : [],
   )
 
   # SSM /stockspoon/v2/prod/backend/<이름> (application secrets)
   backend_secret_names = concat(
     ["MYSQL_USER", "MYSQL_PASSWORD", "JWT_SECRET", "KAKAO_CLIENT_ID", "KAKAO_REDIRECT_URI", "FRONTEND_ORIGIN"],
+    var.telemetry_backend_prometheus_enabled ? ["BACKEND_METRICS_TOKEN"] : [],
     var.backend_kakao_client_secret_enabled ? ["KAKAO_CLIENT_SECRET"] : [],
     var.backend_kiwoom_stream_enabled ? ["KIWOOM_APP_KEY", "KIWOOM_APP_SECRET"] : [],
     var.backend_collector_enabled ? ["KIWOOM_COLLECTOR_URL", "KIWOOM_COLLECTOR_SECRET"] : [],
