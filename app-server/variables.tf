@@ -19,7 +19,7 @@ variable "ec2_key_name" {
 variable "ec2_root_volume_size_gib" {
   description = "Size in GiB of the encrypted gp3 root EBS volume"
   type        = number
-  default     = 30
+  default     = 60
 
   validation {
     condition     = var.ec2_root_volume_size_gib >= 8
@@ -88,6 +88,18 @@ variable "public_ecr_ai_repository_name" {
   default     = "stockspoon-v1-ai"
 }
 
+variable "public_ecr_v2_backend_repository_name" {
+  description = "Name of the public ECR repository for the V2 development backend image"
+  type        = string
+  default     = "stockspoon-v2-backend"
+}
+
+variable "public_ecr_v2_frontend_repository_name" {
+  description = "Name of the public ECR repository for the V2 development frontend image"
+  type        = string
+  default     = "stockspoon-v2-frontend"
+}
+
 variable "github_repository_owner" {
   description = "GitHub organization or user that owns the backend repository"
   type        = string
@@ -128,4 +140,106 @@ variable "app_alert_email_recipient" {
   description = "Email address that receives CloudWatch alarm notifications through Amazon SES"
   type        = string
   default     = "ruby0656@naver.com"
+}
+
+variable "alb_access_log_retention_days" {
+  description = "Days to keep ALB access logs in S3 before expiration"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.alb_access_log_retention_days >= 1
+    error_message = "alb_access_log_retention_days must be at least 1."
+  }
+}
+
+variable "app_dns_target" {
+  description = "Application DNS entry point: ec2, alb, or cloudfront. CloudFront requires completed frontend readiness checks."
+  type        = string
+  default     = "cloudfront"
+
+  validation {
+    condition     = contains(["ec2", "alb", "cloudfront"], var.app_dns_target)
+    error_message = "app_dns_target must be ec2, alb, or cloudfront."
+  }
+}
+
+variable "db_migration_enabled" {
+  description = "Enable the MySQL migration target, API load generator, and PMM hosts in the V1 VPC"
+  type        = bool
+  default     = true
+}
+
+variable "db_migration_instance_type" {
+  description = "x86_64 EC2 instance type for the MySQL migration target"
+  type        = string
+  default     = "t3a.medium"
+}
+
+variable "db_migration_root_volume_size_gib" {
+  description = "Encrypted gp3 disk for migration MySQL data, binlogs, and seed dumps"
+  type        = number
+  default     = 40
+
+  validation {
+    condition     = var.db_migration_root_volume_size_gib >= 20
+    error_message = "db_migration_root_volume_size_gib must be at least 20 GiB."
+  }
+}
+
+variable "db_migration_ssh_allowed_cidrs" {
+  description = "Additional SSH IPv4 CIDRs for the migration EC2, combined with db_migration_admin_cidrs"
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.db_migration_ssh_allowed_cidrs : can(cidrnetmask(cidr))])
+    error_message = "db_migration_ssh_allowed_cidrs must contain only valid IPv4 CIDR blocks."
+  }
+}
+
+variable "db_migration_loadgen_instance_type" {
+  description = "Instance type for the dedicated API load generator"
+  type        = string
+  default     = "t3a.small"
+}
+
+variable "db_migration_pmm_instance_type" {
+  description = "Instance type for the PMM Server using the low-memory rehearsal configuration"
+  type        = string
+  default     = "t3a.medium"
+}
+
+variable "retain_legacy_terraform_ci_write_policy" {
+  description = "Keep the legacy inline policy during managed-policy attachment; set false only after verifying all four attachments"
+  type        = bool
+  default     = false
+}
+
+variable "db_migration_admin_cidrs" {
+  description = "Administrator IPv4 CIDRs allowed to use SSH, PMM HTTPS, and Grafana HTTPS"
+  type        = set(string)
+  default     = ["211.244.225.224/32", "220.86.114.140/32", "123.142.185.86/32"]
+
+  validation {
+    condition     = alltrue([for cidr in var.db_migration_admin_cidrs : can(cidrnetmask(cidr)) && endswith(cidr, "/32")])
+    error_message = "db_migration_admin_cidrs must contain individual IPv4 /32 addresses."
+  }
+}
+
+variable "db_migration_pmm_ssh_cidrs" {
+  description = "Additional administrator IPv4 CIDRs for SSH and Grafana HTTPS on the monitoring host"
+  type        = set(string)
+  default     = ["211.244.225.211/32"]
+
+  validation {
+    condition     = alltrue([for cidr in var.db_migration_pmm_ssh_cidrs : can(cidrnetmask(cidr)) && endswith(cidr, "/32")])
+    error_message = "db_migration_pmm_ssh_cidrs must contain individual IPv4 /32 addresses."
+  }
+}
+
+variable "db_migration_grafana_https_enabled" {
+  description = "Allow administrator-only HTTPS access to Grafana on the existing monitoring host"
+  type        = bool
+  default     = true
 }

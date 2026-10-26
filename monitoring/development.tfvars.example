@@ -1,0 +1,3 @@
+plg_tempo_enabled     = true
+dev_telemetry_enabled = true
+grafana_domain_name   = "monitoring.stock-spoon.com"

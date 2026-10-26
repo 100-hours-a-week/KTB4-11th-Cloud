@@ -51,3 +51,21 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
+
+# ALB는 서로 다른 AZ의 서브넷이 최소 2개 필요하므로 2c에 두 번째 Public Subnet 추가
+# 이 서브넷에는 ALB 노드만 배치하므로 EC2 생성 시 자동으로 Public IP를 붙여주는 기능은 켜지 않는다
+resource "aws_subnet" "public_c" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.public_subnet_c_cidr
+  availability_zone = "ap-northeast-2c"
+
+  tags = {
+    Name = "stockspoon-public-subnet-c"
+  }
+}
+
+# 2c Public Subnet도 기존 Public Route Table을 사용
+resource "aws_route_table_association" "public_c" {
+  subnet_id      = aws_subnet.public_c.id
+  route_table_id = aws_route_table.public.id
+}

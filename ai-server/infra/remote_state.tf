@@ -19,3 +19,25 @@ data "terraform_remote_state" "app" {
     region = "ap-northeast-2"
   }
 }
+
+# 운영 Valkey Security Group과 AI 전용 사용자·Connect Policy는 redis@prod가 관리합니다.
+data "terraform_remote_state" "redis_prod" {
+  backend = "s3"
+
+  config = {
+    bucket = "stockspoon-terraform-state-redis"
+    key    = "redis/prod/terraform.tfstate"
+    region = "ap-northeast-2"
+  }
+}
+
+# 운영 SQS(주문 FIFO 큐, 리포트 요청 큐)와 AI 전용 SQS 정책은 messaging@prod가 관리합니다.
+data "terraform_remote_state" "messaging_prod" {
+  backend = "s3"
+
+  config = {
+    bucket = "stockspoon-terraform-state-sqs"
+    key    = "messaging/prod/terraform.tfstate"
+    region = "ap-northeast-2"
+  }
+}

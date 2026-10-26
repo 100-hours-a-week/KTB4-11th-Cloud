@@ -1,0 +1,23 @@
+# Prometheus 알림(prometheus-rules/)을 Discord로 보낸다.
+# Webhook URL은 SSM /stockspoon/v1/db-migration/discord-webhook에서 install.sh가 파일로 만든다.
+route:
+  receiver: discord
+  group_by: [alertname, db_node, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: discord
+    discord_configs:
+      - webhook_url_file: /etc/alertmanager/secrets/discord-webhook
+        send_resolved: true
+
+inhibit_rules:
+  # 수집이 끊긴 노드의 다른 경고는 원인이 같으므로 함께 보내지 않는다.
+  - source_matchers: [alertname="MySQLDown"]
+    target_matchers: [severity="warning"]
+    equal: [db_node]
+  - source_matchers: [alertname="MySQLHeartbeatLagCritical"]
+    target_matchers: [alertname="MySQLHeartbeatLagHigh"]
+    equal: [db_node]

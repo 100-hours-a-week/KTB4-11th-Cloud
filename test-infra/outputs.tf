@@ -4,7 +4,7 @@ output "vpc_id" {
 }
 
 output "public_subnet_id" {
-  description = "ID of the public subnet that hosts both test EC2 instances"
+  description = "ID of the public subnet used by load-test and development EC2 instances"
   value       = aws_subnet.public.id
 }
 
@@ -61,4 +61,39 @@ output "k6_app_private_url" {
 output "app_ssh_user" {
   description = "Ubuntu SSH username"
   value       = "ubuntu"
+}
+
+output "dev_app_instance_id" {
+  description = "ID of the single-host development Compose EC2"
+  value       = aws_instance.dev_app.id
+}
+
+output "dev_app_public_ip" {
+  description = "Elastic IP of the single-host development Compose EC2"
+  value       = aws_eip.dev_app.public_ip
+}
+
+output "dev_app_public_url" {
+  description = "HTTP URL for the development application"
+  value       = "http://${aws_eip.dev_app.public_ip}"
+}
+
+output "dev_app_private_ip" {
+  description = "Private IP used by other services in the development VPC"
+  value       = aws_instance.dev_app.private_ip
+}
+
+output "dev_app_private_url" {
+  description = "Private HTTP URL for services inside the development VPC"
+  value       = "http://${aws_instance.dev_app.private_ip}"
+}
+
+output "dev_app_security_group_id" {
+  description = "Dedicated Security Group attached to the development Compose EC2"
+  value       = aws_security_group.dev_app.id
+}
+
+output "dev_app_iam_role_name" {
+  description = "Dedicated IAM Role attached to the development Compose EC2"
+  value       = aws_iam_role.dev_app.name
 }

@@ -1,0 +1,147 @@
+name: stockspoon-v2-dev
+
+x-logging-options: &default-logging-options
+  awslogs-region: ap-northeast-2
+  awslogs-create-group: "false"
+  mode: non-blocking
+  max-buffer-size: 4m
+  tag: "{{.Name}}-{{.ID}}"
+
+services:
+  nginx:
+    image: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    container_name: stockspoon-v2-dev-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - app-net
+    cpus: ${NGINX_CPUS:-0.30}
+    mem_limit: ${NGINX_MEMORY_LIMIT:-128m}
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/v2-dev/containers/nginx
+
+  frontend:
+    image: ${ECR_REGISTRY:-public.ecr.aws/g8x9p1p0}/stockspoon-v2-frontend:${FE_TAG:?FE_TAG is required}
+    container_name: stockspoon-v2-dev-frontend
+    restart: unless-stopped
+    env_file:
+      - path: /opt/stockspoon-telemetry-agent/frontend.otel.env
+        required: false
+    expose:
+      - "3000"
+    networks:
+      - app-net
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    cpus: ${FRONTEND_CPUS:-0.5}
+    mem_limit: ${FRONTEND_MEMORY_LIMIT:-512m}
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/v2-dev/containers/frontend
+
+  backend:
+    image: ${ECR_REGISTRY:-public.ecr.aws/g8x9p1p0}/stockspoon-v2-backend:${BE_TAG:?BE_TAG is required}
+    container_name: stockspoon-v2-dev-backend
+    restart: unless-stopped
+    env_file:
+      - path: /opt/stockspoon-telemetry-agent/backend.otel.env
+        required: false
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL is required}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:?MYSQL_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:-com.mysql.cj.jdbc.Driver}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:?KAKAO_CLIENT_ID is required}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:?KAKAO_REDIRECT_URI is required}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      KIWOOM_APP_KEY: ${KIWOOM_APP_KEY:?KIWOOM_APP_KEY is required}
+      KIWOOM_APP_SECRET: ${KIWOOM_APP_SECRET:?KIWOOM_APP_SECRET is required}
+      KIWOOM_STREAM_ENABLED: ${KIWOOM_STREAM_ENABLED:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-net
+      - data-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 40s
+    cpus: ${BACKEND_CPUS:-1.0}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-1500m}
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/v2-dev/containers/backend
+
+  db:
+    image: ${MYSQL_IMAGE:-mysql:8.4.11}
+    container_name: stockspoon-v2-dev-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      TZ: ${TZ:-Asia/Seoul}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - data-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    cpus: ${MYSQL_CPUS:-0.75}
+    mem_limit: ${MYSQL_MEMORY_LIMIT:-1024m}
+    logging:
+      driver: awslogs
+      options:
+        <<: *default-logging-options
+        awslogs-group: /stockspoon/v2-dev/containers/db
+
+volumes:
+  db-data:
+
+networks:
+  app-net:
+    driver: bridge
+  data-net:
+    driver: bridge

@@ -37,7 +37,7 @@ resource "aws_cloudwatch_metric_alarm" "app_memory_low" {
   period              = 60
   evaluation_periods  = 1
   datapoints_to_alarm = 1
-  threshold           = 40
+  threshold           = 80
   comparison_operator = "GreaterThanOrEqualToThreshold"
   unit                = "Percent"
   treat_missing_data  = "notBreaching"

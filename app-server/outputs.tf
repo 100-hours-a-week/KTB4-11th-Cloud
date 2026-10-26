@@ -12,6 +12,14 @@ output "app_instance_id" {
   value       = aws_instance.app.id
 }
 
+# V2 ECS Backend가 V1 MySQL에 접속하는 주소 (ecs 루트가 remote state로 참조)
+# EC2를 교체하지 않는 한 stop/start에도 유지된다.
+# TODO: V2 DB로 이전하면 ecs의 참조와 함께 제거
+output "app_private_ip" {
+  description = "Private IP of the V1 application EC2 (V1 MySQL host for V2 ECS backend tasks)"
+  value       = aws_instance.app.private_ip
+}
+
 output "app_public_ip" {
   description = "Elastic IP used as the EC2_HOST GitHub Environment secret"
   value       = aws_eip.app.public_ip
@@ -42,9 +50,24 @@ output "public_ecr_ai_repository_uri" {
   value       = aws_ecrpublic_repository.ai.repository_uri
 }
 
+output "public_ecr_v2_backend_repository_uri" {
+  description = "URI of the public ECR repository for V2 development backend images"
+  value       = aws_ecrpublic_repository.backend_v2.repository_uri
+}
+
+output "public_ecr_v2_frontend_repository_uri" {
+  description = "URI of the public ECR repository for V2 development frontend images"
+  value       = aws_ecrpublic_repository.frontend_v2.repository_uri
+}
+
 output "github_actions_ecr_push_role_arn" {
   description = "IAM role ARN assumed by the backend GitHub Actions workflow"
   value       = aws_iam_role.github_actions_ecr_push.arn
+}
+
+output "github_actions_v2_dev_ecr_push_role_arn" {
+  description = "IAM role ARN assumed by the Backend and Frontend dev workflows to push V2 images"
+  value       = aws_iam_role.github_actions_v2_dev_ecr_push.arn
 }
 
 output "github_actions_oidc_provider_arn" {
@@ -70,4 +93,37 @@ output "app_discord_webhook_secret_name" {
 output "app_alert_email_from" {
   description = "Verified SES sender address for application alarm notifications"
   value       = local.app_alert_email_from
+}
+
+output "db_migration_host" {
+  description = "Connection and disk identifiers for the migration target EC2"
+  value = var.db_migration_enabled ? {
+    instance_id       = aws_instance.db_migration[0].id
+    instance_type     = aws_instance.db_migration[0].instance_type
+    private_ip        = aws_instance.db_migration[0].private_ip
+    public_ip         = aws_instance.db_migration[0].public_ip
+    security_group_id = aws_security_group.db_migration[0].id
+    root_volume_id    = aws_instance.db_migration[0].root_block_device[0].volume_id
+    vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
+    subnet_id         = data.terraform_remote_state.shared.outputs.public_subnet_id
+  } : null
+}
+
+output "db_migration_support_hosts" {
+  description = "Connection details for the API load generator and PMM EC2 hosts"
+  value = {
+    for role, instance in aws_instance.db_migration_support : role => {
+      instance_id       = instance.id
+      instance_type     = instance.instance_type
+      private_ip        = instance.private_ip
+      public_ip         = instance.public_ip
+      security_group_id = aws_security_group.db_migration_support[role].id
+      root_volume_id    = instance.root_block_device[0].volume_id
+    }
+  }
+}
+
+output "db_migration_pmm_url" {
+  description = "PMM HTTPS UI; allowed only from db_migration_admin_cidrs"
+  value       = var.db_migration_enabled ? "https://${aws_instance.db_migration_support["pmm"].public_ip}:8443" : null
 }

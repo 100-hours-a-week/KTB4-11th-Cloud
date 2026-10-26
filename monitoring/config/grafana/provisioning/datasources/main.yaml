@@ -1,0 +1,48 @@
+apiVersion: 1
+datasources:
+  - name: CloudWatch
+    uid: cloudwatch
+    type: cloudwatch
+    access: proxy
+    editable: false
+    jsonData:
+      authType: default
+      defaultRegion: $AWS_REGION
+      customMetricsNamespaces: 'StockSpoon/ECS,ECS/ContainerInsights'
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '(?:trace_id|traceId)["\s:=]+([a-fA-F0-9]{32})'
+          datasourceUid: tempo
+          url: '$${__value.raw}'
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-1m'
+        spanEndTimeShift: '1m'
+        tags:
+          - key: service.name
+            value: service_name
+          - key: deployment.environment.name
+            value: environment
+        filterByTraceID: true
+        filterBySpanID: false

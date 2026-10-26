@@ -1,0 +1,235 @@
+{
+  "uid": "stockspoon-task-resources",
+  "title": "Stockspoon 운영 Task별 자원",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "prod",
+    "prometheus"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "stockspoon"
+      ],
+      "asDropdown": true,
+      "title": "Stockspoon 대시보드"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "ECS 서비스",
+        "type": "custom",
+        "query": "stockspoon-v2-prod-market-http,stockspoon-v2-prod-backend,stockspoon-v2-prod-backend-collector,stockspoon-v2-prod-frontend",
+        "multi": false,
+        "includeAll": false,
+        "options": [
+          {
+            "text": "stockspoon-v2-prod-market-http",
+            "value": "stockspoon-v2-prod-market-http",
+            "selected": true
+          },
+          {
+            "text": "stockspoon-v2-prod-backend",
+            "value": "stockspoon-v2-prod-backend",
+            "selected": false
+          },
+          {
+            "text": "stockspoon-v2-prod-backend-collector",
+            "value": "stockspoon-v2-prod-backend-collector",
+            "selected": false
+          },
+          {
+            "text": "stockspoon-v2-prod-frontend",
+            "value": "stockspoon-v2-prod-frontend",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "stockspoon-v2-prod-market-http",
+          "value": "stockspoon-v2-prod-market-http"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Task별 CPU 사용 코어",
+      "description": "1은 CPU 코어 1개 사용량입니다. Task 예약 CPU 대비 백분율이 아닙니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,service_name) (rate(container_cpu_usage_seconds_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=~\"${service:regex}\",task_id!=\"\"}[2m]))",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:cores",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Task별 메모리 Working Set",
+      "description": "캐시 중 비활성 페이지를 제외한 앱 컨테이너 Working Set의 Task별 합계입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,service_name) (container_memory_working_set_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=~\"${service:regex}\",task_id!=\"\"}) / 1024 / 1024",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Task별 메모리 RSS",
+      "description": "앱 컨테이너 RSS의 Task별 합계입니다. Task 예약 메모리·한도와 구분합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,service_name) (container_memory_rss{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=~\"${service:regex}\",task_id!=\"\"}) / 1024 / 1024",
+          "legendFormat": "{{service_name}} / {{task_id}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ],
+  "description": "Alloy/cAdvisor가 직접 수집한 앱 컨테이너 CPU·메모리를 ECS Task별로 합산합니다. DB·ProxySQL·pause·수집기 컨테이너는 제외합니다. CPU는 사용 코어 수이며 Task 예약량 대비 백분율이 아닙니다."
+}

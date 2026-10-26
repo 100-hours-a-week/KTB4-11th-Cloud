@@ -16,7 +16,7 @@ variable "ai_instance_id" {
 variable "ai_instance_type" {
   description = "AI EC2 instance type used by AI_CWAgent dimensions"
   type        = string
-  default     = "t3a.medium"
+  default     = "t3a.xlarge"
 }
 
 # 생성할 AI 전용 CloudWatch 대시보드 이름을 설정합니다.

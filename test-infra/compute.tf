@@ -71,6 +71,77 @@ resource "aws_eip_association" "app" {
   allocation_id = aws_eip.app.id
 }
 
+# Development frontend, backend, and MySQL containers share one EC2 host.
+# Give the development host its own role and security group. The Redis and AI
+# roots consume their IDs from this root's outputs after this root is applied.
+resource "aws_instance" "dev_app" {
+  ami                         = data.aws_ssm_parameter.ubuntu_2604_ami.value
+  instance_type               = var.dev_app_instance_type
+  key_name                    = var.ec2_key_name
+  subnet_id                   = aws_subnet.public.id
+  associate_public_ip_address = true
+  vpc_security_group_ids      = [aws_security_group.dev_app.id]
+  iam_instance_profile        = aws_iam_instance_profile.dev_app.name
+
+  user_data = templatefile("${path.module}/dev_app_user_data.sh", {
+    docker_compose_version = var.docker_compose_version
+  })
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = var.dev_app_root_volume_size_gib
+    encrypted             = true
+    delete_on_termination = true
+
+    tags = {
+      Name        = "${var.dev_app_name_prefix}-root"
+      Project     = "stockspoon"
+      Environment = "dev"
+      ManagedBy   = "Terraform"
+    }
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  depends_on = [
+    aws_route.internet,
+    aws_route_table_association.public,
+  ]
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
+  tags = {
+    Name        = var.dev_app_name_prefix
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_eip" "dev_app" {
+  domain = "vpc"
+
+  depends_on = [aws_internet_gateway.loadtest]
+
+  tags = {
+    Name        = "${var.dev_app_name_prefix}-eip"
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_eip_association" "dev_app" {
+  instance_id   = aws_instance.dev_app.id
+  allocation_id = aws_eip.dev_app.id
+}
+
 resource "aws_instance" "k6" {
   ami                         = data.aws_ssm_parameter.ubuntu_2604_ami.value
   instance_type               = var.k6_instance_type
@@ -118,4 +189,9 @@ resource "aws_instance" "k6" {
     Environment = "loadtest"
     ManagedBy   = "Terraform"
   }
+}
+
+resource "aws_ec2_instance_state" "k6" {
+  instance_id = aws_instance.k6.id
+  state       = "stopped"
 }

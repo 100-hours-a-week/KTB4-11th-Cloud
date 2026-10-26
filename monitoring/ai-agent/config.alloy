@@ -1,0 +1,159 @@
+logging {
+  level = "info"
+}
+
+discovery.docker "apps" {
+  host = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "apps" {
+  targets = discovery.docker.apps.targets
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex = "ktb4-ai"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex = sys.env("AI_SERVICE_REGEX")
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label = "service_name"
+  }
+}
+
+loki.source.docker "apps" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.apps.output
+  labels = {
+    cluster = sys.env("TELEMETRY_CLUSTER"),
+    host = sys.env("TELEMETRY_HOST"),
+    environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+    host_role = "ai",
+  }
+  forward_to = [loki.write.server.receiver]
+}
+
+// Host logs are separate from application stdout; database containers stay excluded.
+loki.relabel "journal_metadata" {
+  forward_to = []
+  rule {
+    source_labels = ["__journal__transport", "__journal__systemd_unit"]
+    regex = "kernel;.*|.*;(docker|containerd|ssh|sshd)\\.service"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__journal_priority"]
+    regex = "[0-6]"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label = "unit"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label = "level"
+  }
+  rule {
+    source_labels = ["__journal__transport"]
+    target_label = "transport"
+  }
+}
+
+loki.source.journal "system" {
+  path = sys.env("SYSTEM_JOURNAL_PATH")
+  // Only a short startup overlap; no historical CloudWatch import.
+  max_age = "1m"
+  relabel_rules = loki.relabel.journal_metadata.rules
+  labels = { source = "journal" }
+  forward_to = [loki.relabel.system.receiver]
+}
+
+loki.source.file "system_files" {
+  targets = [
+    { __path__ = "/host/var/log/cloud-init.log", source = "cloud-init" },
+    { __path__ = "/host/var/log/cloud-init-output.log", source = "cloud-init-output" },
+    { __path__ = "/host/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log", source = "cloudwatch-agent" },
+  ]
+  file_match {
+    enabled = true
+  }
+  tail_from_end = true
+  on_positions_file_error = "restart_from_end"
+  forward_to = [loki.relabel.system.receiver]
+}
+
+loki.relabel "system" {
+  forward_to = [loki.write.server.receiver]
+  rule {
+    target_label = "service_name"
+    replacement = "system"
+  }
+  rule {
+    target_label = "log_kind"
+    replacement = "system"
+  }
+  rule {
+    target_label = "environment"
+    replacement = sys.env("DEPLOYMENT_ENVIRONMENT")
+  }
+  rule {
+    target_label = "cluster"
+    replacement = sys.env("TELEMETRY_CLUSTER")
+  }
+  rule {
+    target_label = "host"
+    replacement = sys.env("TELEMETRY_HOST")
+  }
+  rule {
+    target_label = "host_role"
+    replacement = "ai"
+  }
+}
+
+loki.write "server" {
+  endpoint {
+    url = sys.env("LOKI_PUSH_URL")
+    max_backoff_retries = 0
+  }
+  wal {
+    enabled = true
+    max_segment_age = "1h"
+  }
+}
+
+prometheus.exporter.unix "host" {
+  rootfs_path = "/host"
+  procfs_path = "/host/proc"
+  sysfs_path = "/host/sys"
+  disable_collectors = ["systemd"]
+}
+
+discovery.relabel "host" {
+  targets = prometheus.exporter.unix.host.targets
+  rule {
+    target_label = "instance"
+    replacement = sys.env("TELEMETRY_HOST")
+  }
+}
+
+prometheus.scrape "host" {
+  targets = discovery.relabel.host.output
+  scrape_interval = "30s"
+  forward_to = [prometheus.remote_write.server.receiver]
+}
+
+prometheus.remote_write "server" {
+  external_labels = {
+    cluster = sys.env("TELEMETRY_CLUSTER"),
+    environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+    host_role = "ai",
+  }
+  endpoint {
+    url = sys.env("PROMETHEUS_WRITE_URL")
+  }
+}

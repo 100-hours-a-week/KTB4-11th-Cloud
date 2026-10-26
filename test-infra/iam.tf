@@ -32,6 +32,18 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
+  dev_container_log_group_names = {
+    nginx    = "/stockspoon/v2-dev/containers/nginx"
+    frontend = "/stockspoon/v2-dev/containers/frontend"
+    backend  = "/stockspoon/v2-dev/containers/backend"
+    db       = "/stockspoon/v2-dev/containers/db"
+  }
+
+  dev_container_log_group_arns = [
+    for name in values(local.dev_container_log_group_names) :
+    "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${name}"
+  ]
+
   app_log_group_names = [
     "/stockspoon/app/system",
     local.test_system_log_group_name,
@@ -46,6 +58,7 @@ locals {
     for name in local.app_log_group_names :
     "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${name}"
   ]
+
 }
 
 data "aws_iam_policy_document" "app_cloudwatch" {
@@ -101,6 +114,67 @@ resource "aws_iam_instance_profile" "app" {
     Name        = "${var.name_prefix}-app-instance-profile"
     Project     = "stockspoon"
     Environment = "loadtest"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_iam_role" "dev_app" {
+  name               = "${var.dev_app_name_prefix}-ec2-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+
+  tags = {
+    Name        = "${var.dev_app_name_prefix}-ec2-role"
+    Project     = "stockspoon"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "dev_app_ssm" {
+  role       = aws_iam_role.dev_app.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "dev_app_cloudwatch" {
+  name   = "${var.dev_app_name_prefix}-cloudwatch-policy"
+  role   = aws_iam_role.dev_app.id
+  policy = data.aws_iam_policy_document.dev_app_cloudwatch.json
+}
+
+data "aws_iam_policy_document" "dev_app_cloudwatch" {
+  statement {
+    sid       = "DescribeLogGroups"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "DescribeDevContainerLogStreams"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogStreams"]
+    resources = local.dev_container_log_group_arns
+  }
+
+  statement {
+    sid    = "PublishDevContainerLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+    ]
+    resources = [for arn in local.dev_container_log_group_arns : "${arn}:log-stream:*"]
+  }
+}
+
+resource "aws_iam_instance_profile" "dev_app" {
+  name = "${var.dev_app_name_prefix}-instance-profile"
+  role = aws_iam_role.dev_app.name
+
+  tags = {
+    Name        = "${var.dev_app_name_prefix}-instance-profile"
+    Project     = "stockspoon"
+    Environment = "dev"
     ManagedBy   = "Terraform"
   }
 }

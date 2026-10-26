@@ -15,6 +15,17 @@ variable "name_prefix" {
   }
 }
 
+variable "dev_app_name_prefix" {
+  description = "Prefix for the dedicated development application resources"
+  type        = string
+  default     = "stockspoon-v2-dev-app"
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]{1,40}$", var.dev_app_name_prefix))
+    error_message = "dev_app_name_prefix must contain 1-40 lowercase letters, numbers, or hyphens."
+  }
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the isolated load-test VPC; must not overlap existing VPCs"
   type        = string
@@ -22,7 +33,7 @@ variable "vpc_cidr" {
 }
 
 variable "public_subnet_cidr" {
-  description = "CIDR block for the public subnet that hosts both EC2 instances"
+  description = "CIDR block for the public subnet that hosts the load-test and development EC2 instances"
   type        = string
   default     = "10.20.1.0/24"
 }
@@ -88,6 +99,12 @@ variable "app_instance_type" {
   default     = "t3a.medium"
 }
 
+variable "dev_app_instance_type" {
+  description = "EC2 instance type for the single-host development Compose stack"
+  type        = string
+  default     = "t3a.medium"
+}
+
 variable "k6_instance_type" {
   description = "EC2 instance type for the k6 load generator"
   type        = string
@@ -102,6 +119,17 @@ variable "app_root_volume_size_gib" {
   validation {
     condition     = var.app_root_volume_size_gib >= 8
     error_message = "app_root_volume_size_gib must be at least 8 GiB."
+  }
+}
+
+variable "dev_app_root_volume_size_gib" {
+  description = "Encrypted gp3 root volume size for development Docker images and the Compose MySQL volume"
+  type        = number
+  default     = 40
+
+  validation {
+    condition     = var.dev_app_root_volume_size_gib >= 30
+    error_message = "dev_app_root_volume_size_gib must be at least 30 GiB."
   }
 }
 

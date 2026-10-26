@@ -1,0 +1,169 @@
+name: stockspoon-db-migration-plg
+
+services:
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: migration-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    mem_limit: 768m
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: migration-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=72h
+      - --storage.tsdb.retention.size=8GB
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    mem_limit: 640m
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    container_name: migration-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run install.sh first}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    mem_limit: 384m
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.20.0
+    container_name: migration-mysqld-exporter
+    restart: unless-stopped
+    command:
+      - --config.my-cnf=/.my.cnf
+      - --mysqld.address=${MIGRATION_DB_PRIVATE_IP:?run install.sh first}:3306
+      - --mysqld.username=pmm
+      - --tls.insecure-skip-verify
+      - --web.listen-address=:9104
+      # pt-heartbeat writes UTC timestamps; lag is computed from each DB's own clock.
+      - --collect.heartbeat
+      - --collect.heartbeat.database=stockspoon
+      - --collect.heartbeat.table=monitoring_heartbeat
+      - --collect.heartbeat.utc
+    volumes:
+      - ./mysqld-exporter/.my.cnf:/.my.cnf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: migration-alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=72h
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/secrets/discord-webhook:/etc/alertmanager/secrets/discord-webhook:ro
+      - alertmanager-data:/alertmanager
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # One writer per DB node. --check-read-only skips writes while the node is a
+  # replica, so the current primary writes after a switchover without changes.
+  # The heartbeat account has no SUPER, so switchover's read_only freeze also
+  # stops these writes before the data checksum comparison.
+  heartbeat-v1: &heartbeat
+    image: percona/percona-toolkit:3.7.2
+    container_name: migration-heartbeat-v1
+    restart: unless-stopped
+    command:
+      - pt-heartbeat
+      - --update
+      - --replace
+      - --check-read-only
+      - --utc
+      - --interval=1
+      - --database=stockspoon
+      - --table=monitoring_heartbeat
+      - h=${V1_PRIVATE_IP:?run install.sh first},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
+    volumes:
+      - ./heartbeat/.my.cnf:/heartbeat.cnf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+
+  heartbeat-migration:
+    <<: *heartbeat
+    container_name: migration-heartbeat-migration
+    command:
+      - pt-heartbeat
+      - --update
+      - --replace
+      - --check-read-only
+      - --utc
+      - --interval=1
+      - --database=stockspoon
+      - --table=monitoring_heartbeat
+      - h=${MIGRATION_DB_PRIVATE_IP:?run install.sh first},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
+
+volumes:
+  loki-data:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
