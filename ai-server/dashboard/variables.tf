@@ -47,11 +47,11 @@ variable "business_metric_namespace" {
   default     = "Stockspoon/AI"
 }
 
-# Change this default only after the Grafana AI rules and existing AI channel are verified.
+# Grafana AI rules evaluated successfully and the existing AI channel passed a delivery test on 2026-10-27.
 variable "ai_host_alert_owner" {
   description = "cloudwatch retains host alarms; grafana-verified removes only the four migrated host alarms after verification."
   type        = string
-  default     = "cloudwatch"
+  default     = "grafana-verified"
 
   validation {
     condition     = contains(["cloudwatch", "grafana-verified"], var.ai_host_alert_owner)

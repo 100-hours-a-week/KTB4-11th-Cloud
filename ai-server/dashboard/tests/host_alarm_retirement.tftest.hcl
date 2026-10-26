@@ -17,8 +17,11 @@ mock_provider "aws" {
   }
 }
 
-run "default_retains_existing_alarms" {
+run "explicit_cloudwatch_owner_retains_existing_alarms" {
   command = plan
+  variables {
+    ai_host_alert_owner = "cloudwatch"
+  }
 
   assert {
     condition = (
@@ -31,11 +34,8 @@ run "default_retains_existing_alarms" {
   }
 }
 
-run "verified_migration_removes_only_host_alarms" {
+run "verified_default_removes_only_host_alarms" {
   command = plan
-  variables {
-    ai_host_alert_owner = "grafana-verified"
-  }
 
   assert {
     condition = (
