@@ -1,5 +1,5 @@
 variable "telemetry_backend_prometheus_enabled" {
-  description = "Scrape backend Actuator metrics; enable only after BE rollout and SecureString creation"
+  description = "Scrape backend Actuator metrics using a temporary JWT cookie; disabled until manual rollout"
   type        = bool
   default     = false
 
@@ -10,7 +10,7 @@ variable "telemetry_backend_prometheus_enabled" {
 }
 
 locals {
-  backend_metrics_token_arn = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/BACKEND_METRICS_TOKEN"
+  backend_metrics_cookie_arn = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/telemetry/BACKEND_METRICS_COOKIE"
 }
 
 # Alloy uses host networking: grant only ECS host SG access, never public CIDRs.

@@ -324,10 +324,11 @@ prometheus.scrape "backend_metrics" {
   scrape_interval = "15s"
   scrape_timeout = "5s"
   metrics_path = "/actuator/prometheus"
-  authorization {
-    type = "Bearer"
-    credentials = sys.env("BACKEND_METRICS_TOKEN")
+  // Existing BE security reads access_token cookies, not Bearer headers.
+  http_headers = {
+    "Cookie" = [sys.env("BACKEND_METRICS_COOKIE")],
   }
+  follow_redirects = false
   forward_to = [prometheus.relabel.backend_metrics.receiver]
 }
 

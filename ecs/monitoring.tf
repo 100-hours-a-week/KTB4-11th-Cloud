@@ -157,8 +157,8 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
       { name = "PROMETHEUS_WRITE_URL", value = local.telemetry_server.prometheus_write_url },
     ]
     secrets = var.telemetry_backend_prometheus_enabled ? [{
-      name      = "BACKEND_METRICS_TOKEN"
-      valueFrom = local.backend_metrics_token_arn
+      name      = "BACKEND_METRICS_COOKIE"
+      valueFrom = local.backend_metrics_cookie_arn
     }] : []
     mountPoints = [
       { sourceVolume = "docker-socket", containerPath = "/var/run/docker.sock", readOnly = true },

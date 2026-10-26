@@ -38,14 +38,24 @@ locals {
     # SSM에는 빈 값을 저장할 수 없음
     var.backend_kakao_client_secret_enabled ? [] : [{ name = "KAKAO_CLIENT_SECRET", value = "" }],
     local.telemetry_otlp_environment,
-    var.telemetry_backend_prometheus_enabled ? [{ name = "HTTP_REQUEST_HISTOGRAM_ENABLED", value = "true" }] : [],
+    # Environment-only instrumentation. The application image must already include
+    # micrometer-registry-prometheus; configuration cannot add a missing library.
+    var.telemetry_backend_prometheus_enabled ? [{
+      name = "SPRING_APPLICATION_JSON"
+      value = jsonencode({
+        "management.endpoints.web.exposure.include"                                   = "health,metrics,prometheus"
+        "server.tomcat.mbeanregistry.enabled"                                         = true
+        "management.metrics.distribution.percentiles-histogram.http.server.requests"  = true
+        "management.metrics.distribution.minimum-expected-value.http.server.requests" = "1ms"
+        "management.metrics.distribution.maximum-expected-value.http.server.requests" = "30s"
+      })
+    }] : [],
     var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "backend" }] : [],
   )
 
   # SSM /stockspoon/v2/prod/backend/<이름> (application secrets)
   backend_secret_names = concat(
     ["MYSQL_USER", "MYSQL_PASSWORD", "JWT_SECRET", "KAKAO_CLIENT_ID", "KAKAO_REDIRECT_URI", "FRONTEND_ORIGIN"],
-    var.telemetry_backend_prometheus_enabled ? ["BACKEND_METRICS_TOKEN"] : [],
     var.backend_kakao_client_secret_enabled ? ["KAKAO_CLIENT_SECRET"] : [],
     var.backend_kiwoom_stream_enabled ? ["KIWOOM_APP_KEY", "KIWOOM_APP_SECRET"] : [],
     var.backend_collector_enabled ? ["KIWOOM_COLLECTOR_URL", "KIWOOM_COLLECTOR_SECRET"] : [],
