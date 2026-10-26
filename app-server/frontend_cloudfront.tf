@@ -53,6 +53,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   price_class         = var.frontend_price_class
   http_version        = "http2and3"
   wait_for_deployment = true
+  web_acl_id          = var.api_waf_enabled ? module.api_waf[0].web_acl_arn : null
   tags                = local.frontend_tags
 
   origin {
