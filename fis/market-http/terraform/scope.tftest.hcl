@@ -57,3 +57,27 @@ run "missing_stop_alarm_rejected" {
   }
   expect_failures = [var.stop_alarm_arns]
 }
+
+run "redis_fault_scope" {
+  command = plan
+  assert {
+    condition = length(aws_fis_experiment_template.redis) == 3 && alltrue([
+      for template in aws_fis_experiment_template.redis : alltrue([
+        for target in template.target : target.resource_arns == toset([var.target_task_arn]) && target.selection_mode == "COUNT(1)"
+      ]) && length(template.stop_condition) > 0 && length(template.log_configuration) == 1
+    ])
+    error_message = "Each Redis scenario requires one explicit Task, stop alarms and experiment logs."
+  }
+  assert {
+    condition = alltrue([for scenario in ["R1", "R3"] :
+      local.redis_parameters[scenario].port == "6379" && local.redis_parameters[scenario].trafficType == "egress"
+    ]) && local.redis_parameters.R2.sources == "stockspoon-v2-prod-valkey-kmikux.serverless.apn2.cache.amazonaws.com"
+    error_message = "Blackhole must use Redis port only; latency must never default to ALL."
+  }
+  assert {
+    condition = alltrue([for statement in jsondecode(aws_iam_role_policy.redis_fis.policy).Statement :
+      !contains(statement.Action, "ecs:StopTask") && !contains(statement.Action, "ec2:TerminateInstances")
+    ]) && jsondecode(aws_iam_role_policy.redis_fis.policy).Statement[2].Condition.StringEquals["ssm:resourceTag/ECS_TASK_ARN"] == var.target_task_arn
+    error_message = "Redis role must not terminate resources and must scope SSM commands to the selected Task."
+  }
+}
