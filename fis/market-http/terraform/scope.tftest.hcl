@@ -11,7 +11,7 @@ run "one_task_only" {
   assert {
     condition = length(aws_fis_experiment_template.stop_one.target) == 1 && alltrue([
       for target in aws_fis_experiment_template.stop_one.target :
-      target.selection_mode == "COUNT(1)" && target.resource_arns == toset([var.target_task_arn])
+      target.selection_mode == "COUNT(1)" && target.resource_arns == toset([var.target_task_arn]) && length(target.filter) == 0
     ])
     error_message = "The template must resolve exactly one explicitly supplied Task."
   }
@@ -25,12 +25,19 @@ run "one_task_only" {
     condition     = jsondecode(aws_iam_role_policy.fis.policy).Statement[0].Resource == var.target_task_arn
     error_message = "IAM must restrict the write action to the exact Task ARN."
   }
+  assert {
+    condition = alltrue([
+      for config in aws_fis_experiment_template.stop_one.log_configuration :
+      config.log_schema_version == 2 && length(config.cloudwatch_logs_configuration) == 1
+    ]) && length(aws_fis_experiment_template.stop_one.log_configuration) == 1
+    error_message = "FIS must deliver schema v2 experiment logs to CloudWatch Logs."
+  }
 }
 
-run "read_profile_cannot_deploy" {
+run "explicit_profile_required" {
   command = plan
   variables {
-    deployment_profile = "stockspoon"
+    deployment_profile = ""
   }
   expect_failures = [var.deployment_profile]
 }
