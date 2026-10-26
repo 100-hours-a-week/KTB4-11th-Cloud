@@ -56,6 +56,8 @@ resource "aws_cloudwatch_log_metric_filter" "ai_storage_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ai_cpu_high" {
+  count = var.ai_host_alert_owner == "cloudwatch" ? 1 : 0
+
   alarm_name          = "${local.ai_alarm_prefix}-cpu-high"
   alarm_description   = "AI host average CPU active is at least 85% for 3 of 5 one-minute periods."
   namespace           = local.namespace
@@ -86,6 +88,8 @@ resource "aws_cloudwatch_metric_alarm" "ai_cpu_high" {
 # CPU 사용률은 음수가 될 수 없으므로 실제 데이터는 임계값을 위반하지 않고,
 # 5분 연속 누락된 데이터만 breaching으로 평가됩니다.
 resource "aws_cloudwatch_metric_alarm" "ai_metrics_missing" {
+  count = var.ai_host_alert_owner == "cloudwatch" ? 1 : 0
+
   alarm_name          = "${local.ai_alarm_prefix}-metrics-missing"
   alarm_description   = "AI CloudWatch Agent CPU metrics have been missing for five consecutive minutes."
   namespace           = local.namespace
@@ -113,6 +117,8 @@ resource "aws_cloudwatch_metric_alarm" "ai_metrics_missing" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ai_memory_high" {
+  count = var.ai_host_alert_owner == "cloudwatch" ? 1 : 0
+
   alarm_name          = "${local.ai_alarm_prefix}-memory-used-high"
   alarm_description   = "AI host memory used is at least 85% for 3 of 5 one-minute periods."
   namespace           = local.namespace
@@ -139,6 +145,8 @@ resource "aws_cloudwatch_metric_alarm" "ai_memory_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ai_root_disk_high" {
+  count = var.ai_host_alert_owner == "cloudwatch" ? 1 : 0
+
   alarm_name          = "${local.ai_alarm_prefix}-root-disk-high"
   alarm_description   = "AI root filesystem usage is at least 85% for 5 consecutive one-minute periods."
   namespace           = local.namespace
@@ -230,4 +238,24 @@ resource "aws_cloudwatch_metric_alarm" "ai_application_log_errors" {
   depends_on = [aws_lambda_permission.ai_cloudwatch_alarms]
 
   tags = local.ai_alarm_tags
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.ai_cpu_high
+  to   = aws_cloudwatch_metric_alarm.ai_cpu_high[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.ai_metrics_missing
+  to   = aws_cloudwatch_metric_alarm.ai_metrics_missing[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.ai_memory_high
+  to   = aws_cloudwatch_metric_alarm.ai_memory_high[0]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.ai_root_disk_high
+  to   = aws_cloudwatch_metric_alarm.ai_root_disk_high[0]
 }
