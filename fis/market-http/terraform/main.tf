@@ -8,13 +8,14 @@ terraform {
   }
 }
 
-# Deployment uses a separate operator identity. stockspoon remains read-only.
+# The operator must select an explicit profile. The user authorized stockspoon
+# for this Terraform deployment; never fall back to ambient/default credentials.
 variable "deployment_profile" {
   type        = string
-  description = "Explicit deployment profile; never stockspoon. No default credentials are used."
+  description = "Explicit operator-authorized deployment profile. No default credentials are used."
   validation {
-    condition     = trimspace(var.deployment_profile) != "" && lower(trimspace(var.deployment_profile)) != "stockspoon"
-    error_message = "Use a separate deployment profile. stockspoon is read-only."
+    condition     = trimspace(var.deployment_profile) != ""
+    error_message = "Select an explicit operator-authorized deployment profile."
   }
 }
 
@@ -106,15 +107,40 @@ resource "aws_iam_role_policy" "fis" {
         Effect   = "Allow"
         Action   = ["tag:GetResources", "cloudwatch:DescribeAlarms"]
         Resource = "*"
+      },
+      {
+        # FIS configures vended log delivery using the experiment role.
+        # These APIs do not support restricting Resource to a log-group ARN.
+        Sid    = "ConfigureExperimentLogDelivery"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogDelivery",
+          "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies",
+          "logs:DescribeLogGroups",
+        ]
+        Resource = "*"
       }
     ]
   })
+}
+
+resource "aws_cloudwatch_log_group" "fis" {
+  name              = "/aws/vendedlogs/fis/stockspoon-market-http-fis01"
+  retention_in_days = 30
 }
 
 # This resource only defines a template. It does not start an experiment.
 resource "aws_fis_experiment_template" "stop_one" {
   description = "FIS-01 market-http: stop one verified Task; intraday 900 SSE; manual start only"
   role_arn    = aws_iam_role.fis.arn
+
+  log_configuration {
+    log_schema_version = 2
+    cloudwatch_logs_configuration {
+      log_group_arn = "${aws_cloudwatch_log_group.fis.arn}:*"
+    }
+  }
 
   experiment_options {
     account_targeting            = "single-account"
@@ -134,14 +160,8 @@ resource "aws_fis_experiment_template" "stop_one" {
     resource_type  = "aws:ecs:task"
     resource_arns  = [var.target_task_arn]
     selection_mode = "COUNT(1)"
-    filter {
-      path   = "lastStatus"
-      values = ["RUNNING"]
-    }
-    filter {
-      path   = "group"
-      values = ["service:stockspoon-v2-prod-market-http"]
-    }
+    # AWS rejects resource_arns combined with filters. preflight.py verifies
+    # RUNNING status and service membership; IAM permits only this exact ARN.
   }
 
   action {
@@ -173,4 +193,8 @@ output "template_id" {
 
 output "target_task_arn" {
   value = var.target_task_arn
+}
+
+output "experiment_log_group_name" {
+  value = aws_cloudwatch_log_group.fis.name
 }

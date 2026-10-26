@@ -22,19 +22,19 @@ def aws(service, action, *args):
     return json.loads(result.stdout)
 
 
-def validate_snapshot(service, tasks, target_arn, targets, alarms):
+def validate_snapshot(service, tasks, target_arn, targets, alarms, expected_tasks=2):
     prefix = f"arn:aws:ecs:{REGION}:{ACCOUNT}:task/{CLUSTER}/"
     if not re.fullmatch(re.escape(prefix) + "[a-f0-9]{32}", target_arn):
         raise ValueError("Target is outside the approved cluster/account/region")
     if service.get("serviceName") != SERVICE or service.get("status") != "ACTIVE":
         raise ValueError("Wrong or inactive service")
-    if (service.get("desiredCount"), service.get("runningCount"), service.get("pendingCount")) != (2, 2, 0):
-        raise ValueError("Intraday experiment requires desired/running=2 and pending=0")
+    if (service.get("desiredCount"), service.get("runningCount"), service.get("pendingCount")) != (expected_tasks, expected_tasks, 0):
+        raise ValueError(f"Experiment requires desired/running={expected_tasks} and pending=0")
     deployments = service.get("deployments", [])
     if len(deployments) != 1 or deployments[0].get("rolloutState") != "COMPLETED":
         raise ValueError("Deployment is incomplete or overlapping")
-    if len(tasks) != 2 or target_arn not in {t["taskArn"] for t in tasks}:
-        raise ValueError("Target is not one of the two current service Tasks")
+    if len(tasks) != expected_tasks or target_arn not in {t["taskArn"] for t in tasks}:
+        raise ValueError("Target is not one of the current service Tasks")
     task_ips = set()
     for task in tasks:
         if (task.get("group") != f"service:{SERVICE}"
@@ -48,13 +48,13 @@ def validate_snapshot(service, tasks, target_arn, targets, alarms):
                     task_ips.add(item["value"])
     healthy_ips = {t["Target"]["Id"] for t in targets
                    if t["TargetHealth"]["State"] == "healthy"}
-    if len(task_ips) != 2 or task_ips != healthy_ips or len(targets) != 2:
-        raise ValueError("ALB healthy targets do not match both service Tasks")
+    if len(task_ips) != expected_tasks or task_ips != healthy_ips or len(targets) != expected_tasks:
+        raise ValueError("ALB healthy targets do not match all service Tasks")
     if not alarms or any(a.get("StateValue") != "OK" for a in alarms):
         raise ValueError("Every required stop alarm must exist and be OK")
 
 
-def capture(target_arn, alarm_arns):
+def capture(target_arn, alarm_arns, expected_tasks=2):
     identity = aws("sts", "get-caller-identity")
     if identity["Account"] != ACCOUNT:
         raise ValueError("Unexpected AWS account")
@@ -77,7 +77,7 @@ def capture(target_arn, alarm_arns):
     if set(alarm_arns) != {a["AlarmArn"] for a in alarms}:
         raise ValueError("A requested stop alarm is missing")
     targets = aws("elbv2", "describe-target-health", "--target-group-arn", TG)["TargetHealthDescriptions"]
-    validate_snapshot(services["services"][0], described["tasks"], target_arn, targets, alarms)
+    validate_snapshot(services["services"][0], described["tasks"], target_arn, targets, alarms, expected_tasks)
     return {"captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "scope": "infrastructure preflight only; not authorization to inject faults",
             "service": services["services"][0], "tasks": described["tasks"],
@@ -87,13 +87,14 @@ def capture(target_arn, alarm_arns):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task-arn", required=True)
+    parser.add_argument("--expected-tasks", type=int, choices=[2, 3], default=2)
     parser.add_argument("--stop-alarm-arn", action="append", required=True)
     parser.add_argument("--output", type=Path, required=True,
                         help="New directory for timestamped snapshot and Terraform variables")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Output path already exists; preserve previous snapshots")
-    snapshot = capture(args.task_arn, args.stop_alarm_arn)
+    snapshot = capture(args.task_arn, args.stop_alarm_arn, args.expected_tasks)
     args.output.mkdir(parents=True)
     (args.output / "snapshot.json").write_text(json.dumps(snapshot, indent=2) + "\n")
     (args.output / "target.tfvars.json").write_text(json.dumps({
