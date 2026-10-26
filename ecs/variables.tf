@@ -205,7 +205,8 @@ variable "backend_health_check_grace_period_seconds" {
 variable "backend_deregistration_delay_seconds" {
   description = "Time the ALB waits for in-flight requests before deregistering a target"
   type        = number
-  default     = 60
+  # Candidate drain timeout; validate long requests and shutdown errors before rollout.
+  default = 45
 }
 
 # 3장 완료 후 Rolling(ECS) / ECS 네이티브 Blue-Green 중 결정한다.
