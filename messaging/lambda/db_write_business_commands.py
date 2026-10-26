@@ -10,6 +10,7 @@ those messages remain queued rather than being acknowledged as partially applied
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+import json
 import math
 import re
 import uuid
@@ -364,8 +365,24 @@ class CommandExecutor:
     def order_cancel(self, command):
         require(command.payload.get("status") == "cancelled", "INVALID_ORDER_STATUS")
         self.locked_account(command)
-        order = self.one("SELECT order_id,status FROM trade_orders WHERE order_id=%s AND account_id=%s FOR UPDATE",
+        order = self.one("SELECT order_id,status,created_at,cancelled_at FROM trade_orders WHERE order_id=%s AND account_id=%s FOR UPDATE",
                          (command.target["orderId"], command.target["accountId"]))
+        if order is None or order["status"] != "PENDING":
+            # Preserve the existing rejection policy; expose only identifiers and
+            # database state so a later replay can explain why cancellation stopped.
+            print(json.dumps({
+                "event": "db_write_replay_order_cancel_validation_failed",
+                "requestId": command.request_id,
+                "commandType": command.kind,
+                "phase": "order_cancel_state_validation",
+                "accountId": command.target["accountId"],
+                "orderId": command.target["orderId"],
+                "orderExists": order is not None,
+                "observedOrderStatus": order["status"] if order is not None else None,
+                "expectedOrderStatus": "PENDING",
+                "orderCreatedAt": order.get("created_at") if order is not None else None,
+                "orderCancelledAt": order.get("cancelled_at") if order is not None else None,
+            }, default=str))
         require(order is not None, "ORDER_NOT_FOUND")
         require(order["status"] == "PENDING", "ORDER_NOT_PENDING")
         self.cursor.execute("UPDATE trade_orders SET status='CANCELLED',reserved_cash=0,cancelled_at=%s WHERE order_id=%s",
