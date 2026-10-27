@@ -155,24 +155,35 @@ class DeploymentTest(unittest.TestCase):
             with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
                 deploy.checked_endpoint(endpoint, 4318)
 
-    def test_server_bundle_has_dashboards_but_no_runtime_secrets_or_data(self):
+    def test_server_bundle_has_no_runtime_secrets_or_data(self):
         files = deploy.deployment_files("server", outputs()["plg_tempo"]["value"])
-        self.assertIn("config/grafana/dashboards/prod/overview.json", files)
         self.assertIn("config/grafana/provisioning/dashboards/main.yaml", files)
+        self.assertFalse(any(name.startswith("config/grafana/dashboards/") for name in files))
         self.assertEqual([name for name in files if name.endswith(".env")], ["server.env"])
         self.assertIn("GRAFANA_COOKIE_SECURE=true", files["server.env"].decode())
         self.assertNotIn("PASSWORD", files["server.env"].decode())
         self.assertFalse(any("password" in name or "tfstate" in name for name in files))
 
+    def test_dashboard_bundle_carries_every_dashboard_and_nothing_else(self):
+        files = deploy.deployment_files("server-dashboards", outputs()["plg_tempo"]["value"])
+        dashboards = {"config/" + p.relative_to(ROOT / "config").as_posix()
+                      for p in (ROOT / "config/grafana/dashboards").rglob("*.json")}
+        self.assertEqual(set(files) - {"install.sh"}, dashboards)
+        installer = files["install.sh"].decode()
+        self.assertNotIn("docker compose", installer)
+        self.assertNotIn("configure-alerting", installer)
+
     def test_json_transport_compaction_preserves_configuration_values(self):
-        files = deploy.deployment_files("server", outputs()["plg_tempo"]["value"])
+        destination = outputs()["plg_tempo"]["value"]
+        files = {**deploy.deployment_files("server", destination),
+                 **deploy.deployment_files("server-dashboards", destination)}
         for source in (ROOT / "config").rglob("*.json"):
             if not source.name.endswith(".local.json"):
                 name = "config/" + source.relative_to(ROOT / "config").as_posix()
                 self.assertEqual(json.loads(source.read_bytes()), json.loads(files[name]))
 
     def test_payload_is_bash_syntax_checked_and_under_ssm_limit(self):
-        for target in ["server", "dev-agent", "dev-ai-agent", "prod-ai-agent"]:
+        for target in ["server", "server-dashboards", "dev-agent", "dev-ai-agent", "prod-ai-agent"]:
             payload = deploy.make_payload(target, outputs())
             commands = payload["Parameters"]["commands"][0]
             self.assertLess(len(commands.encode()), 24000)
@@ -192,7 +203,8 @@ class DeploymentTest(unittest.TestCase):
                 self.assertEqual(files['system-logs.sh'], (ROOT / 'scripts/deploy/system-logs.sh').read_bytes())
                 installer = files['install.sh'].decode()
                 self.assertLess(installer.index('detect_system_journal'), installer.index('install -m'))
-        self.assertNotIn('system-logs.sh', deploy.deployment_files('server', state['plg_tempo']['value']))
+        for target in ['server', 'server-dashboards']:
+            self.assertNotIn('system-logs.sh', deploy.deployment_files(target, state['plg_tempo']['value']))
 
     def test_cli_only_renders_a_payload_without_submitting_commands(self):
         with tempfile.TemporaryDirectory() as directory:

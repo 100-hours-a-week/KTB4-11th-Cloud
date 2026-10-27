@@ -101,7 +101,7 @@ class MarketContractTest(unittest.TestCase):
     def test_opt_in_bundle_fits_ssm_and_round_trips_configuration(self):
         destination = {'private_ip': '10.0.11.236', 'compose_project_name': 'test', 'aws_region': 'ap-northeast-2',
                        'loki_bucket': 'loki', 'tempo_bucket': 'tempo', 'instance_id': 'i-018b437837e804b2d'}
-        payload = deploy.make_payload('server', {'plg_tempo': {'value': destination}}, sse_prometheus=True)
+        payload = deploy.make_payload('server-dashboards', {'plg_tempo': {'value': destination}}, sse_prometheus=True)
         command = payload['Parameters']['commands'][0]
         self.assertLess(len(command.encode()), 24000)
         line = next(line for line in command.splitlines() if line.startswith('printf'))

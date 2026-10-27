@@ -27,6 +27,9 @@ AI_SERVICES = [
 AI_TRACING_TARGETS = ["dev-ai-tracing", "prod-ai-tracing"]
 MARKET_TRACING_TARGET = "prod-market-http-tracing"
 METRICS_TARGETS = ["dev-ai-metrics", "prod-market-http-metrics"]
+# Dashboards ship in their own SSM payload so neither command exceeds the limit.
+SERVER_TARGETS = ["server", "server-dashboards"]
+DASHBOARDS = ROOT / "config" / "grafana" / "dashboards"
 
 
 def checked_endpoint(value: str, port: int, path: str = "") -> str:
@@ -119,13 +122,19 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
     if streamer_metrics_port is not None:
         if target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= streamer_metrics_port <= 65535 or streamer_metrics_port in [9101, 12345]:
             raise ValueError("Select an AI agent and a non-conflicting private streamer metrics port")
-    if sse_prometheus and target not in ["server", "dev-ai-agent"]:
+    if sse_prometheus and target not in [*SERVER_TARGETS, "dev-ai-agent"]:
         raise ValueError("SSE Prometheus is available only for server and dev-ai-agent deployments")
-    if target == "server":
+    if target == "server-dashboards":
+        files = {
+            "config/" + path.relative_to(ROOT / "config").as_posix(): config_bytes(path)
+            for path in DASHBOARDS.rglob("*.json")
+        }
+    elif target == "server":
         files = {
             "config/" + path.relative_to(ROOT / "config").as_posix(): config_bytes(path)
             for path in (ROOT / "config").rglob("*")
             if path.is_file() and not path.name.endswith(".local.json")
+            and DASHBOARDS not in path.parents
         }
         files["smoke.py"] = (ROOT / "scripts" / "smoke.py").read_bytes()
         files["configure-alerting.py"] = (ROOT / "scripts" / "configure-alerting.py").read_bytes()
@@ -180,14 +189,14 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
                 destination["otlp_http_endpoint"], service, "dev"
             ).encode()
     installer = "ai-agent" if target in ["dev-ai-agent", "prod-ai-agent"] else target
-    if target != "server":
+    if target not in SERVER_TARGETS:
         files["system-logs.sh"] = (ROOT / "scripts" / "deploy" / "system-logs.sh").read_bytes()
     files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{installer}.sh").read_bytes()
     return files
 
 
 def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict:
-    output_name = "plg_tempo" if target == "server" else "development_telemetry"
+    output_name = "plg_tempo" if target in SERVER_TARGETS else "development_telemetry"
     if target in ["dev-ai-agent", "prod-ai-agent"]:
         output_name = "ai_telemetry"
         environment = "dev" if target == "dev-ai-agent" else "prod"
@@ -231,7 +240,7 @@ def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, st
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=["server", "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET, *METRICS_TARGETS])
+    parser.add_argument("target", choices=[*SERVER_TARGETS, "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET, *METRICS_TARGETS])
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--sse-prometheus", action="store_true", help="Enable dev AI scraping; accepted for server compatibility (SSE panels are always included)")
@@ -239,7 +248,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.streamer_metrics_port is not None and (args.target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= args.streamer_metrics_port <= 65535 or args.streamer_metrics_port in [9101, 12345]):
         parser.error("--streamer-metrics-port requires an AI agent and a non-conflicting port")
-    if args.sse_prometheus and args.target not in ["server", "dev-ai-agent"]:
+    if args.sse_prometheus and args.target not in [*SERVER_TARGETS, "dev-ai-agent"]:
         parser.error("--sse-prometheus requires server or dev-ai-agent")
     if args.target in METRICS_TARGETS:
         settings = market_http_metrics_environment(development=args.target == "dev-ai-metrics")
@@ -278,6 +287,8 @@ def main() -> None:
         payload = make_payload(args.target, outputs, sse_prometheus=args.sse_prometheus, streamer_metrics_port=args.streamer_metrics_port)
         args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
         print(f"Prepared {args.target} payload for {payload['InstanceIds'][0]}: {args.output}")
+        if args.target == "server":
+            print("Dashboards are not included; render and send server-dashboards after this payload.")
     args.output.chmod(0o600)
     print("No AWS command was submitted. No Terraform apply was executed.")
 
