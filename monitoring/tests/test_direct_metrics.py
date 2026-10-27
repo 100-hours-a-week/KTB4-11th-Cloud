@@ -50,10 +50,10 @@ class DirectMetricsTest(unittest.TestCase):
             'private_ip': '10.0.11.236', 'compose_project_name': 'test',
             'aws_region': 'ap-northeast-2', 'loki_bucket': 'test-loki', 'tempo_bucket': 'test-tempo',
         }
-        default = deploy.deployment_files('server', destination)
+        default = deploy.deployment_files('server-dashboards', destination)
         name = 'config/grafana/dashboards/prod/ecs-sse.json'
-        self.assertEqual(default[name], deploy.deployment_files('server', destination, sse_prometheus=True)[name])
-        files = deploy.deployment_files('server', destination, sse_prometheus=True)
+        self.assertEqual(default[name], deploy.deployment_files('server-dashboards', destination, sse_prometheus=True)[name])
+        files = deploy.deployment_files('server-dashboards', destination, sse_prometheus=True)
         dashboard = json.loads(files[name])
         ids = set()
         for panel in dashboard['panels']:

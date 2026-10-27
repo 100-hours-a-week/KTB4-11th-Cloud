@@ -1830,6 +1830,646 @@
             "summary": "운영 fe 오류 로그 급증",
             "description": "최근 5분 error/exception/fatal 일치 로그가 20건을 초과한 상태가 5분 지속됩니다. HTTP 오류율이 아니며 같은 예외가 여러 줄로 집계될 수 있습니다."
           }
+        },
+        {
+          "uid": "stockspoon-prod-fe-tg-unhealthy",
+          "title": "운영 frontend 비정상 타깃 발생",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "UnHealthyHostCount",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+                  "TargetGroup": "targetgroup/stockspoon-v2-prod-fe/ced52dbccc9d0809"
+                },
+                "statistic": "Maximum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "3m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "warning",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "운영 frontend 비정상 타깃 발생",
+            "description": "FE 타깃 그룹의 /health 검사에 실패한 타깃이 3분 넘게 남아 있습니다. 배포 중 교체가 끝나지 않았거나 Task가 응답하지 않는 경우입니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-fe-tg-no-healthy",
+          "title": "운영 frontend 정상 타깃 없음",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "HealthyHostCount",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+                  "TargetGroup": "targetgroup/stockspoon-v2-prod-fe/ced52dbccc9d0809"
+                },
+                "statistic": "Minimum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "for": "1m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "critical",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "운영 frontend 정상 타깃 없음",
+            "description": "ALB가 FE로 보낼 정상 타깃이 없습니다. Task가 실행 중이어도 헬스 체크에 실패하면 발생하며, 지표가 10분간 수신되지 않아도 알립니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-fe-tg-5xx",
+          "title": "운영 frontend 5xx 분당 5건 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "HTTPCode_Target_5XX_Count",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+                  "TargetGroup": "targetgroup/stockspoon-v2-prod-fe/ced52dbccc9d0809"
+                },
+                "statistic": "Sum",
+                "period": "60",
+                "matchExact": true,
+                "metricEditorMode": 1,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "expression": "FILL(SEARCH('{AWS/ApplicationELB,LoadBalancer,TargetGroup} MetricName=\"HTTPCode_Target_5XX_Count\" LoadBalancer=\"app/stockspoon-v1-alb/ebcc17bb6129bafc\" TargetGroup=\"targetgroup/stockspoon-v2-prod-fe/ced52dbccc9d0809\"', 'Sum', 60), 0)"
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "warning",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "운영 frontend 5xx 분당 5건 초과",
+            "description": "FE Task(Next.js)가 직접 반환한 5xx입니다. ALB/CloudFront가 만든 5xx는 포함하지 않습니다. 누락 구간은 0으로 채웁니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-fe-tg-latency",
+          "title": "운영 frontend 응답 p95 2초 초과",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "ap-northeast-2",
+                "queryMode": "Metrics",
+                "namespace": "AWS/ApplicationELB",
+                "metricName": "TargetResponseTime",
+                "dimensions": {
+                  "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+                  "TargetGroup": "targetgroup/stockspoon-v2-prod-fe/ced52dbccc9d0809"
+                },
+                "statistic": "p95",
+                "period": "300",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        2
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "warning",
+            "service_name": "frontend"
+          },
+          "annotations": {
+            "summary": "운영 frontend 응답 p95 2초 초과",
+            "description": "FE 타깃 그룹의 5분 p95 응답 시간입니다. SSR 페이지 응답 기준이며 정적 자산(CloudFront→S3)은 포함하지 않습니다."
+          }
+        },
+        {
+          "uid": "stockspoon-prod-edge-5xx",
+          "title": "운영 CloudFront 5xx 비율 5% 초과",
+          "condition": "F",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 1200,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "id": "a",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "us-east-1",
+                "queryMode": "Metrics",
+                "namespace": "AWS/CloudFront",
+                "metricName": "5xxErrorRate",
+                "dimensions": {
+                  "DistributionId": "E2Y9S3V9X3DRMW",
+                  "Region": "Global"
+                },
+                "statistic": "Average",
+                "period": "300",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "refId": "D",
+              "datasourceUid": "cloudwatch",
+              "relativeTimeRange": {
+                "from": 1200,
+                "to": 0
+              },
+              "model": {
+                "refId": "D",
+                "id": "d",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "us-east-1",
+                "queryMode": "Metrics",
+                "namespace": "AWS/CloudFront",
+                "metricName": "Requests",
+                "dimensions": {
+                  "DistributionId": "E2Y9S3V9X3DRMW",
+                  "Region": "Global"
+                },
+                "statistic": "Sum",
+                "period": "300",
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricQueryType": 0,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "E",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "E",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "reduce",
+                "expression": "D",
+                "reducer": "last",
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "F",
+              "datasourceUid": "__expr__",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "model": {
+                "refId": "F",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "type": "math",
+                "expression": "$C && $E >= 100"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "isPaused": true,
+          "labels": {
+            "managed_by": "stockspoon",
+            "environment": "prod",
+            "component": "fe",
+            "severity": "warning",
+            "service_name": "cloudfront"
+          },
+          "annotations": {
+            "summary": "운영 CloudFront 5xx 비율 5% 초과",
+            "description": "stock-spoon.com CloudFront 배포 전체(페이지·정적 자산·/api 포함)의 5분 5xx 비율입니다. 트래픽이 적을 때 소수 오류로 울리지 않도록 5분 요청이 100건 이상일 때만 평가합니다. FE 타깃 그룹 5xx가 없으면 /api 경로나 CloudFront→ALB 연결 오류를 먼저 확인하세요."
+          }
         }
       ]
     },
