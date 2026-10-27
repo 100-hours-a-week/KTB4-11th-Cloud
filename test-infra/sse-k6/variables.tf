@@ -35,7 +35,7 @@ variable "ssh_allowed_cidrs" {
 variable "sse_k6_instance_type" {
   description = "EC2 instance type for the dedicated SSE load generator"
   type        = string
-  default     = "t3a.large"
+  default     = "c7i.xlarge"
 }
 
 variable "sse_k6_root_volume_size_gib" {
