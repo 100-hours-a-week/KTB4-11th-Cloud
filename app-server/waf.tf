@@ -1,5 +1,5 @@
 variable "api_waf_enabled" {
-  # Count 모드로 활성화해 기준 초과 요청을 관찰한다. 실제 차단은 api_waf_mode로 제어한다.
+  # 활성 여부와 별개로 실제 차단은 api_waf_mode로 제어한다.
   # Count에서도 요청당 WAF 요금과 요청별 로그가 발생한다.
   description = "Attach experimental per-IP API rate rules to the public CloudFront entry point."
   type        = bool
@@ -11,13 +11,10 @@ variable "api_waf_enabled" {
 }
 
 variable "api_waf_mode" {
-  # 현재는 Count: 기준 초과를 기록하지만 요청을 차단하지 않는다.
-  # DB 마이그레이션·백엔드 처리 성능 테스트 중에는 count를 유지한다.
-  # 정상 요청의 오탐 여부를 확인한 뒤, WAF 방어 테스트 시 아래 기본값을
-  # "block"으로 변경하고 plan/apply한다. 차단 응답은 HTTP 429다.
-  # 또는 tfvars에 api_waf_mode = "block"을 지정한다. 기존 tfvars/TF_VAR 설정이
-  # 있으면 이 기본값보다 우선하므로 전환 전 plan과 적용 후 output을 확인한다.
-  # 되돌릴 때는 같은 설정을 "count"로 변경하고 다시 plan/apply한다.
+  # 현재는 Count: 기준 초과를 기록하며 요청은 차단하지 않는다.
+  # DB 마이그레이션·백엔드 처리 성능 테스트 중에는 "count"를 유지한다.
+  # Count는 기준 초과만 기록하며 차단하지 않는다. 방어 테스트 시 "block"으로 복구한다.
+  # tfvars/TF_VAR 설정은 이 기본값보다 우선하므로 전환 전 plan과 적용 후 output을 확인한다.
   type    = string
   default = "count"
   validation {
