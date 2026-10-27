@@ -50,4 +50,25 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(ValueError):list_invocations(api,self.mi,time,doc)
             api.assert_not_called()
 
+
+class DeliveryEvidenceTests(unittest.TestCase):
+    def data(self, connections=10, values=None):
+        labels={'task_id':'task','stream':'prices'}
+        return {'end':200,'metrics':{'connections':{'data':{'result':[{'metric':labels,'values':[[100,str(connections)],[200,str(connections)]]}]}},'live_delivery_counter':{'data':{'result':[{'metric':labels,'values':values or [[100,'0'],[200,'0']]}]}}}}
+    def test_idle_replacement_is_not_delivery_failure(self):
+        from network_runtime import delivery_evidence
+        d=self.data(values=[[100,'2'],[200,'4']]);idle=copy.deepcopy(self.data(0))
+        for key in d['metrics']:
+            row=idle['metrics'][key]['data']['result'][0];row['metric']['task_id']='replacement';d['metrics'][key]['data']['result'].append(row)
+        result=delivery_evidence(d);self.assertEqual(result['issues'],[]);self.assertEqual(result['observed_connections'],10);self.assertEqual(len(result['idle_series']),1)
+    def test_active_clients_without_events_fail(self):
+        from network_runtime import delivery_evidence
+        self.assertTrue(delivery_evidence(self.data())['issues'])
+    def test_counter_reset_still_allows_evidence_of_progress(self):
+        from network_runtime import delivery_evidence
+        self.assertEqual(delivery_evidence(self.data(values=[[100,'100'],[150,'0'],[200,'5']]))['issues'],[])
+    def test_no_active_clients_is_not_recovery_proof(self):
+        from network_runtime import delivery_evidence
+        self.assertTrue(delivery_evidence(self.data(0))['issues'])
+
 if __name__=='__main__':unittest.main()

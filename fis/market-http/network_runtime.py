@@ -50,3 +50,40 @@ def stopped_network_namespace(aws, task):
             'stop_code': row.get('stopCode'), 'stop_reason': row.get('stoppedReason'),
             'containers': [{k: c.get(k) for k in ['name', 'lastStatus', 'exitCode', 'reason']}
                            for c in containers]}
+
+
+def delivery_evidence(metrics, window_seconds=120):
+    """Idle replacement Tasks need no fanout; inspect Tasks serving SSE clients."""
+    import math
+    end = metrics['end']
+    def series(name):
+        return metrics['metrics'][name]['data']['result']
+    def samples(row):
+        return [(t, float(v)) for t, v in row['values']
+                if end - window_seconds <= t <= end and math.isfinite(float(v))]
+    counters = {(r['metric'].get('task_id'), r['metric'].get('stream')): samples(r)
+                for r in series('live_delivery_counter')}
+    out = {'observed_connections': 0, 'active_series': [], 'idle_series': [], 'issues': []}
+    for row in series('connections'):
+        values = samples(row)
+        if not values:
+            continue  # A terminated Task may have only historical samples.
+        labels = row['metric']
+        count = values[-1][1]
+        if count < 0:
+            out['issues'].append({'labels': labels, 'reason': 'Negative connection count'})
+            continue
+        out['observed_connections'] += count
+        if count == 0:
+            out['idle_series'].append(labels)
+            continue
+        key = (labels.get('task_id'), labels.get('stream'))
+        readings = counters.get(key, [])
+        advances = [b - a for (_, a), (_, b) in zip(readings, readings[1:]) if b > a]
+        out['active_series'].append({'labels': labels, 'connections': count,
+                                     'positive_counter_increments': sum(advances)})
+        if not advances:
+            out['issues'].append({'labels': labels, 'reason': 'Active SSE clients without advancing delivery evidence'})
+    if not out['active_series']:
+        out['issues'].append({'reason': 'No active SSE delivery evidence'})
+    return out
