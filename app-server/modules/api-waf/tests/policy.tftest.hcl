@@ -7,6 +7,11 @@ run "observe_all_api_paths" {
     error_message = "Count viewer IPs at CloudFront."
   }
   assert {
+    # Mock providers skip AWS validation; mirror the WAFv2 description pattern.
+    condition     = can(regex("^[\\w+=:#@/\\-,.][\\w+=:#@/\\-,.\\s]+[\\w+=:#@/\\-,.]$", aws_wafv2_web_acl.api.description))
+    error_message = "WAFv2 descriptions reject characters such as ';'."
+  }
+  assert {
     condition     = length(aws_wafv2_web_acl.api.rule) == 1
     error_message = "No special users/me rule should exist."
   }
