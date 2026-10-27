@@ -98,3 +98,70 @@ run "t2_one_task_only" {
     error_message = "T2 requires stop alarms, experiment logs and only StopTask plus observation."
   }
 }
+
+run "t3_one_task_only" {
+  command = plan
+  assert {
+    condition = length(aws_fis_experiment_template.stop_limit.target) == 1 && alltrue([
+      for target in aws_fis_experiment_template.stop_limit.target :
+      target.resource_type == "aws:ecs:task" && target.selection_mode == "COUNT(1)" &&
+      target.resource_arns == toset([var.target_task_arn]) && length(target.filter) == 0
+    ]) && jsondecode(aws_iam_role_policy.fis.policy).Statement[0].Resource == var.target_task_arn
+    error_message = "T3 must resolve exactly one verified ECS Task, with IAM restricted to that same Task."
+  }
+  assert {
+    condition = length(aws_fis_experiment_template.stop_limit.action) == 2 && toset([
+      for action in aws_fis_experiment_template.stop_limit.action : action.action_id
+      ]) == toset(["aws:ecs:stop-task", "aws:fis:wait"]) && alltrue([
+      for action in aws_fis_experiment_template.stop_limit.action :
+      length(action.target) == 1 && alltrue([
+        for target in action.target : target.key == "Tasks" && target.value == "VerifiedMarketHttpTask"
+      ]) if action.action_id == "aws:ecs:stop-task"
+    ])
+    error_message = "T3 permits only a single targeted StopTask action and the recovery observation wait."
+  }
+  assert {
+    condition = alltrue([
+      for action in aws_fis_experiment_template.stop_limit.action :
+      action.start_after == toset(["StopOneMarketHttpTask"]) && length(action.parameter) == 1 && alltrue([
+        for parameter in action.parameter : parameter.key == "duration" && parameter.value == "PT10M"
+      ]) if action.action_id == "aws:fis:wait"
+    ])
+    error_message = "T3 must observe recovery for ten minutes after StopTask."
+  }
+  assert {
+    condition = length(aws_fis_experiment_template.stop_limit.stop_condition) == length(var.stop_alarm_arns) && alltrue([
+      for condition in aws_fis_experiment_template.stop_limit.stop_condition : condition.source == "aws:cloudwatch:alarm"
+      ]) && toset([
+      for condition in aws_fis_experiment_template.stop_limit.stop_condition : condition.value
+      ]) == var.stop_alarm_arns && length(aws_fis_experiment_template.stop_limit.log_configuration) == 1 && alltrue([
+      for config in aws_fis_experiment_template.stop_limit.log_configuration :
+      config.log_schema_version == 2 && length(config.cloudwatch_logs_configuration) == 1
+    ]) && aws_fis_experiment_template.stop_limit.tags["Scenario"] == "T3"
+    error_message = "T3 requires the supplied stop alarms, schema v2 experiment logs and its own scenario tag."
+  }
+}
+
+run "ci_oidc_credentials" {
+  command = plan
+  variables {
+    use_ci_credentials = true
+    deployment_profile = null
+  }
+}
+
+run "ambient_credentials_require_explicit_opt_in" {
+  command = plan
+  variables {
+    deployment_profile = null
+  }
+  expect_failures = [var.deployment_profile]
+}
+
+run "ci_cannot_select_local_profile" {
+  command = plan
+  variables {
+    use_ci_credentials = true
+  }
+  expect_failures = [var.deployment_profile]
+}

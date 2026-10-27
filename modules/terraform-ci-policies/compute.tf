@@ -1,4 +1,32 @@
 data "aws_iam_policy_document" "terraform_ci_write_compute" {
+  dynamic "statement" {
+    for_each = var.fis_resource_arns == null ? [] : [var.fis_resource_arns]
+    content {
+      sid    = "ManageFisTemplatesOnly"
+      effect = "Allow"
+      actions = [
+        "fis:CreateExperimentTemplate", "fis:UpdateExperimentTemplate",
+        "fis:DeleteExperimentTemplate", "fis:TagResource", "fis:UntagResource",
+      ]
+      resources = [statement.value.templates, statement.value.actions]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.fis_resource_arns == null ? [] : [var.fis_resource_arns]
+    content {
+      sid       = "PassExperimentRolesToFis"
+      effect    = "Allow"
+      actions   = ["iam:PassRole"]
+      resources = statement.value.roles
+      condition {
+        test     = "StringEquals"
+        variable = "iam:PassedToService"
+        values   = ["fis.amazonaws.com"]
+      }
+    }
+  }
+
   statement {
     sid    = "ManageEc2AndElastiCacheInSeoul"
     effect = "Allow"

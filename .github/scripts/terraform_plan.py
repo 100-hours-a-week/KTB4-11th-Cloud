@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from terraform_fis import FIS_ROOT, write_ci_variables
 from terraform_plan_summary import render_summary
 from terraform_roots import ROOT_ORDER, root_dir
 
@@ -94,6 +95,8 @@ def create_plan(root: str, plan_path: Path) -> dict:
     ]
     if root in VAR_FILES:
         args.append(f"-var-file={VAR_FILES[root]}")
+    if root == FIS_ROOT:
+        args.append(f"-var-file={write_ci_variables(plan_path.parent)}")
     run(root, *args, capture=True)
 
     result = run(root, "show", "-json", str(plan_path), capture=True)

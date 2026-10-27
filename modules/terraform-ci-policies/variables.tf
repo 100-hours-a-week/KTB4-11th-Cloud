@@ -19,3 +19,13 @@ variable "resource_arns" {
     hosted_zone                      = string
   })
 }
+
+variable "fis_resource_arns" {
+  description = "Optional FIS template deployment scopes; experiment execution is excluded."
+  type = object({
+    roles     = list(string)
+    templates = string
+    actions   = string
+  })
+  default = null
+}

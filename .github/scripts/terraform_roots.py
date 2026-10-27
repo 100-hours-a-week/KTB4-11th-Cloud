@@ -16,6 +16,7 @@ ROOT_DEPENDENCIES = {
     "shared-infra": set(),
     "test-infra": set(),
     "test-infra/sse-k6": {"test-infra", "shared-infra", "ecs"},
+    "fis/market-http/terraform": {"ecs"},
     "storage": set(),
     "ecr": set(),
     "ai-server/dashboard": set(),
@@ -43,7 +44,7 @@ MODULE_CONSUMERS = {
     "modules/terraform-ci-policies": {"app-server"},
 }
 
-DEFAULT_ENVIRONMENTS = {"ecs": "prod", "monitoring": "prod"}
+DEFAULT_ENVIRONMENTS = {"ecs": "prod", "monitoring": "prod", "fis/market-http/terraform": "prod"}
 
 
 def dependency_order(
