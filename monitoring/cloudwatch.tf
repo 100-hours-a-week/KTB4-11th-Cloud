@@ -19,6 +19,16 @@ resource "aws_iam_role_policy" "telemetry_cloudwatch" {
         }
       },
       {
+        # CloudFront metrics exist only in us-east-1; keep logs access regional.
+        Sid      = "ReadCloudFrontMetrics"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:ListMetrics", "cloudwatch:GetMetricData"]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = "us-east-1" }
+        }
+      },
+      {
         Sid      = "QueryEcsPerformanceOnly"
         Effect   = "Allow"
         Action   = ["logs:StartQuery", "logs:GetLogGroupFields"]

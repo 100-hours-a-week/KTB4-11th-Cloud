@@ -40,8 +40,8 @@ class EnvironmentDashboardTest(unittest.TestCase):
         dashboards = [json.loads(p.read_text()) for p in (ROOT / 'config/grafana/dashboards').rglob('*.json')]
         uids = [d['uid'] for d in dashboards]
         self.assertEqual(len(set(uids)), len(uids))
-        self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb'} <= set(uids))
-        self.assertEqual(len(dashboards), 9)
+        self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb', 'stockspoon-frontend-edge'} <= set(uids))
+        self.assertEqual(len(dashboards), 10)
 
     def test_dedicated_development_dashboards_cannot_include_other_services(self):
         for service in ['frontend', 'backend']:
@@ -67,7 +67,9 @@ class EnvironmentDashboardTest(unittest.TestCase):
                     if rule['data'][0]['datasourceUid'] == 'cloudwatch':
                         self.assertEqual(environment, 'prod')
                         dimensions = model['dimensions']
-                        self.assertTrue(dimensions.get('ClusterName') == 'stockspoon-v2-prod-cluster' or dimensions.get('LoadBalancer') == 'app/stockspoon-v1-alb/ebcc17bb6129bafc')
+                        self.assertTrue(dimensions.get('ClusterName') == 'stockspoon-v2-prod-cluster' or dimensions.get('LoadBalancer') == 'app/stockspoon-v1-alb/ebcc17bb6129bafc' or dimensions.get('DistributionId') == 'E2Y9S3V9X3DRMW')
+                        # CloudFront publishes metrics only in us-east-1.
+                        self.assertEqual(model['region'], 'us-east-1' if model['namespace'] == 'AWS/CloudFront' else 'ap-northeast-2')
                         self.assertFalse(any('$' in value for value in dimensions.values()))
                     else:
                         self.assertIn('environment="' + environment + '"', model['expr'])
