@@ -1,9 +1,9 @@
 variable "api_waf_enabled" {
-  # 부하테스트 중에는 끈다: Count여도 요청당 WAF 요금과 요청별 로그가 쌓이고
-  # CloudFront 설정이 바뀐다. 테스트가 끝나면 true로 바꿔 plan/apply한다.
+  # Count 모드로 활성화해 기준 초과 요청을 관찰한다. 실제 차단은 api_waf_mode로 제어한다.
+  # Count에서도 요청당 WAF 요금과 요청별 로그가 발생한다.
   description = "Attach experimental per-IP API rate rules to the public CloudFront entry point."
   type        = bool
-  default     = false
+  default     = true
   validation {
     condition     = !var.api_waf_enabled || var.frontend_edge_enabled
     error_message = "API WAF requires frontend_edge_enabled; it counts viewer IPs at CloudFront, not proxy IPs at ALB."
