@@ -87,6 +87,12 @@ def market_open(now):
 
 
 @dataclass(frozen=True)
+class CommandResult:
+    identifiers: dict
+    outcome: str = "applied"
+
+
+@dataclass(frozen=True)
 class BusinessCommand:
     request_id: str
     transaction_id: str
@@ -169,12 +175,13 @@ class CommandExecutor:
         self.timestamp = self.now.astimezone(timezone.utc).replace(tzinfo=None)
 
     def execute(self, command):
-        return {
+        result = {
             "ACCOUNT_CREATE": self.account_create, "ACCOUNT_RENAME": self.account_rename,
             "WATCHLIST_ADD": self.watchlist_add, "WATCHLIST_REMOVE": self.watchlist_remove,
             "ORDER_CREATE": self.order_create, "ORDER_CANCEL": self.order_cancel,
             "COMPETITION_CREATE": self.competition_create,
         }[command.kind](command)
+        return result if isinstance(result, CommandResult) else CommandResult(result)
 
     def one(self, sql, values=()):
         self.cursor.execute(sql, values)
@@ -365,11 +372,15 @@ class CommandExecutor:
     def order_cancel(self, command):
         require(command.payload.get("status") == "cancelled", "INVALID_ORDER_STATUS")
         self.locked_account(command)
-        order = self.one("SELECT order_id,status,created_at,cancelled_at FROM trade_orders WHERE order_id=%s AND account_id=%s FOR UPDATE",
+        order = self.one("SELECT order_id,status,reserved_cash,created_at,cancelled_at FROM trade_orders WHERE order_id=%s AND account_id=%s FOR UPDATE",
                          (command.target["orderId"], command.target["accountId"]))
+        if (order is not None and order["status"] == "CANCELLED"
+                and order["reserved_cash"] == 0 and order["cancelled_at"] is not None):
+            # Ownership and both row locks have already been checked. Record this
+            # request's receipt without changing the original cancellation time.
+            return CommandResult({"orderId": order["order_id"]}, "already_satisfied")
         if order is None or order["status"] != "PENDING":
-            # Preserve the existing rejection policy; expose only identifiers and
-            # database state so a later replay can explain why cancellation stopped.
+            # Conflicting or inconsistent state remains queued for investigation.
             print(json.dumps({
                 "event": "db_write_replay_order_cancel_validation_failed",
                 "requestId": command.request_id,
@@ -382,8 +393,10 @@ class CommandExecutor:
                 "expectedOrderStatus": "PENDING",
                 "orderCreatedAt": order.get("created_at") if order is not None else None,
                 "orderCancelledAt": order.get("cancelled_at") if order is not None else None,
+                "reservedCashReleased": order["reserved_cash"] == 0 if order is not None else None,
             }, default=str))
         require(order is not None, "ORDER_NOT_FOUND")
+        require(order["status"] != "CANCELLED", "CANCELLED_ORDER_STATE_INCONSISTENT")
         require(order["status"] == "PENDING", "ORDER_NOT_PENDING")
         self.cursor.execute("UPDATE trade_orders SET status='CANCELLED',reserved_cash=0,cancelled_at=%s WHERE order_id=%s",
                             (self.timestamp, order["order_id"]))

@@ -1,5 +1,9 @@
 import unittest
+import io
+import json
 import sys
+from contextlib import redirect_stdout
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -263,6 +267,246 @@ class DbWriteReplayForwarderTests(unittest.TestCase):
         self.assertEqual(result, "duplicate")
         self.assertEqual(connection.events, ["begin", "rollback", "close"])
         self.assertEqual(len(cursor.calls), 1)
+
+
+class ReceiptConflict(Exception):
+    pass
+
+
+class OrderCursor(ContextRecordingCursor):
+    """Represent the locked account/order state returned by MySQL."""
+
+    def __init__(self, status="CANCELLED", reserved_cash=0, cancelled_at=datetime(2026, 10, 26, 14, 0, 8),
+                 owner=128, active=1, order_exists=True, duplicate=False):
+        super().__init__()
+        self.account = {"account_id": 19720, "user_id": owner, "is_active": active}
+        self.order = {"order_id": 26285, "account_id": 19720, "status": status,
+                      "reserved_cash": reserved_cash, "created_at": datetime(2026, 10, 26, 14, 0, 6),
+                      "cancelled_at": cancelled_at} if order_exists else None
+        self.duplicate = duplicate
+        self.row = None
+
+    def execute(self, sql, parameters=None):
+        super().execute(sql, parameters)
+        if sql.startswith("INSERT INTO db_write_replay_receipts") and self.duplicate:
+            raise ReceiptConflict(1062, "duplicate request")
+        if "FROM accounts WHERE" in sql:
+            self.row = self.account if parameters == (self.account["account_id"],) else None
+        elif "FROM trade_orders WHERE" in sql:
+            self.row = self.order if self.order and parameters == (
+                self.order["order_id"], self.order["account_id"]) else None
+        else:
+            self.row = None
+
+    def fetchone(self):
+        return self.row
+
+
+class BusinessCommandReplayTests(unittest.TestCase):
+    def envelope(self, request_id="49fa9956-b660-42f6-a277-db558a3daca9", account_id=19720):
+        return {
+            "schemaVersion": 3, "operation": "BUSINESS_COMMAND",
+            "consumerContract": "DB_WRITE_BUSINESS_COMMAND_V1",
+            "requestId": request_id, "transactionId": "tx-1",
+            "idempotencyKey": "a" * 64, "payloadHash": "b" * 64,
+            "idempotencyKeySource": "REQUEST", "requiresBusinessValidation": True,
+            "capturedStatementsArePartial": True, "capturedStatements": [],
+            "replaySafety": "NO_DML_OBSERVED", "replayPolicy": "REEXECUTE_COMMAND",
+            "sourceTransactions": [],
+            "businessCommand": {"type": "ORDER_CANCEL", "actor": {"userId": 128, "source": "USER"},
+                                "target": {"accountId": account_id, "orderId": 26285},
+                                "payload": {"status": "cancelled"}},
+        }
+
+    def drain(self, envelopes, cursors, delete_error=None, commit_error=None, max_messages=None):
+        trace = []
+
+        class TracedConnection(RecordingConnection):
+            def commit(self):
+                super().commit()
+                trace.append("commit")
+                if commit_error:
+                    raise commit_error
+
+        class TracedSqs(RecordingSqs):
+            def delete_message(self, **kwargs):
+                trace.append("delete")
+                if delete_error:
+                    raise delete_error
+                super().delete_message(**kwargs)
+
+        connections = [TracedConnection(cursor) for cursor in cursors]
+        sqs = TracedSqs([
+            {"MessageId": f"m{i}", "Body": json.dumps(envelope), "ReceiptHandle": f"h{i}",
+             "Attributes": {"ApproximateReceiveCount": "1"}}
+            for i, envelope in enumerate(envelopes)
+        ])
+        fake_pymysql = SimpleNamespace(err=SimpleNamespace(IntegrityError=ReceiptConflict))
+        output = io.StringIO()
+        with patch.dict(sys.modules, {"pymysql": fake_pymysql}), \
+             patch.object(replay, "_connect_database", side_effect=connections), \
+             patch.object(replay, "_aws_clients", return_value=(sqs, None)), \
+             patch.dict("os.environ", {"DB_WRITE_REPLAY_QUEUE_URL": "queue-url"}), \
+             redirect_stdout(output):
+            result = replay.handler({"maxMessages": max_messages or len(envelopes)}, RecordingContext())
+        events = [json.loads(line) for line in output.getvalue().splitlines()]
+        return result, sqs, connections, events, trace
+
+    def test_already_cancelled_commits_receipt_without_changing_order_and_continues_fifo(self):
+        cancelled, pending = OrderCursor(), OrderCursor("PENDING", 1, None)
+        original_order = dict(cancelled.order)
+        result, sqs, connections, events, trace = self.drain(
+            [self.envelope(), self.envelope("b22f75ff-5b88-4485-8b13-d9d2d9e76fa7")],
+            [cancelled, pending])
+
+        self.assertEqual((result["processed"], result["applied"], result["alreadySatisfied"]), (2, 1, 1))
+        self.assertEqual(sqs.deleted, ["h0", "h1"])
+        self.assertEqual(trace, ["commit", "delete", "commit", "delete"])
+        self.assertEqual(cancelled.order, original_order)
+        self.assertFalse(any(sql.startswith("UPDATE") for sql, _ in cancelled.calls))
+        self.assertTrue(cancelled.calls[0][0].startswith("INSERT INTO db_write_replay_receipts"))
+        self.assertEqual(connections[0].events, ["begin", "commit", "close"])
+        self.assertTrue(any(sql.startswith("UPDATE trade_orders") for sql, _ in pending.calls))
+        committed = [e for e in events if e["event"] == "db_write_business_command_committed"]
+        self.assertEqual([e["outcome"] for e in committed], ["already_satisfied", "applied"])
+
+    def test_cancelled_order_with_inconsistent_state_is_preserved_for_reconciliation(self):
+        for cursor in [OrderCursor(reserved_cash=1), OrderCursor(cancelled_at=None)]:
+            with self.subTest(order=cursor.order):
+                result, sqs, connections, _, _ = self.drain([self.envelope()], [cursor])
+                self.assertEqual(result["failureCategory"], "RECONCILIATION_REQUIRED")
+                self.assertEqual(result["errorCode"], "CANCELLED_ORDER_STATE_INCONSISTENT")
+                self.assertFalse(result["retryable"])
+                self.assertEqual(sqs.deleted, [])
+                self.assertEqual(connections[0].events, ["begin", "rollback", "close"])
+
+    def test_cancel_does_not_acknowledge_another_users_or_inactive_account(self):
+        for cursor, code in [(OrderCursor(owner=999), "FORBIDDEN_ACCOUNT"),
+                             (OrderCursor(active=0), "ACCOUNT_NOT_FOUND")]:
+            with self.subTest(code=code):
+                result, sqs, connections, _, _ = self.drain([self.envelope()], [cursor])
+                self.assertEqual(result["errorCode"], code)
+                self.assertEqual(result["failureCategory"], "BUSINESS_CONFLICT")
+                self.assertFalse(any("FROM trade_orders" in sql for sql, _ in cursor.calls))
+                self.assertEqual(sqs.deleted, [])
+                self.assertIn("rollback", connections[0].events)
+
+    def test_cancel_does_not_acknowledge_missing_order_or_wrong_account(self):
+        wrong_account = OrderCursor()
+        wrong_account.order["account_id"] = 999
+        for cursor in [OrderCursor(order_exists=False), wrong_account]:
+            with self.subTest(order=cursor.order):
+                result, sqs, _, _, _ = self.drain([self.envelope()], [cursor])
+                self.assertEqual(result["errorCode"], "ORDER_NOT_FOUND")
+                self.assertEqual(sqs.deleted, [])
+
+    def test_executed_order_is_business_conflict_and_stops_before_next_message(self):
+        result, sqs, connections, events, _ = self.drain(
+            [self.envelope(), self.envelope("b22f75ff-5b88-4485-8b13-d9d2d9e76fa7")],
+            [OrderCursor("EXECUTED"), OrderCursor()])
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["failureCategory"], "BUSINESS_CONFLICT")
+        self.assertEqual(result["errorCode"], "ORDER_NOT_PENDING")
+        self.assertFalse(result["retryable"])
+        self.assertEqual(sqs.deleted, [])
+        self.assertEqual(sqs.receive_count, 1)
+        self.assertEqual(sqs.visibility_resets, [("h0", 0)])
+        self.assertEqual(connections[0].events, ["begin", "rollback", "close"])
+        self.assertEqual(connections[1].events, [])
+        summary = events[-1]
+        self.assertEqual(summary["Blocked"], 1)
+        self.assertEqual(summary["FailureCategory"], "BUSINESS_CONFLICT")
+        self.assertEqual(summary["_aws"]["CloudWatchMetrics"][0]["Namespace"], "Stockspoon/DBWriteReplay")
+
+    def test_same_receipt_after_redelivery_skips_account_and_order_execution(self):
+        cursor = OrderCursor(duplicate=True)
+        result, sqs, connections, _, _ = self.drain([self.envelope()], [cursor])
+        self.assertEqual(result["duplicates"], 1)
+        self.assertEqual(result["alreadySatisfied"], 0)
+        self.assertEqual(len(cursor.calls), 1)
+        self.assertEqual(connections[0].events, ["begin", "rollback", "close"])
+        self.assertEqual(sqs.deleted, ["h0"])
+
+    def test_delete_failure_preserves_committed_receipt_for_safe_redelivery(self):
+        result, sqs, connections, _, _ = self.drain(
+            [self.envelope()], [OrderCursor()], delete_error=TimeoutError("sqs timed out"))
+        self.assertEqual(result["failureCategory"], "SQS_ERROR")
+        self.assertEqual(result["processingStage"], "sqs_delete")
+        self.assertTrue(result["dbCommitConfirmed"])
+        self.assertEqual(connections[0].events, ["begin", "commit", "close"])
+        self.assertEqual(sqs.deleted, [])
+        self.assertEqual(sqs.visibility_resets, [("h0", 0)])
+
+    def test_lost_commit_response_does_not_delete_or_claim_a_confirmed_commit(self):
+        result, sqs, connections, _, _ = self.drain(
+            [self.envelope()], [OrderCursor()], commit_error=Exception(2013, "commit response lost"))
+        self.assertEqual(result["failureCategory"], "TRANSIENT_DB_ERROR")
+        self.assertFalse(result["dbCommitConfirmed"])
+        self.assertTrue(result["retryable"])
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(sqs.deleted, [])
+        self.assertEqual(connections[0].events, ["begin", "commit", "rollback", "close"])
+
+    def test_queue_empty_summary_counts_already_satisfied_without_counting_a_new_write(self):
+        result, sqs, _, events, _ = self.drain([self.envelope()], [OrderCursor()], max_messages=2)
+        self.assertEqual(result["status"], "queue_empty")
+        self.assertEqual((result["processed"], result["applied"], result["alreadySatisfied"]), (1, 0, 1))
+        self.assertEqual(sqs.receive_count, 3)
+        self.assertEqual(events[-1]["AlreadySatisfied"], 1)
+        self.assertEqual(events[-1]["Blocked"], 0)
+
+    def test_sqs_permission_and_service_errors_have_distinct_retry_advice(self):
+        for code, status, retryable in [("AccessDenied", 403, False),
+                                        ("AWS.SimpleQueueService.NonExistentQueue", 400, False),
+                                        ("InternalError", 500, True)]:
+            with self.subTest(code=code):
+                error = Exception("AWS exception body must not be logged")
+                error.response = {"Error": {"Code": code}, "ResponseMetadata": {"HTTPStatusCode": status}}
+                result, sqs, _, events, _ = self.drain([self.envelope()], [OrderCursor()], delete_error=error)
+                self.assertEqual(result["errorCode"], code)
+                self.assertEqual(result["failureCategory"], "SQS_ERROR")
+                self.assertEqual(result["retryable"], retryable)
+                self.assertTrue(result["dbCommitConfirmed"])
+                self.assertEqual(sqs.deleted, [])
+                self.assertNotIn("AWS exception body", json.dumps(events))
+
+    def test_unsafe_original_transaction_is_preserved_before_opening_database(self):
+        envelope = self.envelope()
+        envelope["replaySafety"] = "UNCONFIRMED_OR_PARTIAL"
+        result, sqs, connections, _, _ = self.drain([envelope], [OrderCursor()])
+        self.assertEqual(result["failureCategory"], "RECONCILIATION_REQUIRED")
+        self.assertEqual(connections[0].events, [])
+        self.assertEqual(sqs.deleted, [])
+
+    def test_mysql_failures_are_classified_without_logging_sql_or_bindings(self):
+        class FailingCursor(OrderCursor):
+            def execute(self, sql, parameters=None):
+                raise Exception(self.error_code, "SQL and secret bindings must not be logged")
+
+        for code, category, retryable in [(1290, "TRANSIENT_DB_ERROR", True),
+                                           (2013, "TRANSIENT_DB_ERROR", True),
+                                           (1213, "TRANSIENT_DB_ERROR", True),
+                                           (1146, "DATABASE_ERROR", False)]:
+            with self.subTest(code=code):
+                cursor = FailingCursor()
+                cursor.error_code = code
+                result, sqs, connections, events, _ = self.drain([self.envelope()], [cursor])
+                self.assertEqual(result["failureCategory"], category)
+                self.assertEqual(result["retryable"], retryable)
+                self.assertEqual(result["errorCode"], code)
+                self.assertNotIn("secret bindings", json.dumps(events))
+                self.assertEqual(sqs.deleted, [])
+                self.assertIn("rollback", connections[0].events)
+
+    def test_invalid_contract_is_not_classified_as_a_business_conflict(self):
+        envelope = self.envelope()
+        envelope["consumerContract"] = "unknown"
+        result, sqs, connections, _, _ = self.drain([envelope], [OrderCursor()])
+        self.assertEqual(result["failureCategory"], "INVALID_COMMAND")
+        self.assertFalse(result["retryable"])
+        self.assertEqual(connections[0].events, [])
+        self.assertEqual(sqs.deleted, [])
 
 
 if __name__ == "__main__":
