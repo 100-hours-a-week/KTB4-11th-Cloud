@@ -19,7 +19,7 @@ for (const [group, config] of Object.entries(plan.groups)) {
 export const options = {
   scenarios, maxRedirects: 0,
   summaryTrendStats: ['avg', 'min', 'med', 'p(95)', 'p(99)', 'max'],
-  tags: {test_id: plan.test_id || 'inspect', service: 'market-http', experiment: 'FIS-01'},
+  tags: {test_id: plan.test_id || 'inspect', service: 'market-http', experiment: plan.experiment || 'T1'},
   // No latency/error abort thresholds: expected disconnections must be measured.
 };
 

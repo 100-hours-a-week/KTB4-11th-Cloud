@@ -240,7 +240,7 @@ def start(args):
         raise ValueError(f"executable k6-sse not found: {binary}")
     if active_k6():
         raise ValueError("another k6 is running; existing workloads are never stopped by this tool")
-    folder = ROOT / "results" / (dt.datetime.now(dt.timezone.utc).strftime("fis01-%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:6])
+    folder = ROOT / "results" / (plan.get("experiment", "T1").lower() + dt.datetime.now(dt.timezone.utc).strftime("-%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:6])
     folder.mkdir(parents=True, exist_ok=False)
     plan.update(binary=binary, test_id=folder.name)
     write_json(folder / "plan.json", plan)
@@ -305,6 +305,7 @@ def main():
     plan = sub.add_parser("plan", help="create a plan without HTTP requests")
     plan.add_argument("--base-url", default="https://stock-spoon.com/market")
     plan.add_argument("--connections", type=int, default=900)
+    plan.add_argument("--experiment", choices=["T1", "T2", "T3", "R1", "R2", "R3"], default="T1")
     plan.add_argument("--price-codes", required=True)
     plan.add_argument("--orderbook-codes", required=True)
     plan.add_argument("--mode", choices=["baseline", "fault"], default="fault")

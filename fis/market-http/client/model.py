@@ -47,8 +47,10 @@ def validate_url(value):
 
 def validate_plan(plan):
     validate_url(plan["base_url"])
+    if plan.get("experiment", "T1") not in {"T1", "T2", "T3", "R1", "R2", "R3"}:
+        raise ValueError("invalid experiment label")
     if (plan.get("schema") != 1 or plan["mode"] not in {"baseline", "fault"}
-            or not 5 <= plan["connections"] <= 1000 or not 1 <= plan["budget_seconds"] <= 7200):
+            or not 5 <= plan["connections"] <= 2000 or not 1 <= plan["budget_seconds"] <= 7200):
         raise ValueError("invalid plan scope or execution budget")
     if sum(row["connections"] for row in plan["groups"].values()) != plan["connections"]:
         raise ValueError("scenario connection counts do not match the plan")
@@ -72,8 +74,8 @@ def validate_plan(plan):
 
 
 def make_plan(args):
-    if not 5 <= args.connections <= 1000:
-        raise ValueError("connections must be between 5 and 1000")
+    if not 5 <= args.connections <= 2000:
+        raise ValueError("connections must be between 5 and 2000")
     validate_url(args.base_url)
     for name in ("ramp", "baseline", "fault_wait", "observe"):
         if not 1 <= getattr(args, name) <= 3600:
@@ -87,7 +89,7 @@ def make_plan(args):
     if budget > 7200:
         raise ValueError("total execution budget must not exceed two hours")
     return {
-        "schema": 1, "mode": args.mode, "base_url": args.base_url.rstrip("/"),
+        "schema": 1, "experiment": getattr(args, "experiment", "T1"), "mode": args.mode, "base_url": args.base_url.rstrip("/"),
         "connections": args.connections, "ramp_seconds": args.ramp,
         "baseline_seconds": args.baseline, "fault_wait_seconds": args.fault_wait,
         "observe_seconds": args.observe, "budget_seconds": budget,
