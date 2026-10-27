@@ -81,3 +81,20 @@ run "redis_fault_scope" {
     error_message = "Redis role must not terminate resources and must scope SSM commands to the selected Task."
   }
 }
+
+run "t2_one_task_only" {
+  command = plan
+  assert {
+    condition = length(aws_fis_experiment_template.stop_peak.target) == 1 && alltrue([
+      for target in aws_fis_experiment_template.stop_peak.target :
+      target.selection_mode == "COUNT(1)" && target.resource_arns == toset([var.target_task_arn]) && length(target.filter) == 0
+    ])
+    error_message = "T2 must stop exactly one explicitly verified Task with no target filters."
+  }
+  assert {
+    condition = toset([for action in aws_fis_experiment_template.stop_peak.action : action.action_id]) == toset([
+      "aws:ecs:stop-task", "aws:fis:wait"
+    ]) && length(aws_fis_experiment_template.stop_peak.stop_condition) > 0 && length(aws_fis_experiment_template.stop_peak.log_configuration) == 1
+    error_message = "T2 requires stop alarms, experiment logs and only StopTask plus observation."
+  }
+}
