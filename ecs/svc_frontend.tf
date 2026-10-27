@@ -26,10 +26,12 @@ variable "frontend_desired_count" {
   }
 }
 
+# FE logs now go to Loki only (json-file + Alloy). Keep the former awslogs
+# history readable: no new ingestion, and 0 means the group never expires.
 resource "aws_cloudwatch_log_group" "frontend" {
   count             = var.frontend_enabled ? 1 : 0
   name              = "/ecs/${var.name_prefix}/frontend"
-  retention_in_days = var.container_log_retention_days
+  retention_in_days = 0
 }
 
 resource "aws_iam_role" "frontend_task" {
@@ -148,12 +150,13 @@ resource "aws_ecs_task_definition" "frontend" {
     var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "frontend" }] : [])
     portMappings = [{ containerPort = 3000, protocol = "tcp" }]
     stopTimeout  = 30
+    # Alloy tails Docker json-file logs into Loki. Live revisions are copied by
+    # FE CD; scripts/frontend-logs-to-loki.sh switches an existing service.
     logConfiguration = {
-      logDriver = "awslogs"
+      logDriver = "json-file"
       options = {
-        awslogs-group         = aws_cloudwatch_log_group.frontend[0].name
-        awslogs-region        = var.aws_region
-        awslogs-stream-prefix = "frontend"
+        max-size = "10m"
+        max-file = "5"
       }
     }
   }])
