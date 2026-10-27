@@ -3,17 +3,16 @@
 locals {
   redis_endpoint = "stockspoon-v2-prod-valkey-kmikux.serverless.apn2.cache.amazonaws.com"
   redis_scenarios = {
-    R1 = { action = "aws:ecs:task-network-blackhole-port", workload = "900 SSE; 2 Tasks" }
+    R1 = { action = "aws:ecs:task-network-packet-loss", workload = "900 SSE; 2 Tasks" }
     R2 = { action = "aws:ecs:task-network-latency", workload = "900 SSE; 2 Tasks" }
-    R3 = { action = "aws:ecs:task-network-blackhole-port", workload = "2000 SSE; 3 Tasks" }
+    R3 = { action = "aws:ecs:task-network-packet-loss", workload = "2000 SSE; 3 Tasks" }
   }
-  # The blackhole API has no destination IP filter. Verify that TCP/6379 on
-  # this Task is exclusively Valkey before use. Egress does not guarantee an
-  # immediate loss of Pub/Sub receives; validate this separately before R1/R3.
+  # Egress only: validate actual Pub/Sub interruption and recovery separately.
+  # Endpoint IPs are selected, without a port restriction.
   redis_parameters = {
-    R1 = { duration = "PT1M", port = "6379", protocol = "tcp", trafficType = "egress", useEcsFaultInjectionEndpoints = "true", installDependencies = "false" }
+    R1 = { duration = "PT1M", sources = local.redis_endpoint, lossPercent = "100", flowsPercent = "100", useEcsFaultInjectionEndpoints = "true", installDependencies = "false" }
     R2 = { duration = "PT1M", sources = local.redis_endpoint, delayMilliseconds = "200", jitterMilliseconds = "10", flowsPercent = "100", useEcsFaultInjectionEndpoints = "true", installDependencies = "false" }
-    R3 = { duration = "PT1M", port = "6379", protocol = "tcp", trafficType = "egress", useEcsFaultInjectionEndpoints = "true", installDependencies = "false" }
+    R3 = { duration = "PT1M", sources = local.redis_endpoint, lossPercent = "100", flowsPercent = "100", useEcsFaultInjectionEndpoints = "true", installDependencies = "false" }
   }
 }
 
@@ -31,7 +30,7 @@ resource "aws_iam_role_policy" "redis_fis" {
       {
         Effect = "Allow", Action = ["ssm:SendCommand"]
         Resource = [
-          "arn:aws:ssm:ap-northeast-2::document/AWSFIS-Run-Network-Blackhole-Port-ECS",
+          "arn:aws:ssm:ap-northeast-2::document/AWSFIS-Run-Network-Packet-Loss-ECS",
           "arn:aws:ssm:ap-northeast-2::document/AWSFIS-Run-Network-Latency-ECS"
         ]
       },
