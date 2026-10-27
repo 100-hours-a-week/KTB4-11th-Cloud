@@ -29,6 +29,24 @@ class MeasurementTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_plan(plan)
 
+    def test_peak_plan_accepts_2000_connections_and_rejects_over_budget(self):
+        with tempfile.TemporaryDirectory() as folder:
+            codes = Path(folder) / "codes.txt"
+            codes.write_text("\n".join(f"{i:06}" for i in range(14)))
+            args = argparse.Namespace(connections=2000, experiment="T2", base_url="https://stock-spoon.com/market",
+                                      price_codes=str(codes), orderbook_codes=str(codes),
+                                      ramp=120, baseline=300, fault_wait=600, observe=720, mode="fault")
+            plan = make_plan(args)
+            validate_plan(plan)
+            self.assertEqual(sum(row["connections"] for row in plan["groups"].values()), 2000)
+            self.assertEqual(plan["experiment"], "T2")
+            plan["connections"] = 2001
+            with self.assertRaises(ValueError):
+                validate_plan(plan)
+            args.connections = 2001
+            with self.assertRaises(ValueError):
+                make_plan(args)
+
     def test_reconnection_and_first_update_are_separate(self):
         rows = [event("connected", 100), event("disconnected", 1000, outage_id=1, last_update_ms=900),
                 event("connected", 2000), event("reconnected", 2000, outage_id=1),
