@@ -36,9 +36,10 @@ variable "mode" {
   }
 }
 
+# WAFv2 descriptions allow only letters, digits, spaces and + = : # @ / - , .
 resource "aws_wafv2_web_acl" "api" {
   name        = "stockspoon-api-rate-limit"
-  description = "Experimental API flood protection; limits are hypotheses, not measured user traffic."
+  description = "Experimental API flood protection - limits are hypotheses, not measured user traffic."
   scope       = "CLOUDFRONT"
 
   default_action {
