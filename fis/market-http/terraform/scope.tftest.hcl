@@ -70,9 +70,45 @@ run "redis_fault_scope" {
   }
   assert {
     condition = alltrue([for scenario in ["R1", "R3"] :
-      local.redis_parameters[scenario].port == "6379" && local.redis_parameters[scenario].trafficType == "egress"
-    ]) && local.redis_parameters.R2.sources == "stockspoon-v2-prod-valkey-kmikux.serverless.apn2.cache.amazonaws.com"
-    error_message = "Blackhole must use Redis port only; latency must never default to ALL."
+      toset([for action in aws_fis_experiment_template.redis[scenario].action : action.action_id]) == toset([
+        "aws:ecs:task-network-packet-loss", "aws:fis:wait"
+        ]) && alltrue([
+        for action in aws_fis_experiment_template.redis[scenario].action :
+        { for parameter in action.parameter : parameter.key => parameter.value } == {
+          duration                      = "PT1M"
+          sources                       = "stockspoon-v2-prod-valkey-kmikux.serverless.apn2.cache.amazonaws.com"
+          lossPercent                   = "100"
+          flowsPercent                  = "100"
+          useEcsFaultInjectionEndpoints = "true"
+          installDependencies           = "false"
+        } if action.name == "RedisNetworkFault"
+      ])
+    ])
+    error_message = "R1/R3 must inject 100% packet loss into all flows to the Valkey endpoint only."
+  }
+  assert {
+    condition = toset([for action in aws_fis_experiment_template.redis["R2"].action : action.action_id]) == toset([
+      "aws:ecs:task-network-latency", "aws:fis:wait"
+      ]) && alltrue([
+      for action in aws_fis_experiment_template.redis["R2"].action :
+      { for parameter in action.parameter : parameter.key => parameter.value } == {
+        duration                      = "PT1M"
+        sources                       = "stockspoon-v2-prod-valkey-kmikux.serverless.apn2.cache.amazonaws.com"
+        delayMilliseconds             = "200"
+        jitterMilliseconds            = "10"
+        flowsPercent                  = "100"
+        useEcsFaultInjectionEndpoints = "true"
+        installDependencies           = "false"
+      } if action.name == "RedisNetworkFault"
+    ])
+    error_message = "R2 must preserve the existing Valkey endpoint latency parameters."
+  }
+  assert {
+    condition = toset(jsondecode(aws_iam_role_policy.redis_fis.policy).Statement[1].Resource) == toset([
+      "arn:aws:ssm:ap-northeast-2::document/AWSFIS-Run-Network-Packet-Loss-ECS",
+      "arn:aws:ssm:ap-northeast-2::document/AWSFIS-Run-Network-Latency-ECS"
+    ])
+    error_message = "The Redis role must allow only packet-loss and latency SSM documents."
   }
   assert {
     condition = alltrue([for statement in jsondecode(aws_iam_role_policy.redis_fis.policy).Statement :
