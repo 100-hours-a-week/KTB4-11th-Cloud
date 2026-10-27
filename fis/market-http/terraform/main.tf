@@ -8,20 +8,27 @@ terraform {
   }
 }
 
-# The operator must select an explicit profile. The user authorized stockspoon
-# for this Terraform deployment; never fall back to ambient/default credentials.
+# Local operators select a profile; CI explicitly opts into OIDC credentials.
+variable "use_ci_credentials" {
+  type    = bool
+  default = false
+}
+
 variable "deployment_profile" {
   type        = string
-  description = "Explicit operator-authorized deployment profile. No default credentials are used."
+  default     = null
+  description = "Explicit local profile, or null only when CI credentials are enabled."
   validation {
-    condition     = trimspace(var.deployment_profile) != ""
-    error_message = "Select an explicit operator-authorized deployment profile."
+    condition = var.use_ci_credentials ? var.deployment_profile == null : (
+      var.deployment_profile == null ? false : trimspace(var.deployment_profile) != ""
+    )
+    error_message = "Select an explicit local profile, or enable CI credentials with a null profile."
   }
 }
 
 variable "target_task_arn" {
   type        = string
-  description = "One live market-http Task ARN verified by preflight.py immediately before planning."
+  description = "One live market-http Task ARN verified by preflight.py or CI service membership checks before planning."
   validation {
     condition     = can(regex("^arn:aws:ecs:ap-northeast-2:250832562715:task/stockspoon-v2-prod-cluster/[a-f0-9]{32}$", var.target_task_arn))
     error_message = "Only a long Task ARN in the approved production cluster/account/region is allowed. Verify service membership using preflight.py."

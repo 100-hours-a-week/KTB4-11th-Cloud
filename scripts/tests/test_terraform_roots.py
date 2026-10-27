@@ -92,16 +92,24 @@ class DependencyGraphTest(unittest.TestCase):
 
 
 class ChangedRootSelectionTest(unittest.TestCase):
+    def test_fis_templates_use_shared_plan_and_apply(self):
+        self.assertEqual(
+            roots.affected_roots(["fis/market-http/terraform/t3.tf"]),
+            ["fis/market-http/terraform"],
+        )
+        self.assertEqual(roots.affected_roots(["fis/market-http/client/preflight.py"]), [])
+
+
     def test_ecs_production_var_file_selects_ecs_and_its_consumer(self):
         self.assertEqual(
             roots.affected_roots(["ecs/environments/prod/terraform.tfvars.example"]),
-            ["ecs", "test-infra/sse-k6"],
+            ["ecs", "fis/market-http/terraform", "test-infra/sse-k6"],
         )
 
     def test_monitoring_production_var_file_selects_monitoring_and_consumers(self):
         self.assertEqual(
             roots.affected_roots(["monitoring/environments/prod/terraform.tfvars.example"]),
-            ["monitoring", "ecs", "test-infra/sse-k6"],
+            ["monitoring", "ecs", "fis/market-http/terraform", "test-infra/sse-k6"],
         )
 
     def test_production_only_roots_reject_unregistered_environments(self):
@@ -123,7 +131,7 @@ class ChangedRootSelectionTest(unittest.TestCase):
     def test_production_ai_changes_select_ai_before_monitoring_and_ecs(self):
         self.assertEqual(
             roots.affected_roots(["ai-server/infra/compute.tf"]),
-            ["ai-server/infra", "monitoring", "ecs", "test-infra/sse-k6"],
+            ["ai-server/infra", "monitoring", "ecs", "fis/market-http/terraform", "test-infra/sse-k6"],
         )
 
     def test_shared_network_changes_include_both_messaging_environments(self):
@@ -135,7 +143,7 @@ class ChangedRootSelectionTest(unittest.TestCase):
     def test_production_messaging_config_does_not_select_development_messaging(self):
         self.assertEqual(
             roots.affected_roots(["messaging/environments/prod/backend.hcl"]),
-            ["messaging@prod", "ai-server/infra", "monitoring", "ecs", "test-infra/sse-k6"],
+            ["messaging@prod", "ai-server/infra", "monitoring", "ecs", "fis/market-http/terraform", "test-infra/sse-k6"],
         )
 
     def test_development_messaging_config_does_not_select_production_messaging(self):
@@ -182,8 +190,8 @@ class ChangedRootSelectionTest(unittest.TestCase):
             changed.write_text("ecs/svc_backend.tf\n")
             result = subprocess.run([sys.executable, str(REPOSITORY / ".github/scripts/terraform_roots.py"), str(changed)],
                                     text=True, capture_output=True, check=True)
-        self.assertIn('roots=["ecs","test-infra/sse-k6"]', result.stdout)
-        self.assertIn('matrix={"include":[{"root":"ecs","dir":"ecs"},{"root":"test-infra/sse-k6","dir":"test-infra/sse-k6"}]}', result.stdout)
+        self.assertIn('roots=["ecs","fis/market-http/terraform","test-infra/sse-k6"]', result.stdout)
+        self.assertIn('matrix={"include":[{"root":"ecs","dir":"ecs"},{"root":"fis/market-http/terraform","dir":"fis/market-http/terraform"},{"root":"test-infra/sse-k6","dir":"test-infra/sse-k6"}]}', result.stdout)
 
 
 class ModuleConsumersTest(unittest.TestCase):
@@ -200,11 +208,11 @@ class ModuleConsumersTest(unittest.TestCase):
     def test_monitoring_changes_select_server_before_ecs_consumer(self):
         self.assertEqual(
             roots.affected_roots(["monitoring/config/compose.yaml"]),
-            ["monitoring", "ecs", "test-infra/sse-k6"],
+            ["monitoring", "ecs", "fis/market-http/terraform", "test-infra/sse-k6"],
         )
 
     def test_ecs_does_not_trigger_its_monitoring_dependency(self):
-        self.assertEqual(roots.affected_roots(["ecs/monitoring.tf"]), ["ecs", "test-infra/sse-k6"])
+        self.assertEqual(roots.affected_roots(["ecs/monitoring.tf"]), ["ecs", "fis/market-http/terraform", "test-infra/sse-k6"])
 
     def test_shared_network_changes_include_monitoring_before_ecs(self):
         selected = roots.affected_roots(["shared-infra/network.tf"])

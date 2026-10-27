@@ -141,3 +141,27 @@ run "t3_one_task_only" {
     error_message = "T3 requires the supplied stop alarms, schema v2 experiment logs and its own scenario tag."
   }
 }
+
+run "ci_oidc_credentials" {
+  command = plan
+  variables {
+    use_ci_credentials = true
+    deployment_profile = null
+  }
+}
+
+run "ambient_credentials_require_explicit_opt_in" {
+  command = plan
+  variables {
+    deployment_profile = null
+  }
+  expect_failures = [var.deployment_profile]
+}
+
+run "ci_cannot_select_local_profile" {
+  command = plan
+  variables {
+    use_ci_credentials = true
+  }
+  expect_failures = [var.deployment_profile]
+}

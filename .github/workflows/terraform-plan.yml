@@ -64,9 +64,20 @@ jobs:
           ROOT_DIR: ${{ matrix.dir }}
         run: terraform -chdir="$ROOT_DIR" validate -no-color
 
+      - name: Test FIS templates without AWS access
+        if: matrix.root == 'fis/market-http/terraform'
+        run: terraform -chdir=fis/market-http/terraform test -no-color
+
       - name: Test monitoring stack without AWS access
         if: matrix.root == 'monitoring'
         run: terraform -chdir=monitoring test -no-color
+
+      - name: Test CI policy scopes without AWS access
+        if: matrix.root == 'app-server'
+        run: |
+          cp app-server/.terraform.lock.hcl modules/terraform-ci-policies/.terraform.lock.hcl
+          terraform -chdir=modules/terraform-ci-policies init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=modules/terraform-ci-policies test -no-color
 
       - name: Test API WAF policy without AWS access
         if: matrix.root == 'app-server'

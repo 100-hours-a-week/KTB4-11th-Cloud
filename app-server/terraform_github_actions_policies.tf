@@ -2,7 +2,16 @@
 # state writes, and resource writes by responsibility.
 
 locals {
+  github_actions_terraform_fis_role_arns = [
+    for name in ["stockspoon-market-http-fis01", "stockspoon-market-http-fis-redis"] :
+    "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/${name}"
+  ]
+
   github_actions_terraform_states = [
+    {
+      bucket = "stockspoon-terraform-state-v2"
+      key    = "fis/market-http/terraform.tfstate"
+    },
     {
       bucket = "stockspoon-terraform-state-v1"
       key    = "app-server/terraform.tfstate"
@@ -91,7 +100,7 @@ locals {
     ]
   ])
 
-  github_actions_terraform_iam_resource_arns = [
+  github_actions_terraform_iam_resource_arns = concat(local.github_actions_terraform_fis_role_arns, [
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/stockspoon-v1-app-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/stockspoon-v1-ai-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/stockspoon-loadtest-*",
@@ -109,11 +118,11 @@ locals {
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-v2-dev-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:instance-profile/stockspoon-v2-prod-*",
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore",
-  ]
+  ])
 
   github_actions_terraform_pass_role_arns = [
     for role_arn in local.github_actions_terraform_iam_resource_arns : role_arn
-    if startswith(role_arn, "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/")
+    if startswith(role_arn, "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/") && !contains(local.github_actions_terraform_fis_role_arns, role_arn)
   ]
 
   backend_rollback_parameter_arn       = "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/operations/prod/backend-routing/rollback-latch"
@@ -355,6 +364,8 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
       "ses:List*",
       "sqs:Get*",
       "sqs:List*",
+      "fis:GetExperimentTemplate",
+      "fis:ListTagsForResource",
       "sts:GetCallerIdentity",
       "sts:GetServiceBearerToken",
     ]
@@ -507,6 +518,12 @@ resource "aws_iam_role_policy" "github_actions_terraform_apply_state" {
 
 module "terraform_ci_policies" {
   source = "../modules/terraform-ci-policies"
+
+  fis_resource_arns = {
+    roles     = local.github_actions_terraform_fis_role_arns
+    templates = "arn:${data.aws_partition.github_actions_terraform.partition}:fis:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:experiment-template/*"
+    actions   = "arn:${data.aws_partition.github_actions_terraform.partition}:fis:ap-northeast-2:*:action/*"
+  }
 
   resource_arns = {
     backend_rollback_parameter       = local.backend_rollback_parameter_arn
