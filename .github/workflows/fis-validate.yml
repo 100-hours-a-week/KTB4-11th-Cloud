@@ -1,0 +1,66 @@
+name: FIS Validation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - "fis/market-http/**"
+      - ".github/workflows/fis-validate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "fis/market-http/**"
+      - ".github/workflows/fis-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fis-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate FIS without AWS access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_SHARED_CREDENTIALS_FILE: /dev/null
+      AWS_CONFIG_FILE: /dev/null
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.2
+          terraform_wrapper: false
+
+      - name: Check Terraform formatting
+        run: terraform -chdir=fis/market-http/terraform fmt -check -recursive
+
+      - name: Initialize without remote state
+        run: terraform -chdir=fis/market-http/terraform init -backend=false -input=false -lockfile=readonly
+
+      - name: Validate Terraform configuration
+        run: terraform -chdir=fis/market-http/terraform validate -no-color
+
+      - name: Test Terraform scope with mock AWS provider
+        run: terraform -chdir=fis/market-http/terraform test -no-color
+
+      - name: Test ECS and Redis prerequisites
+        run: python3 -m unittest discover -s fis/market-http -p 'test_*.py' -v
+
+      - name: Test SSE recovery measurement
+        run: python3 -m unittest discover -s fis/market-http/client -p 'test_*.py' -v
+
+      - name: Check Python syntax
+        run: python3 -m compileall -q fis/market-http

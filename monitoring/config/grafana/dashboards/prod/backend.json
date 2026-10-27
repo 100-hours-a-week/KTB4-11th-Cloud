@@ -1,0 +1,444 @@
+{
+  "uid": "stockspoon-prod-backend",
+  "title": "ECS BE 모니터링",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "prod",
+    "backend"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "stockspoon"
+      ],
+      "asDropdown": true,
+      "title": "Stockspoon 대시보드"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "task",
+        "label": "Backend task",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(up{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\"}, task_id)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "태스크별 요청량",
+      "description": "Actuator 요청 제외. 완료된 앱 요청 기준이며 ALB 요청 시작 수와 다를 수 있습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "태스크별 평균 앱 응답시간",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (rate(http_server_requests_seconds_sum{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval])) / sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "태스크별 p95 앱 응답시간",
+      "description": "요청 histogram 활성화 필요. 앱 계측 구간이며 ALB 응답시간과 다릅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by(le,task_id) (rate(http_server_requests_seconds_bucket{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "태스크별 p99 앱 응답시간",
+      "description": "요청 histogram 활성화 필요. 앱 계측 구간이며 ALB 응답시간과 다릅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by(le,task_id) (rate(http_server_requests_seconds_bucket{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Tomcat busy / max threads",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tomcat_threads_busy_threads{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"} / tomcat_threads_config_max_threads{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"}",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Tomcat busy threads",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tomcat_threads_busy_threads{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"}",
+          "legendFormat": "{{task_id}} / {{name}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Hikari active / max connections",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_active{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"} / hikaricp_connections_max{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"}",
+          "legendFormat": "{{task_id}} / {{pool}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Hikari pending connections",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_pending{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"}",
+          "legendFormat": "{{task_id}} / {{pool}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "지표 수집 상태 (1=성공, 0=실패)",
+      "description": "서비스 상태가 아닌 수집 성공 여부입니다. No data는 태스크 발견/설정도 확인하세요.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"}",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "DB 연결 획득 평균 대기시간",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,pool) (rate(hikaricp_connections_acquire_seconds_sum{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"}[$__rate_interval])) / sum by(task_id,pool) (rate(hikaricp_connections_acquire_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} / {{pool}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "태스크별 CPU 사용 코어",
+      "description": "기존 cAdvisor 지표. CPU 예약 대비 %가 아닌 실제 사용 코어입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (rate(container_cpu_usage_seconds_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=\"stockspoon-v2-prod-backend\",task_id!=\"\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "태스크별 메모리 Working Set",
+      "description": "기존 cAdvisor의 컨테이너 Working Set입니다. JVM heap 또는 DB 메모리 지표가 아닙니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mbytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (container_memory_working_set_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=\"stockspoon-v2-prod-backend\",task_id!=\"\",task_id=~\"${task:regex}\"}) / 1024 / 1024",
+          "legendFormat": "{{instance}} {{task_id}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "태스크별 앱 HTTP 5xx 비율",
+      "description": "완료된 앱 요청 중 5xx 비율입니다. 요청이 0이거나 메트릭이 없으면 정상 0으로 표시하지 않습니다. Actuator와 ALB 자체 오류는 제외합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\",status=~\"5..\"}[$__rate_interval])) or on(task_id) (0 * sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval])))) / (sum by(task_id) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",task_id=~\"${task:regex}\",uri!~\"/actuator.*\"}[$__rate_interval])) > 0)",
+          "legendFormat": "{{instance}} {{task_id}}",
+          "range": true
+        }
+      ]
+    }
+  ]
+}

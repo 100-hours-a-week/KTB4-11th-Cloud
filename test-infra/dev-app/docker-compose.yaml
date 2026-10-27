@@ -94,10 +94,12 @@ services:
       - data-net
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
-      interval: 5s
+      # Keep the 40s startup grace and nominal 100s failure window.
+      interval: 2s
       timeout: 3s
-      retries: 20
+      retries: 50
       start_period: 40s
+      start_interval: 2s
     cpus: ${BACKEND_CPUS:-1.0}
     mem_limit: ${BACKEND_MEMORY_LIMIT:-1500m}
     logging:

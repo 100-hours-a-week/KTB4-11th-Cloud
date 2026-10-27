@@ -38,6 +38,18 @@ locals {
     # SSM에는 빈 값을 저장할 수 없음
     var.backend_kakao_client_secret_enabled ? [] : [{ name = "KAKAO_CLIENT_SECRET", value = "" }],
     local.telemetry_otlp_environment,
+    # Environment-only instrumentation. The application image must already include
+    # micrometer-registry-prometheus; configuration cannot add a missing library.
+    var.telemetry_backend_prometheus_enabled ? [{
+      name = "SPRING_APPLICATION_JSON"
+      value = jsonencode({
+        "management.endpoints.web.exposure.include"                                   = "health,metrics,prometheus"
+        "server.tomcat.mbeanregistry.enabled"                                         = true
+        "management.metrics.distribution.percentiles-histogram.http.server.requests"  = true
+        "management.metrics.distribution.minimum-expected-value.http.server.requests" = "1ms"
+        "management.metrics.distribution.maximum-expected-value.http.server.requests" = "30s"
+      })
+    }] : [],
     var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "backend" }] : [],
   )
 
@@ -146,14 +158,15 @@ resource "aws_lb_target_group" "backend_green" {
   deregistration_delay = var.backend_deregistration_delay_seconds
 
   health_check {
-    enabled             = true
-    protocol            = "HTTP"
-    path                = var.backend_health_check_path
-    matcher             = "200"
-    interval            = 10
-    timeout             = 5
+    enabled  = true
+    protocol = "HTTP"
+    path     = var.backend_health_check_path
+    matcher  = "200"
+    # Check readiness sooner; preserve the nominal 20s unhealthy detection window.
+    interval            = 5
+    timeout             = 3
     healthy_threshold   = 2
-    unhealthy_threshold = 2
+    unhealthy_threshold = 4
   }
 
   tags = {

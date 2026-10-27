@@ -52,6 +52,12 @@ data "aws_secretsmanager_secret" "discord" {
   name  = "stockspoon/v1/app/discord-webhook"
 }
 
+# AI host alert migration reuses the existing AI Discord channel.
+data "aws_secretsmanager_secret" "ai_discord" {
+  count = var.plg_tempo_enabled ? 1 : 0
+  name  = "stockspoon/v1/ai/discord-webhook"
+}
+
 resource "aws_iam_role_policy" "telemetry_discord" {
   count = var.plg_tempo_enabled ? 1 : 0
   name  = "telemetry-discord-webhook-read"
@@ -62,7 +68,7 @@ resource "aws_iam_role_policy" "telemetry_discord" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = data.aws_secretsmanager_secret.discord[0].arn
+        Resource = [data.aws_secretsmanager_secret.discord[0].arn, data.aws_secretsmanager_secret.ai_discord[0].arn]
       },
       {
         Effect = "Allow"

@@ -68,6 +68,13 @@ jobs:
         if: matrix.root == 'monitoring'
         run: terraform -chdir=monitoring test -no-color
 
+      - name: Test API WAF policy without AWS access
+        if: matrix.root == 'app-server'
+        run: |
+          cp app-server/.terraform.lock.hcl app-server/modules/api-waf/.terraform.lock.hcl
+          terraform -chdir=app-server/modules/api-waf init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=app-server/modules/api-waf test -no-color
+
   validate-workflow-scripts:
     name: Validate workflow helper scripts
     runs-on: ubuntu-24.04

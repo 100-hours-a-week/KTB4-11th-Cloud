@@ -619,6 +619,36 @@
         "dedupStrategy": "none",
         "sortOrder": "Descending"
       }
+    },
+    {
+      "id": 10,
+      "title": "호스트 지표 표본 나이",
+      "description": "Alloy 호스트 지표의 마지막 표본 경과 시간입니다. 최신 시세 데이터의 나이가 아닙니다. ai-v1은 stockspoon-v1-ai 클러스터를 선택합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - timestamp(node_uname_info{environment=\"prod\",cluster=~\"$cluster\",instance=~\"$instance\"})",
+          "legendFormat": "{{instance}} {{task_id}}",
+          "range": true
+        }
+      ]
     }
   ]
 }

@@ -41,7 +41,7 @@ class EnvironmentDashboardTest(unittest.TestCase):
         uids = [d['uid'] for d in dashboards]
         self.assertEqual(len(set(uids)), len(uids))
         self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb', 'stockspoon-frontend-edge'} <= set(uids))
-        self.assertEqual(len(dashboards), 10)
+        self.assertEqual(len(dashboards), 11)
 
     def test_dedicated_development_dashboards_cannot_include_other_services(self):
         for service in ['frontend', 'backend']:
@@ -49,6 +49,15 @@ class EnvironmentDashboardTest(unittest.TestCase):
             self.assertEqual(dashboard['uid'], 'stockspoon-dev-' + service)
             self.assertEqual(dashboard['templating']['list'], [])
             for panel in dashboard['panels']:
+                if service == 'backend' and panel['id'] in [6, 7]:
+                    self.assertEqual(panel['datasource']['uid'], 'prometheus')
+                    self.assertIn('호스트', panel['title'])
+                    self.assertIn('컨테이너', panel['description'])
+                    for target in panel['targets']:
+                        self.assertIn('environment="dev"', target['expr'])
+                        self.assertIn('host_role="app"', target['expr'])
+                        self.assertIn('cluster="stockspoon-v2-dev"', target['expr'])
+                    continue
                 self.assertEqual(panel['datasource']['uid'], 'loki')
                 for target in panel['targets']:
                     self.assertIn('environment="dev"', target['expr'])
