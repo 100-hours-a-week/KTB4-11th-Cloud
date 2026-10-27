@@ -11,6 +11,7 @@ db_write_replay_receipts.sql must already be applied on the replicated database.
 import base64
 import json
 import os
+import re
 import time
 import uuid
 from decimal import Decimal
@@ -21,6 +22,19 @@ from db_write_business_commands import CommandExecutor, ReplayBlocked, validate_
 _sqs = None
 _ssm = None
 _database_credentials = None
+
+_TRANSIENT_MYSQL_CODES = frozenset({1040, 1053, 1205, 1213, 1290, 2002, 2003, 2006, 2013, 2055, 9001})
+_BUSINESS_CONFLICT_CODES = frozenset({
+    "USER_NOT_FOUND", "ONBOARDING_REQUIRED", "ACCOUNT_NOT_FOUND", "FORBIDDEN_ACCOUNT",
+    "DUPLICATE_ACCOUNT_NAME", "LEGACY_ACCOUNT_USER_ORDER_NOT_ALLOWED",
+    "COMPETITION_NOT_IN_PROGRESS", "INVALID_START_DATE", "INVALID_COMPETITION_PERIOD",
+    "ORDER_WINDOW_CLOSED", "ORDER_NOT_FOUND", "ORDER_NOT_PENDING",
+    "INSUFFICIENT_CASH", "INSUFFICIENT_HOLDINGS",
+})
+_RECONCILIATION_CODES = frozenset({
+    "RECONCILIATION_REQUIRED", "CANCELLED_ORDER_STATE_INCONSISTENT",
+    "AMBIGUOUS_STOCK_CODE", "STOCK_MASTER_RESOLUTION_REQUIRED", "MARKET_EXECUTION_REQUIRED",
+})
 
 
 def _aws_clients():
@@ -273,11 +287,13 @@ def _execute_business_command(envelope):
                     _rollback(connection)
                     return "duplicate"
                 raise
-            identifiers = CommandExecutor(cursor).execute(command)
+            result = CommandExecutor(cursor).execute(command)
+            if result.outcome not in ("applied", "already_satisfied"):
+                raise RuntimeError("Unexpected business command outcome")
         connection.commit()
         print(json.dumps({"event": "db_write_business_command_committed", "requestId": command.request_id,
-                          "commandType": command.kind, "result": identifiers}))
-        return "applied"
+                          "commandType": command.kind, "result": result.identifiers, "outcome": result.outcome}))
+        return result.outcome
     except Exception:
         _rollback(connection)
         raise
@@ -342,7 +358,63 @@ def _safe_error_code(error):
         return error.code
     arguments = getattr(error, "args", ())
     # Exception strings can contain SQL and bindings. MySQL numeric codes are safe.
-    return arguments[0] if arguments and type(arguments[0]) is int else None
+    if arguments and type(arguments[0]) is int:
+        return arguments[0]
+    response = getattr(error, "response", None)
+    if isinstance(response, dict):
+        details = response.get("Error")
+        code = details.get("Code") if isinstance(details, dict) else None
+        if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", code):
+            return code
+    return None
+
+
+def _classify_failure(error, stage):
+    """Classify for operators; queue retention and FIFO stopping remain unchanged."""
+    code = _safe_error_code(error)
+    if stage == "sqs_delete":
+        category = "SQS_ERROR"
+        response = getattr(error, "response", {})
+        metadata = response.get("ResponseMetadata", {}) if isinstance(response, dict) else {}
+        status = metadata.get("HTTPStatusCode") if isinstance(metadata, dict) else None
+        retryable = (isinstance(error, (ConnectionError, TimeoutError))
+                     or code in {"Throttling", "ThrottlingException", "RequestThrottled", "RequestTimeout"}
+                     or type(status) is int and (status == 429 or 500 <= status <= 599))
+    elif isinstance(error, ReplayBlocked):
+        category = ("RECONCILIATION_REQUIRED" if code in _RECONCILIATION_CODES
+                    else "BUSINESS_CONFLICT" if code in _BUSINESS_CONFLICT_CODES
+                    else "INVALID_COMMAND")
+        retryable = False
+    elif isinstance(error, ValueError):
+        category, retryable = "INVALID_COMMAND", False
+    elif stage == "command_execution" and (
+            code in _TRANSIENT_MYSQL_CODES or isinstance(error, (ConnectionError, TimeoutError))):
+        category, retryable = "TRANSIENT_DB_ERROR", True
+    elif stage == "command_execution" and type(code) is int:
+        category, retryable = "DATABASE_ERROR", False
+    else:
+        category, retryable = "SYSTEM_ERROR", False
+    return {"failureCategory": category, "retryable": retryable}
+
+
+def _drain_result(status, processed, applied, duplicates, already_satisfied, **details):
+    result = {"status": status, "processed": processed, "applied": applied,
+              "duplicates": duplicates, "alreadySatisfied": already_satisfied, **details}
+    # Embedded Metric Format uses the existing CloudWatch Logs permission.
+    # A handled business block must be observable even when Lambda Errors is zero.
+    metrics = {"Processed": processed, "Applied": applied, "Duplicates": duplicates,
+               "AlreadySatisfied": already_satisfied, "Blocked": int(status == "blocked")}
+    print(json.dumps({
+        "event": "db_write_replay_summary", **result,
+        "FunctionName": os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "db-write-replay-forwarder"),
+        "FailureCategory": details.get("failureCategory", "NONE"), **metrics,
+        "_aws": {"Timestamp": int(time.time() * 1000), "CloudWatchMetrics": [{
+            "Namespace": "Stockspoon/DBWriteReplay",
+            "Dimensions": [["FunctionName", "FailureCategory"]],
+            "Metrics": [{"Name": name, "Unit": "Count"} for name in metrics],
+        }]},
+    }))
+    return result
 
 
 def handler(event, context):
@@ -361,18 +433,14 @@ def handler(event, context):
     processed = 0
     applied = 0
     duplicates = 0
+    already_satisfied = 0
     empty_receives = 0
 
     while processed < max_messages:
         remaining_ms = context.get_remaining_time_in_millis()
         elapsed = time.monotonic() - started_at
         if remaining_ms <= (wait_seconds + 65) * 1000 or elapsed + wait_seconds + 65 >= max_runtime_seconds:
-            return {
-                "status": "runtime_limit",
-                "processed": processed,
-                "applied": applied,
-                "duplicates": duplicates,
-            }
+            return _drain_result("runtime_limit", processed, applied, duplicates, already_satisfied)
 
         response = sqs.receive_message(
             QueueUrl=queue_url,
@@ -388,17 +456,14 @@ def handler(event, context):
             empty_receives += 1
             if empty_receives < empty_limit:
                 continue
-            return {
-                "status": "queue_empty",
-                "processed": processed,
-                "applied": applied,
-                "duplicates": duplicates,
-            }
+            return _drain_result("queue_empty", processed, applied, duplicates, already_satisfied)
         empty_receives = 0
 
         message = messages[0]
         message_id = message.get("MessageId", "unknown")
         request_id = "unknown"
+        stage = "message_validation"
+        db_committed = False
         try:
             envelope = json.loads(message["Body"], parse_constant=_invalid_json_number)
             if not isinstance(envelope, dict):
@@ -407,7 +472,12 @@ def handler(event, context):
                 request_id = str(uuid.UUID(envelope.get("requestId")))
             except (ValueError, TypeError, AttributeError):
                 request_id = "invalid"
+            stage = "command_execution"
             result = _execute_transaction(envelope)
+            if result not in ("applied", "duplicate", "already_satisfied"):
+                raise RuntimeError("Unexpected replay outcome")
+            db_committed = True
+            stage = "sqs_delete"
             sqs.delete_message(
                 QueueUrl=queue_url,
                 ReceiptHandle=message["ReceiptHandle"],
@@ -415,6 +485,8 @@ def handler(event, context):
             processed += 1
             if result == "duplicate":
                 duplicates += 1
+            elif result == "already_satisfied":
+                already_satisfied += 1
             else:
                 applied += 1
             print(json.dumps({
@@ -429,6 +501,7 @@ def handler(event, context):
             # SQL text and bind values can contain user data. Log only safe identifiers
             # and exception codes; leave the message queued and stop at this FIFO head.
             released_for_retry = False
+            failure = _classify_failure(error, stage)
             try:
                 sqs.change_message_visibility(
                     QueueUrl=queue_url,
@@ -452,25 +525,20 @@ def handler(event, context):
                 "errorCode": _safe_error_code(error),
                 "releasedForRetry": released_for_retry,
                 "processed": processed,
+                "processingStage": stage,
+                "dbCommitConfirmed": db_committed,
+                "receiveCount": message.get("Attributes", {}).get("ApproximateReceiveCount"),
+                **failure,
             }))
-            return {
-                "status": "blocked",
-                "processed": processed,
-                "applied": applied,
-                "duplicates": duplicates,
-                "requestId": request_id,
-                "messageId": message_id,
-                "errorType": type(error).__name__,
-                "errorCode": _safe_error_code(error),
-                "releasedForRetry": released_for_retry,
-            }
+            return _drain_result(
+                "blocked", processed, applied, duplicates, already_satisfied,
+                requestId=request_id, messageId=message_id,
+                errorType=type(error).__name__, errorCode=_safe_error_code(error),
+                releasedForRetry=released_for_retry, processingStage=stage,
+                dbCommitConfirmed=db_committed, **failure,
+            )
 
-    return {
-        "status": "message_limit",
-        "processed": processed,
-        "applied": applied,
-        "duplicates": duplicates,
-    }
+    return _drain_result("message_limit", processed, applied, duplicates, already_satisfied)
 
 
 def _invalid_json_number(_value):
