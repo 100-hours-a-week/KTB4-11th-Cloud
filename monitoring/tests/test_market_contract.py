@@ -81,14 +81,18 @@ class MarketContractTest(unittest.TestCase):
         self.assertIn('__meta_docker_container_label_com_amazonaws_ecs_task_arn', source)
         self.assertIn('target_label = "task_id"', source)
 
-    def test_streamer_scrape_requires_an_explicit_private_port(self):
+    def test_streamer_scrape_defaults_to_production_private_port(self):
         for environment in ['dev', 'prod']:
             target = environment + '-ai-agent'
             destination = {'environment': environment,
                            'cluster': 'stockspoon-v2-dev' if environment == 'dev' else 'stockspoon-v1-ai',
                            'loki_push_url': 'http://10.0.11.236:3100/loki/api/v1/push',
                            'prometheus_write_url': 'http://10.0.11.236:9090/api/v1/write'}
-            self.assertNotIn(b'prometheus.scrape "streamer_metrics"', deploy.deployment_files(target, destination)['ai-agent/config.alloy'])
+            default = deploy.deployment_files(target, destination)['ai-agent/config.alloy']
+            if environment == 'dev':
+                self.assertNotIn(b'prometheus.scrape "streamer_metrics"', default)
+            else:
+                self.assertIn(b'127.0.0.1:9102', default)
             rendered = deploy.deployment_files(target, destination, streamer_metrics_port=9102)['ai-agent/config.alloy']
             self.assertIn(b'127.0.0.1:9102', rendered)
             self.assertNotIn(b'__STREAMER_METRICS_PORT__', rendered)

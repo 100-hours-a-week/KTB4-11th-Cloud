@@ -45,7 +45,9 @@ resource "aws_instance" "sse_k6" {
   }
 
   lifecycle {
-    ignore_changes = [ami]
+    # Public addressing is managed by the Elastic IP association below. The
+    # provider can report this launch-time flag as false while EC2 is stopped.
+    ignore_changes = [ami, associate_public_ip_address]
   }
 
   tags = {
@@ -54,4 +56,20 @@ resource "aws_instance" "sse_k6" {
     Environment = "loadtest"
     ManagedBy   = "Terraform"
   }
+}
+
+resource "aws_eip" "sse_k6" {
+  domain = "vpc"
+
+  tags = {
+    Name        = "${var.name_prefix}-sse-k6"
+    Project     = "stockspoon"
+    Environment = "loadtest"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_eip_association" "sse_k6" {
+  allocation_id        = aws_eip.sse_k6.id
+  network_interface_id = aws_instance.sse_k6.primary_network_interface_id
 }

@@ -3,5 +3,14 @@ services:
     environment:
       MARKET_STREAMER_PROMETHEUS_BIND_HOST: "0.0.0.0"
       MARKET_STREAMER_PROMETHEUS_PORT: "9102"
+      OTEL_SDK_DISABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${STREAMER_OTLP_ENDPOINT:?set STREAMER_OTLP_ENDPOINT}"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_TRACES_SAMPLER: "parentbased_traceidratio"
+      OTEL_TRACES_SAMPLER_ARG: "0.1"
+      OTEL_METRICS_EXPORTER: "none"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=prod,deployment.environment.name=prod"
     ports:
       - "127.0.0.1:9102:9102"

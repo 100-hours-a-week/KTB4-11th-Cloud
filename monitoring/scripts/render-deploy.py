@@ -119,6 +119,8 @@ def config_bytes(path: Path) -> bytes:
 
 
 def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict[str, bytes]:
+    if target == "prod-ai-agent" and streamer_metrics_port is None:
+        streamer_metrics_port = 9102
     if streamer_metrics_port is not None:
         if target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= streamer_metrics_port <= 65535 or streamer_metrics_port in [9101, 12345]:
             raise ValueError("Select an AI agent and a non-conflicting private streamer metrics port")
