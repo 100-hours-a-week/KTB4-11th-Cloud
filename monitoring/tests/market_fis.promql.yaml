@@ -1,0 +1,55 @@
+{
+  "rule_files": [],
+  "evaluation_interval": "30s",
+  "tests": [
+    {
+      "interval": "30s",
+      "input_series": [
+        {
+          "series": "test_streamer_published_events_total{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\",kind=\"price\"}",
+          "values": "0+3300x4"
+        },
+        {
+          "series": "test_streamer_published_events_total{environment=\"prod\",service_name=\"market-streamer\",source=\"market-streamer\",job=\"test-streamer-metrics\",kind=\"price\"}",
+          "values": "0+9000x4"
+        },
+        {
+          "series": "market_http_sse_queue_events{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=\"a\",stream=\"prices\"}",
+          "values": "7x4"
+        },
+        {
+          "series": "market_http_sse_queue_events{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend\",task_id=\"b\",stream=\"prices\"}",
+          "values": "999x4"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "expr": "sum by(kind) (rate(test_streamer_published_events_total{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"}[2m]))",
+          "eval_time": "2m",
+          "exp_samples": [
+            {
+              "labels": "{kind=\"price\"}",
+              "value": 110
+            }
+          ]
+        },
+        {
+          "expr": "sum by(task_id,stream) (market_http_sse_queue_events{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\".*\"})",
+          "eval_time": "2m",
+          "exp_samples": [
+            {
+              "labels": "{task_id=\"a\",stream=\"prices\"}",
+              "value": 7
+            }
+          ]
+        },
+        {
+          "expr": "sum by(kind) (rate(test_streamer_publish_unconfirmed_events_total{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"}[2m]))",
+          "eval_time": "2m",
+          "exp_samples": []
+        }
+      ]
+    }
+  ],
+  "fuzzy_compare": true
+}

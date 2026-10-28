@@ -118,9 +118,13 @@ def config_bytes(path: Path) -> bytes:
     return content
 
 
-def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict[str, bytes]:
+def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None, test_streamer: bool = False) -> dict[str, bytes]:
+    if test_streamer and target not in ["dev-ai-agent", "prod-ai-agent"]:
+        raise ValueError("Test publisher collection requires an AI agent target")
     if target == "prod-ai-agent" and streamer_metrics_port is None:
         streamer_metrics_port = 9102
+    if test_streamer and streamer_metrics_port == 9103:
+        raise ValueError("Test publisher and real streamer cannot share port 9103")
     if streamer_metrics_port is not None:
         if target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= streamer_metrics_port <= 65535 or streamer_metrics_port in [9101, 12345]:
             raise ValueError("Select an AI agent and a non-conflicting private streamer metrics port")
@@ -169,6 +173,8 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
         if streamer_metrics_port is not None:
             fragment = (ROOT / "ai-agent/streamer-metrics.alloy").read_text()
             files["ai-agent/config.alloy"] += fragment.replace("__STREAMER_METRICS_PORT__", str(streamer_metrics_port)).encode()
+        if test_streamer:
+            files["ai-agent/config.alloy"] += (ROOT / "ai-agent/test-streamer.alloy").read_bytes()
         services = AI_SERVICES + (["market-http"] if environment == "dev" else [])
         files["agent.env"] = (
             "LOKI_PUSH_URL=" + checked_endpoint(destination["loki_push_url"], 3100, "/loki/api/v1/push")
@@ -197,7 +203,7 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
     return files
 
 
-def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None) -> dict:
+def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None, test_streamer: bool = False) -> dict:
     output_name = "plg_tempo" if target in SERVER_TARGETS else "development_telemetry"
     if target in ["dev-ai-agent", "prod-ai-agent"]:
         output_name = "ai_telemetry"
@@ -212,7 +218,7 @@ def make_payload(target: str, outputs: dict, *, sse_prometheus: bool = False, st
         raise ValueError("Invalid target instance ID")
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as tar:
-        for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus, streamer_metrics_port=streamer_metrics_port).items(),
+        for name, content in sorted(deployment_files(target, destination, sse_prometheus=sse_prometheus, streamer_metrics_port=streamer_metrics_port, test_streamer=test_streamer).items(),
                                     key=lambda item: (not item[0].endswith(".py"), len(item[1]), item[0])):
             info = tarfile.TarInfo(name)
             info.size, info.mode = len(content), 0o644
@@ -247,7 +253,12 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--sse-prometheus", action="store_true", help="Enable dev AI scraping; accepted for server compatibility (SSE panels are always included)")
     parser.add_argument("--streamer-metrics-port", type=int, help="Explicit loopback streamer port (contract: 9102); AI agents only")
+    parser.add_argument("--test-streamer", action="store_true", help="Collect the labeled test publisher logs and loopback:9103 metrics; AI agents only")
     args = parser.parse_args()
+    if args.test_streamer and args.target not in ["dev-ai-agent", "prod-ai-agent"]:
+        parser.error("--test-streamer requires dev-ai-agent or prod-ai-agent")
+    if args.test_streamer and args.streamer_metrics_port == 9103:
+        parser.error("test publisher and real streamer cannot share port 9103")
     if args.streamer_metrics_port is not None and (args.target not in ["dev-ai-agent", "prod-ai-agent"] or not 1024 <= args.streamer_metrics_port <= 65535 or args.streamer_metrics_port in [9101, 12345]):
         parser.error("--streamer-metrics-port requires an AI agent and a non-conflicting port")
     if args.sse_prometheus and args.target not in [*SERVER_TARGETS, "dev-ai-agent"]:
@@ -286,7 +297,7 @@ def main() -> None:
         print("Merge these keys into the existing MARKET_HTTP_ENV_JSON GitHub Variable; do not replace its other settings.")
         print("Requires the AI image containing PR #380; ECS application rollout is separate.")
     else:
-        payload = make_payload(args.target, outputs, sse_prometheus=args.sse_prometheus, streamer_metrics_port=args.streamer_metrics_port)
+        payload = make_payload(args.target, outputs, sse_prometheus=args.sse_prometheus, streamer_metrics_port=args.streamer_metrics_port, test_streamer=args.test_streamer)
         args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
         print(f"Prepared {args.target} payload for {payload['InstanceIds'][0]}: {args.output}")
         if args.target == "server":

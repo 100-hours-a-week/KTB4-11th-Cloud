@@ -31,6 +31,27 @@ class MarketContractTest(unittest.TestCase):
                 self.assertIsNotNone(re.fullmatch(pattern, name), name)
             self.assertIsNone(re.fullmatch(pattern, 'market_http_private_unapproved_metric'))
 
+    def test_fis_metrics_pass_both_http_allowlists_without_wildcard_collection(self):
+        names = [
+            'market_http_sse_queues', 'market_http_sse_queue_events',
+            'market_http_sse_queue_max_events', 'market_http_sse_queue_high_watermark_events',
+            'market_http_sse_queue_payload_bytes', 'market_http_sse_queue_full_total',
+            'market_http_sse_queue_discarded_events_total',
+            'market_http_sse_slow_subscribers_closed_total',
+            'market_http_sse_live_events_sent_total',
+            'market_http_pubsub_messages_received_total', 'market_http_pubsub_payload_received_bytes_total',
+            'market_http_sse_send_operations_in_flight', 'market_http_sse_send_body_bytes_in_flight',
+            'market_http_sse_observer_buffer_bytes', 'market_http_sse_delivery_markers_pending',
+            'process_resident_memory_bytes', 'process_cpu_seconds_total',
+        ]
+        for path in [ROOT.parent / 'ecs/alloy/config.alloy', ROOT / 'ai-agent/market-metrics.alloy']:
+            pattern = next(p for p in re.findall(r'regex = "([^"]+)"', path.read_text()) if p.startswith('market_http_sse_active_connections'))
+            for name in names:
+                self.assertIsNotNone(re.fullmatch(pattern, name), (path, name))
+            for name in ['backend_unrelated_total', 'market_http_private_unapproved_metric',
+                         'market_http_sse_queue_full_created', 'test_streamer_published_events_total']:
+                self.assertIsNone(re.fullmatch(pattern, name), name)
+
     def test_production_scrape_port_and_app_configuration_agree(self):
         production = (ROOT.parent / 'ecs/environments/prod/terraform.tfvars.example').read_text()
         self.assertIn('telemetry_sse_prometheus_enabled = true', production)
