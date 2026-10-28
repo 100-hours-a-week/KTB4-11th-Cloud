@@ -1,0 +1,43 @@
+prometheus.scrape "test_streamer_metrics" {
+  targets = [{"__address__" = "127.0.0.1:9103", service_name = "test-streamer", source = "test-streamer"}]
+  scrape_interval = "15s"
+  scrape_timeout = "5s"
+  metrics_path = "/metrics"
+  forward_to = [prometheus.relabel.test_streamer_metrics.receiver]
+}
+
+prometheus.relabel "test_streamer_metrics" {
+  forward_to = [prometheus.remote_write.server.receiver]
+  rule {
+    source_labels = ["__name__"]
+    regex = "test_streamer_(publish_attempted_events_total|published_events_total|published_payload_bytes_total|publish_unconfirmed_events_total|publish_batches_total|publish_duration_seconds_(bucket|sum|count)|last_publish_timestamp_seconds|publish_age_seconds|target_events_per_second)|process_(resident_memory_bytes|virtual_memory_bytes|cpu_seconds_total|start_time_seconds|open_fds|max_fds)|up"
+    action = "keep"
+  }
+  rule {
+    target_label = "job"
+    replacement = "test-streamer-metrics"
+  }
+}
+
+discovery.relabel "test_streamer_logs" {
+  targets = discovery.docker.apps.targets
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project", "__meta_docker_container_label_com_docker_compose_service", "__meta_docker_container_label_observability_service"]
+    regex = "mock-market-streamer;publisher;test-streamer"
+    action = "keep"
+  }
+}
+
+loki.source.docker "test_streamer" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.test_streamer_logs.output
+  labels = {
+    service_name = "test-streamer",
+    source = "test-streamer",
+    cluster = sys.env("TELEMETRY_CLUSTER"),
+    environment = sys.env("DEPLOYMENT_ENVIRONMENT"),
+    host = sys.env("TELEMETRY_HOST"),
+    host_role = "ai",
+  }
+  forward_to = [loki.write.server.receiver]
+}

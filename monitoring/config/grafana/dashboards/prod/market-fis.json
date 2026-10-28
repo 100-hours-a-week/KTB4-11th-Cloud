@@ -1,0 +1,1138 @@
+{
+  "uid": "stockspoon-market-fis",
+  "title": "시세 FIS · 테스트 발행·큐·전달 관측",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "prod",
+    "fis"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "15s",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "기본 시세 서버 대시보드",
+      "url": "/d/stockspoon-ecs-sse",
+      "keepTime": true
+    },
+    {
+      "type": "link",
+      "title": "테스트 발행 publish 트레이스",
+      "url": "/explore?schemaVersion=1&panes=%7B%22trace%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B+resource.service.name+%3D+%5C%22test-streamer%5C%22+%26%26+name+%3D+%5C%22publish%5C%22+%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+    },
+    {
+      "type": "link",
+      "title": "시세 deliver 트레이스",
+      "url": "/explore?schemaVersion=1&panes=%7B%22trace%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B+resource.service.name+%3D+%5C%22market-http%5C%22+%26%26+name+%3D+%5C%22deliver%5C%22+%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "task",
+        "label": "시세 Task",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(up{environment=\"prod\",job=\"market-http-metrics\"}, task_id)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "options": [],
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "테스트 발행기 · 메트릭 수집 상태",
+      "description": "1은 수집 성공, 0은 중지 또는 실패입니다. 테스트 발행기는 수동 실행하며 미실행 상태를 정상 발행으로 표시하지 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"}",
+          "legendFormat": "test-streamer",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "테스트 발행기 · 실제 발행량과 목표 EPS",
+      "description": "실제 발행량은 Valkey의 배치 응답을 확인한 이벤트 수입니다. SSE 클라이언트 수신 성공 건수와 다릅니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(kind) (rate(test_streamer_published_events_total{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"}[$__rate_interval]))",
+          "legendFormat": "{{kind}} 확인된 발행",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "max by(kind) (test_streamer_target_events_per_second{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"})",
+          "legendFormat": "{{kind}} 목표",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "테스트 발행기 · 발행 payload 바이트 / 초",
+      "description": "UTF-8 JSON payload 기준이며 Redis 프로토콜 바이트와 SET 저장 바이트의 중복은 포함하지 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(kind) (rate(test_streamer_published_payload_bytes_total{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"}[$__rate_interval]))",
+          "legendFormat": "{{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "테스트 발행기 · 배치 오류와 확인되지 않은 이벤트",
+      "description": "배치 오류 시 일부 SET/PUBLISH가 이미 실행됐을 수 있습니다. 미확인 이벤트를 전부 유실되었다고 해석하지 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(test_streamer_publish_batches_total{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\",result=\"error\"}[$__rate_interval]))",
+          "legendFormat": "배치 오류 / 초",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(kind) (rate(test_streamer_publish_unconfirmed_events_total{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"}[$__rate_interval]))",
+          "legendFormat": "{{kind}} 미확인 / 초",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "테스트 발행기 · 마지막 성공 발행 후 경과 시간",
+      "description": "최초 성공 전은 NaN입니다. 값이 없는 상태를 0으로 대체하지 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by(kind) (test_streamer_publish_age_seconds{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"})",
+          "legendFormat": "{{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "테스트 발행기 · Valkey 배치 처리 p95",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by(le) (rate(test_streamer_publish_duration_seconds_bucket{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"}[$__rate_interval])))",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "시세 서버 · Task별 메트릭 수집 상태",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\",job=\"market-http-metrics\"}",
+          "legendFormat": "{{task_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "시세 서버 · SSE 연결 수",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (market_http_sse_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "시세 서버 · Pub/Sub 수신 메시지 / 초",
+      "description": "수신기는 각 Task별로 같은 이벤트를 받을 수 있고 SSE는 구독자별 fan-out됩니다. 발행기/전체 전송 수를 일대일로 비교하지 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,channel) (rate(market_http_pubsub_messages_received_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{channel}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "시세 서버 · 실시간 SSE 전송 / 초",
+      "description": "초기 스냅샷을 제외하고 Pub/Sub 이벤트의 ASGI send 완료를 집계합니다. 클라이언트 수신 완료와는 다릅니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_live_events_sent_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "시세 서버 · Pub/Sub 수신 payload 바이트 / 초",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,channel) (rate(market_http_pubsub_payload_received_bytes_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{channel}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "시세 서버 · 구독자 큐 개수",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (market_http_sse_queues{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "시세 서버 · 큐 적체 이벤트",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (market_http_sse_queue_events{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "시세 서버 · 큐 payload 메모리",
+      "description": "큐 payload 크기이며 Python 객체 오버헤드나 프로세스 전체 메모리는 포함하지 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (market_http_sse_queue_payload_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "시세 서버 · 큐 최대 길이와 최고 기록",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by(task_id,stream) (market_http_sse_queue_max_events{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}} 현재 최대",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "max by(task_id,stream) (market_http_sse_queue_high_watermark_events{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}} 최고 기록",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "시세 서버 · 큐 포화·버림·느린 구독자 종료 / 초",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 56,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_queue_full_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}} 포화",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_queue_discarded_events_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}} 버림",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "C",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_slow_subscribers_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}} 느린 구독자 종료",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "시세 서버 · 전송 중 작업과 전달 마커",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 64,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (market_http_sse_send_operations_in_flight{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}} send 중",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(task_id,stream) (market_http_sse_delivery_markers_pending{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}} 전달 마커",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "시세 서버 · 전송 중 바이트와 framing 버퍼",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 64,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (market_http_sse_send_body_bytes_in_flight{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}} send 중",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(task_id,stream) (market_http_sse_observer_buffer_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} {{stream}} framing 버퍼",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "시세 서버 · 프로세스 RSS",
+      "description": "앱 프로세스 RSS입니다. 컨테이너 working set과 다른 범위입니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 72,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by(task_id) (process_resident_memory_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"})",
+          "legendFormat": "{{task_id}} RSS",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "시세 서버 · 프로세스 CPU 사용 코어",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 72,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (rate(process_cpu_seconds_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "시세 서버 · 실시간 전달 지연 p95",
+      "description": "Pub/Sub 수신부터 ASGI send 완료까지입니다. k6 클라이언트의 첫 후속 이벤트 수신 시간은 별도 증거로 측정합니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 80,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by(le,task_id,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}} {{stream}} p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "테스트 발행기 · 프로세스 RSS",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 80,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(process_resident_memory_bytes{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\",job=\"test-streamer-metrics\"})",
+          "legendFormat": "publisher RSS",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "logs",
+      "title": "발행 오류·시세 구독 복구 로그",
+      "description": "source 또는 service_name으로 테스트 발행기와 시세 서버를 구분합니다. 무로그만으로 복구 성공을 판정하지 않습니다.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 88,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{environment=\"prod\",service_name=\"market-http\",task_id=~\"${task:regex}\"} |= \"market_subscription_\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "{environment=\"prod\",service_name=\"test-streamer\",source=\"test-streamer\"} |= \"publish_batch_unconfirmed\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ]
+    }
+  ]
+}
