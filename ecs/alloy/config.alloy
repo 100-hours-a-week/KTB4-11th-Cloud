@@ -233,7 +233,7 @@ prometheus.relabel "market_metrics" {
   forward_to = [prometheus.remote_write.server.receiver]
   rule {
     source_labels = ["__name__"]
-    regex = "market_http_sse_active_connections|market_http_sse_connections|market_http_sse_connections_(started|closed)_total|market_http_sse_events_sent(_bytes)?_total|market_http_sse_delivery_latency_seconds_(bucket|sum|count)|market_http_valkey_pool_connections|market_http_valkey_pool_acquire_duration_seconds_(bucket|sum|count)|market_http_valkey_pool_acquire_timeouts_total|up"
+    regex = "market_http_sse_active_connections|market_http_sse_connections|market_http_sse_connections_(started|closed)_total|market_http_sse_events_sent(_bytes)?_total|market_http_sse_delivery_latency_seconds_(bucket|sum|count)|market_http_valkey_pool_connections|market_http_valkey_pool_acquire_duration_seconds_(bucket|sum|count)|market_http_valkey_pool_acquire_timeouts_total|market_http_sse_live_events_sent_total|market_http_pubsub_(messages_received|payload_received_bytes)_total|market_http_sse_queues|market_http_sse_queue_(events|max_events|high_watermark_events|payload_bytes|(full|discarded_events)_total)|market_http_sse_slow_subscribers_closed_total|market_http_sse_(send_operations_in_flight|send_body_bytes_in_flight|observer_buffer_bytes|delivery_markers_pending)|process_(resident_memory_bytes|virtual_memory_bytes|cpu_seconds_total|start_time_seconds|open_fds|max_fds)|up"
     action = "keep"
   }
   rule {
