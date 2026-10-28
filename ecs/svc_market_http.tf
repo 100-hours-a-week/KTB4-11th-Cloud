@@ -97,7 +97,7 @@ resource "aws_ecs_task_definition" "market_http" {
     ignore_changes = [
       family, network_mode, requires_compatibilities, cpu, memory,
       execution_role_arn, task_role_arn, runtime_platform, container_definitions,
-      pid_mode, enable_fault_injection,
+      pid_mode, enable_fault_injection, volume,
     ]
   }
 
