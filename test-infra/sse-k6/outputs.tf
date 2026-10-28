@@ -4,8 +4,8 @@ output "sse_k6_instance_id" {
 }
 
 output "sse_k6_public_ip" {
-  description = "Public IP of the dedicated SSE load generator; can change after stop/start or replacement"
-  value       = aws_instance.sse_k6.public_ip
+  description = "Elastic IP of the dedicated SSE load generator, retained across stop/start"
+  value       = aws_eip.sse_k6.public_ip
 }
 
 output "sse_k6_private_ip" {
