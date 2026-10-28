@@ -197,6 +197,16 @@ data "aws_iam_policy_document" "db_migration_switchover_runner" {
     actions   = ["lambda:InvokeFunction"]
     resources = ["arn:${data.aws_partition.monitoring.partition}:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:stockspoon-v2-prod-db-write-replay-forwarder"]
   }
+
+  statement {
+    sid     = "ObserveDbWriteReplayQueues"
+    effect  = "Allow"
+    actions = ["sqs:GetQueueAttributes"]
+    resources = [
+      "arn:${data.aws_partition.monitoring.partition}:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stockspoon-v2-prod-db-write-replay.fifo",
+      "arn:${data.aws_partition.monitoring.partition}:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stockspoon-v2-prod-db-write-replay-dlq.fifo",
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "db_migration_switchover_runner" {

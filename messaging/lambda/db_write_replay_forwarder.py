@@ -417,6 +417,16 @@ def _drain_result(status, processed, applied, duplicates, already_satisfied, **d
     return result
 
 
+def _safe_correlation_id(value, maximum=128):
+    """Keep bounded opaque IDs in logs without exposing arbitrary message values."""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return "unknown"
+    value = str(value)
+    if not value or len(value) > maximum or not re.fullmatch(r"[A-Za-z0-9._:-]+", value):
+        return "unknown"
+    return value
+
+
 def handler(event, context):
     """Drain messages only when explicitly invoked; there is no SQS event mapping."""
     if event is None:
@@ -462,6 +472,9 @@ def handler(event, context):
         message = messages[0]
         message_id = message.get("MessageId", "unknown")
         request_id = "unknown"
+        source_request_id = "unknown"
+        transaction_id = "unknown"
+        write_id = "unknown"
         stage = "message_validation"
         db_committed = False
         try:
@@ -472,6 +485,9 @@ def handler(event, context):
                 request_id = str(uuid.UUID(envelope.get("requestId")))
             except (ValueError, TypeError, AttributeError):
                 request_id = "invalid"
+            source_request_id = _safe_correlation_id(envelope.get("httpRequestId"), 64)
+            transaction_id = _safe_correlation_id(envelope.get("transactionId"), 64)
+            write_id = _safe_correlation_id(envelope.get("writeId"), 128)
             stage = "command_execution"
             result = _execute_transaction(envelope)
             if result not in ("applied", "duplicate", "already_satisfied"):
@@ -492,6 +508,10 @@ def handler(event, context):
             print(json.dumps({
                 "event": "db_write_replay_completed",
                 "requestId": request_id,
+                "replayRequestId": request_id,
+                "sourceRequestId": source_request_id,
+                "transactionId": transaction_id,
+                "writeId": write_id,
                 "sqsMessageId": message_id,
                 "result": result,
                 "operation": envelope.get("operation"),
@@ -513,6 +533,10 @@ def handler(event, context):
                 print(json.dumps({
                     "event": "db_write_replay_visibility_reset_failed",
                     "requestId": request_id,
+                    "replayRequestId": request_id,
+                    "sourceRequestId": source_request_id,
+                    "transactionId": transaction_id,
+                    "writeId": write_id,
                     "sqsMessageId": message_id,
                     "errorType": type(visibility_error).__name__,
                     "errorCode": _safe_error_code(visibility_error),
@@ -520,6 +544,10 @@ def handler(event, context):
             print(json.dumps({
                 "event": "db_write_replay_blocked",
                 "requestId": request_id,
+                "replayRequestId": request_id,
+                "sourceRequestId": source_request_id,
+                "transactionId": transaction_id,
+                "writeId": write_id,
                 "sqsMessageId": message_id,
                 "errorType": type(error).__name__,
                 "errorCode": _safe_error_code(error),
@@ -532,8 +560,9 @@ def handler(event, context):
             }))
             return _drain_result(
                 "blocked", processed, applied, duplicates, already_satisfied,
-                requestId=request_id, messageId=message_id,
-                errorType=type(error).__name__, errorCode=_safe_error_code(error),
+                requestId=request_id, replayRequestId=request_id,
+                sourceRequestId=source_request_id, transactionId=transaction_id, writeId=write_id,
+                messageId=message_id, errorType=type(error).__name__, errorCode=_safe_error_code(error),
                 releasedForRetry=released_for_retry, processingStage=stage,
                 dbCommitConfirmed=db_committed, **failure,
             )
