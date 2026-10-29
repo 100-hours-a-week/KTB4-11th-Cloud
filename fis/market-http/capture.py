@@ -99,6 +99,11 @@ def profile_source(container):
     return Path(mounts[0]["Source"])
 
 
+def parse_time(value):
+    value = re.sub(r"(\.\d{6})\d+", r"\1", value)
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def armed_profile(container, source, statuses=("armed",)):
     matches = []
     for path in source.glob("*/profile-state.json"):
@@ -108,10 +113,7 @@ def armed_profile(container, source, statuses=("armed",)):
         if (
             state.get("hostname") == container["Config"]["Hostname"]
             and state.get("status") in statuses
-            and dt.datetime.fromisoformat(state["utc"])
-            >= dt.datetime.fromisoformat(
-                container["State"]["StartedAt"].replace("Z", "+00:00")
-            )
+            and parse_time(state["utc"]) >= parse_time(container["State"]["StartedAt"])
         ):
             matches.append(path)
     if len(matches) != 1:
@@ -191,6 +193,21 @@ def metrics_address(container):
         for n in network["NetworkSettings"]["Networks"].values()
         if n.get("IPAddress")
     }
+    if not ips:
+        address = subprocess.check_output(
+            [
+                "docker",
+                "exec",
+                container["Id"],
+                "python",
+                "-c",
+                "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); "
+                "s.connect(('192.0.2.1',9)); print(s.getsockname()[0]); s.close()",
+            ],
+            text=True,
+            timeout=5,
+        ).strip()
+        ips = {address}
     if len(ips) != 1:
         raise ValueError("Expected a single Task IPv4 address")
     ip = ipaddress.ip_address(ips.pop())
@@ -411,9 +428,10 @@ def archive(run_dir, output):
     hashes = {}
     for path in files:
         with path.open("rb") as handle:
-            hashes[str(path.relative_to(run_dir))] = hashlib.file_digest(
-                handle, "sha256"
-            ).hexdigest()
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+            hashes[str(path.relative_to(run_dir))] = digest.hexdigest()
     checksum = run_dir / "sha256.json"
     checksum.write_text(json.dumps(hashes, indent=2))
     with output.open("xb") as handle, tarfile.open(fileobj=handle, mode="w:gz") as tar:

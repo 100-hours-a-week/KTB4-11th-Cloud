@@ -261,6 +261,23 @@ class CaptureTests(unittest.TestCase):
                 Path(capture.trigger(container, burst=True)).name, "capture.burst"
             )
 
+    def test_awsvpc_namespace_address_fallback(self):
+        container = {"Id": "target", "HostConfig": {"NetworkMode": "container:pause"}}
+        pause = {"NetworkSettings": {"Networks": {}}}
+        with patch.object(
+            capture.subprocess,
+            "check_output",
+            side_effect=[json.dumps([pause]), "10.0.11.129\n"],
+        ):
+            self.assertEqual(
+                capture.metrics_address(container), "http://10.0.11.129:9101/metrics"
+            )
+
+    def test_nanosecond_docker_timestamp_is_supported(self):
+        self.assertEqual(
+            capture.parse_time("2026-10-29T01:02:03.123456789Z").microsecond, 123456
+        )
+
     def test_archive_rejects_self_destination(self):
         folder = self.root / "run"
         folder.mkdir()
