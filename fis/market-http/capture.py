@@ -160,7 +160,7 @@ def memory_sample(group, pid, proc_root=Path("/proc"), expected_start=None):
             sample[name] = int(value) if value != "max" else value
         except FileNotFoundError:
             sample[name] = None
-    for name in ["memory.events", "memory.stat"]:
+    for name in ["memory.events", "memory.stat", "cpu.stat"]:
         try:
             sample[name] = counters(group / name)
         except FileNotFoundError:
@@ -274,9 +274,9 @@ def mirror_profiles(source, destination, hostname, selected=None):
     return {"copied_files": copied}
 
 
-def record(container, output, seconds, interval):
-    source = profile_source(container)
-    selected = armed_profile(container, source)
+def record(container, output, seconds, interval, profiles=True):
+    source = profile_source(container) if profiles else None
+    selected = armed_profile(container, source) if profiles else None
     group = task_cgroup(
         container["State"]["Pid"], container["verified_task_id"], 2 * 1024**3
     )
@@ -295,8 +295,9 @@ def record(container, output, seconds, interval):
         "seconds": seconds,
         "memory_interval": interval,
         "metrics_interval": 1,
-        "profile_root": str(source),
-        "profile_state": str(selected),
+        "profile_root": str(source) if profiles else None,
+        "profile_state": str(selected) if profiles else None,
+        "profiles_enabled": profiles,
         "hostname": container["Config"]["Hostname"],
         "image_id": container["Image"],
         "task_definition": container["Config"]["Labels"].get(
@@ -351,7 +352,7 @@ def record(container, output, seconds, interval):
                 if started >= next_poll:
                     if "metrics" not in jobs:
                         jobs["metrics"] = pool.submit(fetch_metrics, url)
-                    if "profiles" not in jobs:
+                    if profiles and "profiles" not in jobs:
                         jobs["profiles"] = pool.submit(
                             mirror_profiles,
                             source,
@@ -373,9 +374,10 @@ def record(container, output, seconds, interval):
                         ),
                     )
                 )
-        mirror_profiles(
-            source, output / "profiles", container["Config"]["Hostname"], selected
-        )
+        if profiles:
+            mirror_profiles(
+                source, output / "profiles", container["Config"]["Hostname"], selected
+            )
         manifest["status"] = "finished"
     except BaseException:
         manifest["status"] = "interrupted"
@@ -391,6 +393,8 @@ def recover(run_dir):
         manifest.get("task_arn", "")
     ):
         raise ValueError("Not a verified capture run")
+    if manifest.get("profiles_enabled") is False:
+        return {"copied_files": 0, "profiles_enabled": False}
     source = Path(manifest["profile_root"]).resolve()
     selected = Path(manifest["profile_state"]).resolve()
     if source != PROFILE_ROOT or not selected.is_relative_to(source):
@@ -453,6 +457,7 @@ def main():
             p.add_argument("--output", type=Path, required=True)
             p.add_argument("--seconds", type=int, default=180)
             p.add_argument("--interval", type=float, default=0.25)
+            p.add_argument("--without-profiles", action="store_true")
     p = sub.add_parser("prepare-host")
     p.add_argument("--uid", type=int, default=10001)
     p.add_argument("--gid", type=int, default=10001)
@@ -481,7 +486,7 @@ def main():
     if args.command == "trigger":
         print(trigger(container, args.burst))
     else:
-        record(container, args.output, args.seconds, args.interval)
+        record(container, args.output, args.seconds, args.interval, not args.without_profiles)
         print(args.output)
 
 

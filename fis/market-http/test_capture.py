@@ -290,3 +290,29 @@ class CaptureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoProfileCaptureTests(unittest.TestCase):
+    def test_no_profile_mode_does_not_require_mount_or_arm_and_recovers_after_exit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / 'evidence'
+            group = root / 'group'
+            group.mkdir()
+            (group / 'memory.max').write_text(str(2 * 1024**3))
+            container = {'State': {'Pid': 123}, 'verified_task_id': TASK_ID, 'Id': 'c1', 'Image': 'image',
+                         'Config': {'Hostname': 'market', 'Labels': {'com.amazonaws.ecs.task-arn': ARN}}}
+            with patch.object(capture, 'profile_source', side_effect=AssertionError('must not require profiles')), \
+                 patch.object(capture, 'armed_profile', side_effect=AssertionError('must not arm')), \
+                 patch.object(capture, 'task_cgroup', return_value=group), \
+                 patch.object(capture, 'metrics_address', return_value='http://127.0.0.1:9101/metrics'), \
+                 patch.object(capture, 'process_start', return_value=1), \
+                 patch.object(capture, 'memory_sample', return_value={'memory.current': 10}), \
+                 patch.object(capture, 'fetch_metrics', return_value={'metrics': []}), \
+                 patch.object(capture, 'mirror_profiles', side_effect=AssertionError('must not mirror')):
+                capture.record(container, output, .03, .01, profiles=False)
+                self.assertEqual(capture.recover(output), {'copied_files': 0, 'profiles_enabled': False})
+            manifest = json.loads((output / 'manifest.json').read_text())
+            self.assertEqual(manifest['status'], 'finished')
+            self.assertIsNone(manifest['profile_root'])
+            self.assertTrue((output / 'memory.jsonl').read_text())
