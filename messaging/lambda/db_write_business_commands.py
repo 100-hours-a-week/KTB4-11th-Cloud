@@ -378,7 +378,10 @@ class CommandExecutor:
                 and order["reserved_cash"] == 0 and order["cancelled_at"] is not None):
             # Ownership and both row locks have already been checked. Record this
             # request's receipt without changing the original cancellation time.
-            return CommandResult({"orderId": order["order_id"]}, "already_satisfied")
+            return CommandResult({"orderId": order["order_id"], "accountId": command.target["accountId"],
+                                  "previousStatus": "CANCELLED", "orderStatus": "CANCELLED",
+                                  "cancelledAt": str(order["cancelled_at"]), "mutationApplied": False},
+                                 "already_satisfied")
         if order is None or order["status"] != "PENDING":
             # Conflicting or inconsistent state remains queued for investigation.
             print(json.dumps({
@@ -400,7 +403,9 @@ class CommandExecutor:
         require(order["status"] == "PENDING", "ORDER_NOT_PENDING")
         self.cursor.execute("UPDATE trade_orders SET status='CANCELLED',reserved_cash=0,cancelled_at=%s WHERE order_id=%s",
                             (self.timestamp, order["order_id"]))
-        return {"orderId": order["order_id"]}
+        return {"orderId": order["order_id"], "accountId": command.target["accountId"],
+                "previousStatus": "PENDING", "orderStatus": "CANCELLED",
+                "cancelledAt": str(self.timestamp), "mutationApplied": True}
 
 
 def validate_report(payload, source, side):

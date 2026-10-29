@@ -179,6 +179,40 @@ class SwitchTests(unittest.TestCase):
     def index(self, name, sql):
         return next(i for i, event in enumerate(self.events) if event[:2] == (name, sql))
 
+    def test_replay_recovery_starts_after_write_measurement_and_can_outlive_cutover_budget(self):
+        self.cfg["write_replay"] = {"function_name": "stockspoon-v2-prod-db-write-replay-forwarder"}
+
+        def recover(*_):
+            self.assertEqual((self.a.ro, self.b.ro), (1, 0))
+            self.assertIn("write_availability_window", self.journal.state)
+            self.flow.deadline = time.monotonic() - 1
+            return {"status": "queue_empty", "drainComplete": True, "processed": 101}
+
+        with patch.object(m, "drain_aws", side_effect=recover) as invoked:
+            self.flow.run()
+        invoked.assert_called_once()
+        self.assertFalse(self.journal.state["requires_attention"])
+        self.assertEqual(self.journal.state["write_replay"]["processed"], 101)
+        self.assertLess(self.index("journal", "proxy_writer_ready"),
+                        self.index("journal", "write_replay_recovery_started"))
+
+    def test_blocked_replay_keeps_promoted_writer_and_marks_recovery_incomplete(self):
+        self.cfg["write_replay"] = {"function_name": "stockspoon-v2-prod-db-write-replay-forwarder"}
+        with patch.object(m, "drain_aws", return_value={"status": "blocked", "drainComplete": False}):
+            self.flow.run()
+        self.assertEqual((self.a.ro, self.b.ro), (1, 0))
+        self.assertEqual(self.journal.state["status"], "complete")
+        self.assertTrue(self.journal.state["requires_attention"])
+
+    def test_rollback_never_invokes_replay_recovery(self):
+        self.a.gtids = BASE
+        self.cfg["write_replay"] = {"function_name": "stockspoon-v2-prod-db-write-replay-forwarder"}
+        self.flow.restore_state = {"target_only_gtids_at_switch": "", "before": {"replica": replication_status("source")}}
+        with patch.object(m, "drain_aws") as invoked:
+            self.flow.run()
+        invoked.assert_not_called()
+        self.assertEqual(self.journal.state["write_replay"]["status"], "not_invoked_rollback")
+
     def test_success_checks_data_and_starts_reverse_before_enabling_new_writer(self):
         self.flow.run()
         self.assertEqual((self.a.ro, self.a.sro, self.b.ro, self.b.sro), (1, 1, 0, 0))

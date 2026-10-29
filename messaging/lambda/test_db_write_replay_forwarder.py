@@ -295,6 +295,8 @@ class OrderCursor(ContextRecordingCursor):
         elif "FROM trade_orders WHERE" in sql:
             self.row = self.order if self.order and parameters == (
                 self.order["order_id"], self.order["account_id"]) else None
+        elif "@@server_uuid" in sql:
+            self.row = {"db_server_uuid": "target-uuid", "db_connection_id": 123}
         else:
             self.row = None
 
@@ -325,8 +327,15 @@ class BusinessCommandReplayTests(unittest.TestCase):
             def commit(self):
                 super().commit()
                 trace.append("commit")
+                if hasattr(self.recording_cursor, "commit_changes"):
+                    self.recording_cursor.commit_changes()
                 if commit_error:
                     raise commit_error
+
+            def rollback(self):
+                super().rollback()
+                if hasattr(self.recording_cursor, "rollback_changes"):
+                    self.recording_cursor.rollback_changes()
 
         class TracedSqs(RecordingSqs):
             def delete_message(self, **kwargs):
@@ -447,6 +456,78 @@ class BusinessCommandReplayTests(unittest.TestCase):
         self.assertEqual(result["processed"], 0)
         self.assertEqual(sqs.deleted, [])
         self.assertEqual(connections[0].events, ["begin", "commit", "rollback", "close"])
+
+    def test_committed_work_survives_delete_or_commit_ack_loss_and_redelivery_has_one_effect(self):
+        # Unlike a call-order-only mock, this store retains committed receipt and
+        # order state across separate connections/invocations. Rollback cannot undo a commit.
+        for fault in ("delete", "commit_ack"):
+            with self.subTest(fault=fault):
+                store = {"receipts": set(), "mutations": 0, "order": OrderCursor("PENDING", 1, None).order}
+
+                class DurableCursor(OrderCursor):
+                    def __init__(self):
+                        super().__init__()
+                        self.order = dict(store["order"])
+                        self.staged_receipt = None
+                        self.staged_update = None
+
+                    def execute(self, sql, parameters=None):
+                        if sql.startswith("INSERT INTO db_write_replay_receipts"):
+                            if parameters[0] in store["receipts"]:
+                                raise ReceiptConflict(1062, "duplicate")
+                            self.staged_receipt = parameters[0]
+                        if sql.startswith("UPDATE trade_orders"):
+                            self.staged_update = parameters[0]
+                        super().execute(sql, parameters)
+
+                    def commit_changes(self):
+                        store["receipts"].add(self.staged_receipt)
+                        if self.staged_update is not None:
+                            store["mutations"] += 1
+                            store["order"].update(status="CANCELLED", reserved_cash=0,
+                                                  cancelled_at=self.staged_update)
+                        self.rollback_changes()
+
+                    def rollback_changes(self):
+                        self.staged_receipt = self.staged_update = None
+
+                kwargs = ({"delete_error": TimeoutError("delete ACK lost")} if fault == "delete"
+                          else {"commit_error": Exception(2013, "commit ACK lost")})
+                first, sqs, _, _, _ = self.drain([self.envelope()], [DurableCursor()], **kwargs)
+                self.assertEqual(first["status"], "blocked")
+                self.assertFalse(first["drainComplete"])
+                self.assertEqual(sqs.deleted, [])
+                cancelled_at = store["order"]["cancelled_at"]
+                second, sqs, _, _, _ = self.drain([self.envelope()], [DurableCursor()])
+                self.assertEqual(second["duplicates"], 1)
+                self.assertEqual(store["mutations"], 1)
+                self.assertEqual(len(store["receipts"]), 1)
+                self.assertEqual(store["order"]["cancelled_at"], cancelled_at)
+                self.assertEqual(sqs.deleted, ["h0"])
+
+    def test_committed_cancel_records_database_and_preserves_existing_cancel_time(self):
+        cursor = OrderCursor()
+        cancelled_at = str(cursor.order["cancelled_at"])
+        _, _, _, events, _ = self.drain([self.envelope()], [cursor])
+        event = next(e for e in events if e["event"] == "db_write_business_command_committed")
+        self.assertEqual(event["dbServerUuid"], "target-uuid")
+        self.assertEqual(event["dbConnectionId"], 123)
+        self.assertEqual(event["actorUserId"], 128)
+        self.assertFalse(event["result"]["mutationApplied"])
+        self.assertEqual(event["result"]["cancelledAt"], cancelled_at)
+
+    def test_message_and_runtime_limits_are_explicitly_incomplete(self):
+        result, _, _, _, _ = self.drain([self.envelope()], [OrderCursor()])
+        self.assertEqual(result["status"], "message_limit")
+        self.assertFalse(result["drainComplete"])
+        self.assertTrue(result["resumeRecommended"])
+        with patch.object(replay, "_aws_clients", return_value=(RecordingSqs([]), None)), \
+             patch.dict("os.environ", {"DB_WRITE_REPLAY_QUEUE_URL": "queue-url"}):
+            result = replay.handler({"maxRuntimeSeconds": 70},
+                    SimpleNamespace(get_remaining_time_in_millis=lambda: 60_000))
+        self.assertEqual(result["status"], "runtime_limit")
+        self.assertFalse(result["drainComplete"])
+        self.assertTrue(result["resumeRecommended"])
 
     def test_queue_empty_summary_counts_already_satisfied_without_counting_a_new_write(self):
         result, sqs, _, events, _ = self.drain([self.envelope()], [OrderCursor()], max_messages=2)
