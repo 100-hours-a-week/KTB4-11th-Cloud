@@ -79,6 +79,31 @@ class QuoteMeasurementTests(unittest.TestCase):
         changed = r + [{'kind': 'reference_quote', 'at_ms': 150, 'key': 'prices:Q00000', 'state': {}}]
         self.assertEqual(analyze(p, c, changed, e, 200)['status'], 'INCONCLUSIVE')
 
+    def test_violation_details_and_suppression_are_preserved_without_counting_after_end(self):
+        p, c, r, e = self.fixture()
+        for row in e:
+            if row['kind'] == 'quote_state':
+                row.update(state_rollbacks=1, violation_details_suppressed=3)
+        value = fingerprint('prices', price())
+        detail = {'kind': 'quote_regression', 'client_id': '1', 'group': 'home_prices',
+                  'stream': 'prices', 'attempt': 2, 'at_ms': 180, 'code': 'Q00000',
+                  'comparison_field': 'timestamp_key', 'state_rolled_back': True,
+                  'previous': {**value, 'received_ms': 170, 'attempt': 1},
+                  'high_watermark': value,
+                  'received': {**value, 'hash': 'received-hash', 'received_ms': 180,
+                               'attempt': 2, 'code_payload_index': 1}}
+        conflict = {**detail, 'kind': 'quote_version_conflict', 'at_ms': 185}
+        after_end = {**detail, 'at_ms': 201}
+        result = analyze(p, c, r, [*e, detail, conflict, after_end], 200)
+        self.assertEqual(result['violation_details'], [detail, conflict])
+        self.assertEqual(result['state_rollbacks'], 2)
+        self.assertEqual(result['violation_details_suppressed'], 6)
+        self.assertEqual(result['recovered_clients'], 2)
+        legacy = analyze(*self.fixture(), 200)
+        self.assertIsNone(legacy['state_rollbacks'])
+        self.assertIsNone(legacy['violation_details_suppressed'])
+        self.assertEqual(legacy['violation_details'], [])
+
     def test_missing_observer_or_cache_value_cannot_create_checkpoint(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / 'checkpoint.json'
