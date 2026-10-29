@@ -103,15 +103,17 @@ def main():
     p.add_argument('--seconds', type=int, default=1500)
     p.add_argument('--quiet-seconds', type=float, default=2)
     p.add_argument('--max-mb', type=int, default=256)
-    p.add_argument('--publisher-module-dir', type=Path,
-                   default=Path(__file__).resolve().parents[3] / 'loadtest/test-streamer')
+    p.add_argument('--publisher-module-dir', type=Path)
     args = p.parse_args()
     if not 1 <= args.seconds <= 7200 or not 1 <= args.quiet_seconds <= 30 or not 1 <= args.max_mb <= 512:
         p.error('invalid finite collection limits')
     from model import validate_plan
     plan = json.loads(args.plan.read_text())
     validate_plan(plan)
-    sys.path.insert(0, str(args.publisher_module_dir.resolve()))
+    module_dir = args.publisher_module_dir
+    if module_dir is None:
+        module_dir = Path(__file__).resolve().parents[3] / 'loadtest/test-streamer'
+    sys.path.insert(0, str(module_dir.resolve()))
     from mock_publisher import connect_valkey, parse_args
     client = connect_valkey(parse_args([]))
     args.output.mkdir(parents=True, exist_ok=False)
