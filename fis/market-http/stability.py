@@ -34,11 +34,15 @@ def evaluate(samples, expected_tasks, now_ms, window_ms=180000, max_cpu=0.35,
     summaries = {}
     for task in sorted(tasks):
         values = [s.get('metrics', {}).get(task, {}) for s in rows]
-        fields = ['cpu', 'working_set_bytes', 'queue_full_total']
+        fields = ['cpu', 'working_set_bytes', 'queue_full_total', 'queue_count',
+                  'queue_events', 'queue_payload_bytes', 'sse_connections']
         if any(not isinstance(v.get(k), (int, float)) or not math.isfinite(v[k]) or v[k] < 0
                for v in values for k in fields):
             issues.append('numeric task metrics missing or invalid')
             continue
+        if any(v['queue_events'] != 0 or v['queue_payload_bytes'] != 0 or
+               v['queue_count'] > v['sse_connections'] for v in values):
+            issues.append('idle subscriber queues not drained')
         memory = [v['working_set_bytes'] for v in values]
         span = rows[-1]['at_ms'] - rows[0]['at_ms']
         growth = (memory[-1] - memory[0]) / (span / 60000) if span else 0

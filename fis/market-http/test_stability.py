@@ -8,7 +8,8 @@ class StabilityTests(unittest.TestCase):
         self.rows = [{'at_ms': i * 10000, 'desired': 2, 'running': 2, 'pending': 0,
                       'task_ids': ['a', 'b'], 'healthy_task_ids': ['a', 'b'], 'alarms_ok': True, 'metrics_fresh': True,
                       'metrics': {t: {'cpu': 0.05, 'working_set_bytes': 200 * 1024**2,
-                                      'queue_full_total': 0} for t in ['a', 'b']}}
+                                      'queue_full_total': 0, 'queue_count': 0, 'queue_events': 0,
+                                      'queue_payload_bytes': 0, 'sse_connections': 0} for t in ['a', 'b']}}
                      for i in range(19)]
 
     def test_stable_and_incomplete_or_stale_window(self):
@@ -29,6 +30,15 @@ class StabilityTests(unittest.TestCase):
             if mutation == 'nan': rows[-1]['metrics']['a']['cpu'] = float('nan')
             with self.subTest(mutation=mutation):
                 self.assertFalse(evaluate(rows, 2, 180000)['stable'])
+
+    def test_undrained_and_orphan_queues_block_next_experiment(self):
+        for field in ['queue_count', 'queue_events', 'queue_payload_bytes']:
+            rows = copy.deepcopy(self.rows);rows[-1]['metrics']['a'][field] = 1
+            self.assertFalse(evaluate(rows, 2, 180000)['stable'])
+        # Legitimate idle SSE connections may keep empty subscription queues.
+        for row in self.rows:
+            row['metrics']['a'].update(queue_count=2, sse_connections=2)
+        self.assertTrue(evaluate(self.rows, 2, 180000)['stable'])
 
     def test_cpu_memory_growth_overflow_and_counter_reset(self):
         for field, value in [('cpu', 0.9), ('working_set_bytes', 250 * 1024**2),
