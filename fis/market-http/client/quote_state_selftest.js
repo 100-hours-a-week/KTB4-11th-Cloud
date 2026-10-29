@@ -4,6 +4,10 @@ export const options = {vus: 1, iterations: 1};
 function equal(a, b) {if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(JSON.stringify({a, b}));}
 export default function() {
   for (const f of fixtures) equal(fingerprint(f.stream, f.payload), f.expected);
+  // Python struct-based oracle: scratch-buffer reuse must preserve all IEEE-754 bits.
+  for (const vector of [{"value":0.0,"hash":"ec3d9fb9735d944f1107512f423933fb7928d9a981584b5853103e2424b2a157"},{"value":-0.0,"hash":"ec3d9fb9735d944f1107512f423933fb7928d9a981584b5853103e2424b2a157"},{"value":5e-324,"hash":"e79789ccfe0702305bf194963c242eb298f8afc6aa6d474ce6bd80c3236dd4fa"},{"value":1.7976931348623157e+308,"hash":"fe3df17947d78905a76700714129997d5a557fdf561cf3e1ebdc1ee767c32093"},{"value":2.220446049250313e-16,"hash":"01f8363ffdd00d364e1cc3bd8e130501a310a7a32863dd09408364725fa1bf40"},{"value":-123.5,"hash":"c05e7ded24ac3a514e1ca34480c39dcbd4b9d7aefc10ea22a388207967b96e3b"},{"value":1e-300,"hash":"9901dc4d3acc732e5f066e9ef278279d2267a4afbc753bcee3c36a44f2c99270"},{"value":1e+300,"hash":"b6b19818c40bc6d9d70cd1308cee403c59f1d9177c079eac7f11b6506452f07d"}]) {
+    equal(fingerprint('prices', {...fixtures[0].payload, price: vector.value}).hash, vector.hash);
+  }
   const events = [], tracker = new QuoteState('prices', (kind, row) => events.push({kind, ...row}));
   const payload = fixtures[0].payload;
   const context = {attempt: 1, session_started_ms: 1, session_headers_ms: 2,

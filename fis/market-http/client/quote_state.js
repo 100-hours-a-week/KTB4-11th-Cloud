@@ -1,5 +1,12 @@
 import crypto from 'k6/crypto';
 
+// Each k6 VU has its own module instance. Reuse scratch storage; every numeric
+// field is still validated and included in every payload fingerprint.
+const numberBuffer = new ArrayBuffer(8);
+const numberView = new DataView(numberBuffer);
+const numberBytes = new Uint8Array(numberBuffer);
+const hexByte = Array.from({length: 256}, (_, x) => x.toString(16).padStart(2, '0'));
+
 export function fingerprint(stream, payload) {
   const stamp = Date.parse(payload.timestamp);
   const sequence = payload.sequence === undefined ? null : payload.sequence;
@@ -10,9 +17,9 @@ export function fingerprint(stream, payload) {
   const timestampKey = String(Math.floor(stamp / 1000)).padStart(12, '0') + (fraction ? fraction[1] : '').padEnd(9, '0');
   function number(value) {
     if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('finite numeric field required');
-    const buffer = new ArrayBuffer(8);
-    new DataView(buffer).setFloat64(0, value === 0 ? 0 : value, false);
-    return Array.from(new Uint8Array(buffer), x => x.toString(16).padStart(2, '0')).join('');
+    numberView.setFloat64(0, value === 0 ? 0 : value, false);
+    return hexByte[numberBytes[0]] + hexByte[numberBytes[1]] + hexByte[numberBytes[2]] + hexByte[numberBytes[3]] +
+      hexByte[numberBytes[4]] + hexByte[numberBytes[5]] + hexByte[numberBytes[6]] + hexByte[numberBytes[7]];
   }
   let values = [stream, payload.code, timestampKey, sequence === null ? null : String(sequence)];
   if (stream === 'prices') values = values.concat(['price', 'change', 'rate', 'volume'].map(k => number(payload[k])));
