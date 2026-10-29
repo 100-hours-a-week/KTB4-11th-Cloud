@@ -287,11 +287,19 @@ def _execute_business_command(envelope):
                     _rollback(connection)
                     return "duplicate"
                 raise
+            cursor.execute("SELECT @@server_uuid AS db_server_uuid, CONNECTION_ID() AS db_connection_id")
+            identity = cursor.fetchone() or {}
             result = CommandExecutor(cursor).execute(command)
             if result.outcome not in ("applied", "already_satisfied"):
                 raise RuntimeError("Unexpected business command outcome")
         connection.commit()
         print(json.dumps({"event": "db_write_business_command_committed", "requestId": command.request_id,
+                          "sourceRequestId": _safe_correlation_id(envelope.get("httpRequestId"), 64),
+                          "writeId": _safe_correlation_id(envelope.get("writeId"), 128),
+                          "transactionId": command.transaction_id,
+                          "dbServerUuid": identity.get("db_server_uuid", "unknown"),
+                          "dbConnectionId": identity.get("db_connection_id", "unknown"),
+                          "actorUserId": command.user_id,
                           "commandType": command.kind, "result": result.identifiers, "outcome": result.outcome}))
         return result.outcome
     except Exception:
@@ -399,7 +407,10 @@ def _classify_failure(error, stage):
 
 def _drain_result(status, processed, applied, duplicates, already_satisfied, **details):
     result = {"status": status, "processed": processed, "applied": applied,
-              "duplicates": duplicates, "alreadySatisfied": already_satisfied, **details}
+              "duplicates": duplicates, "alreadySatisfied": already_satisfied,
+              "drainComplete": status == "queue_empty",
+              "resumeRecommended": status in ("message_limit", "runtime_limit")
+                    or (status == "blocked" and details.get("retryable") is True), **details}
     # Embedded Metric Format uses the existing CloudWatch Logs permission.
     # A handled business block must be observable even when Lambda Errors is zero.
     metrics = {"Processed": processed, "Applied": applied, "Duplicates": duplicates,

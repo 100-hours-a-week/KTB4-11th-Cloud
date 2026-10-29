@@ -30,6 +30,16 @@
   "sync_timeout_seconds": 30,
   "routing_timeout_seconds": 60,
   "cutover_timeout_seconds": 180,
+  "write_replay": {
+    "enabled": true,
+    "function_name": "stockspoon-v2-prod-db-write-replay-forwarder",
+    "profile": "stockspoon",
+    "max_messages": 100,
+    "max_invocations": 10,
+    "budget_seconds": 1200,
+    "quiet_passes": 2,
+    "retry_delay_seconds": 2
+  },
   "aws": {
     "region": "ap-northeast-2",
     "cluster": "stockspoon-v2-prod-cluster",

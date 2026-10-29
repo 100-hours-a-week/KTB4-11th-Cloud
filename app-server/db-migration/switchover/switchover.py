@@ -16,6 +16,7 @@ import sys
 import time
 
 from credential_store import load_passwords
+from write_replay import drain_aws, validate_options as validate_replay_options
 
 
 class SafetyError(RuntimeError):
@@ -637,6 +638,10 @@ class Switch:
         self.journal.event("reverse_replication_ready")
 
     def run(self):
+        replay_options = self.cfg.get("write_replay", {})
+        replay_enabled = bool(replay_options) and replay_options.get("enabled", True)
+        if replay_enabled and not self.restore_state:
+            validate_replay_options(replay_options)
         self.preflight()
         self.deadline = time.monotonic() + self.cfg["cutover_timeout_seconds"]
         self.fence(self.standby, self.standby_name)
@@ -699,6 +704,21 @@ class Switch:
                            write_blocked_seconds=write_blocked_seconds,
                            write_blocked_started_at=self.write_block_started_at,
                            writer_ready_at=writer_ready_at)
+        replay_result = {"status": "not_invoked_rollback" if self.restore_state else "disabled"}
+        if replay_enabled and not self.restore_state:
+            self.journal.event("write_replay_recovery_started", function_name=replay_options["function_name"])
+            try:
+                replay_result = drain_aws(replay_options, self.journal.directory,
+                                          self.cfg.get("aws", {}).get("region", "ap-northeast-2"))
+            except Exception as error:
+                replay_result = {"status": "invocation_unconfirmed", "drainComplete": False,
+                                 "errorType": type(error).__name__}
+            self.journal.event("write_replay_recovery_finished", **replay_result)
+        self.journal.state["write_replay"] = replay_result
+        self.journal.state["requires_attention"] = replay_enabled and not self.restore_state and not replay_result.get("drainComplete", False)
+        # Recovery runs after the measured write outage. Give replication verification
+        # its own budget so a long drain cannot invalidate an already promoted writer.
+        self.deadline = None
         after = self.standby.scalar("SELECT @@GLOBAL.gtid_executed")
         new_gtids = self.standby.scalar("SELECT GTID_SUBTRACT(%s,%s)", (after, boundary["Executed_Gtid_Set"]))
         self.wait_gtids(self.primary, new_gtids)
@@ -707,7 +727,9 @@ class Switch:
         self.journal.state["status"] = "complete"
         self.journal.event("complete", primary=self.standby_name, standby=self.primary_name,
                            write_blocked_seconds=write_blocked_seconds,
-                           replicated_post_promotion_gtids=new_gtids)
+                           replicated_post_promotion_gtids=new_gtids,
+                           write_replay_status=replay_result["status"],
+                           requires_attention=self.journal.state["requires_attention"])
 
 
 def load_previous(directory, command):
@@ -815,7 +837,7 @@ def main():
                 # A broken tunnel must not mask the recorded failure or prevent
                 # releasing the remaining connections/advisory locks.
                 pass
-    return 0
+    return 2 if journal.state.get("requires_attention") else 0
 
 
 if __name__ == "__main__":
