@@ -25,7 +25,7 @@ def write_checkpoint(path, latest, cached, checkpoint_id, frozen_at_ms, at_ms):
     return result
 
 
-async def observe(client, plan, output, seconds, request_path, quiet_seconds, max_bytes):
+async def observe(client, plan, output, seconds, request_path, quiet_seconds, max_bytes, stop_path=None):
     keys = {stream + ':' + code for stream, codes in plan['codes'].items() for code in codes}
     latest = {}
     ready = False
@@ -43,6 +43,10 @@ async def observe(client, plan, output, seconds, request_path, quiet_seconds, ma
             async with client.pubsub() as sub:
                 await sub.subscribe(*CHANNELS)
                 while time.monotonic() < ended:
+                    if stop_path is not None and stop_path.exists():
+                        if checkpoint is None:
+                            raise ValueError('stop requested before a verified checkpoint')
+                        break
                     event = await sub.get_message(ignore_subscribe_messages=False, timeout=0.25)
                     if event and event['type'] == 'subscribe':
                         if ready:
@@ -100,6 +104,7 @@ def main():
     p.add_argument('--plan', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--checkpoint-request', type=Path, required=True)
+    p.add_argument('--stop-request', type=Path, help='Finish normally only after a verified checkpoint')
     p.add_argument('--seconds', type=int, default=1500)
     p.add_argument('--quiet-seconds', type=float, default=2)
     p.add_argument('--max-mb', type=int, default=256)
@@ -118,7 +123,7 @@ def main():
     client = connect_valkey(parse_args([]))
     args.output.mkdir(parents=True, exist_ok=False)
     asyncio.run(observe(client, plan, args.output, args.seconds, args.checkpoint_request,
-                        args.quiet_seconds, args.max_mb * 1024**2))
+                        args.quiet_seconds, args.max_mb * 1024**2, args.stop_request))
 
 
 if __name__ == '__main__':

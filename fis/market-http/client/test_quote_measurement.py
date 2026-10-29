@@ -114,11 +114,27 @@ class QuoteMeasurementTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 write_checkpoint(path, {'prices:Q00000': {}}, {'prices:Q00000': {}}, 'c1', 0, 10)
 
+    def test_reference_stop_before_checkpoint_is_invalid(self):
+        from unittest.mock import AsyncMock, MagicMock
+        with tempfile.TemporaryDirectory() as root:
+            out = Path(root);stop = out / 'stop.request';stop.touch()
+            client = MagicMock();client.aclose = AsyncMock()
+            sub = MagicMock();sub.subscribe = AsyncMock()
+            client.pubsub.return_value.__aenter__ = AsyncMock(return_value=sub)
+            client.pubsub.return_value.__aexit__ = AsyncMock(return_value=False)
+            with self.assertRaisesRegex(ValueError, 'before a verified checkpoint'):
+                asyncio.run(observe(client, {'codes': {'prices': ['Q00000']}}, out,
+                                    10, out/'checkpoint-request.json', 1, 100000, stop))
+            rows = [json.loads(line) for line in (out/'reference.jsonl').read_text().splitlines()]
+            self.assertEqual(rows[-1]['kind'], 'reference_invalid')
+            client.aclose.assert_awaited_once()
+
     def test_independent_subscriber_ack_then_cache_checkpoint_and_gap_detection(self):
         class Client:
             clock = 0
             closed = False
-            def __init__(self, reconnect=False):
+            def __init__(self, reconnect=False, stop_path=None):
+                self.stop_path = stop_path
                 self.messages = [{'type': 'subscribe', 'channel': c} for c in ['market:prices', 'market:orderbooks']]
                 self.messages += [{'type': 'message', 'channel': 'market:prices', 'data': json.dumps(price())}]
                 if reconnect:
@@ -129,6 +145,7 @@ class QuoteMeasurementTests(unittest.TestCase):
             async def subscribe(self, *args): pass
             async def get_message(self, **kwargs):
                 self.clock += 1
+                if self.stop_path is not None and self.clock == 6: self.stop_path.touch()
                 return self.messages.pop(0) if self.messages else None
             def pipeline(self, transaction):
                 assert transaction is False
@@ -140,20 +157,26 @@ class QuoteMeasurementTests(unittest.TestCase):
                 return [json.dumps(price())]
             async def mget(self, keys): raise AssertionError('cross-slot MGET must not be used')
             async def aclose(self): self.closed = True
-        for reconnect in [False, True]:
+        for reconnect, early_finish in [(False, False), (True, False), (False, True)]:
             with tempfile.TemporaryDirectory() as root:
                 out = Path(root)
                 request = out / 'request.json'
                 request.write_text(json.dumps({'checkpoint_id': 'c1', 'frozen_at_ms': 0}))
-                client = Client(reconnect)
+                stop = out / 'stop.request' if early_finish else None
+                client = Client(reconnect, stop)
                 with patch('quote_reference.time.monotonic', side_effect=lambda: client.clock), patch('quote_reference.now_ms', return_value=10000):
                     if reconnect:
                         with self.assertRaises(ValueError):
-                            asyncio.run(observe(client, {'codes': {'prices': ['Q00000']}}, out, 10, request, 1, 100000))
+                            asyncio.run(observe(client, {'codes': {'prices': ['Q00000']}}, out, 10, request, 1, 100000, stop))
                     else:
-                        asyncio.run(observe(client, {'codes': {'prices': ['Q00000']}}, out, 10, request, 1, 100000))
+                        asyncio.run(observe(client, {'codes': {'prices': ['Q00000']}}, out, 10, request, 1, 100000, stop))
                         self.assertEqual(json.loads((out / 'checkpoint.json').read_text())['reference'], 'independent_pubsub_and_cache')
                 self.assertTrue(client.closed)
+                if early_finish:
+                    self.assertLess(client.clock, 10)
+                    rows=[json.loads(line) for line in (out/'reference.jsonl').read_text().splitlines()]
+                    self.assertEqual(rows[-1]['kind'], 'reference_finished')
+                    self.assertTrue(rows[-1]['checkpoint_written'])
 
 
 if __name__ == '__main__':
