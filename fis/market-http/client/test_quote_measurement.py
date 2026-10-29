@@ -1,12 +1,14 @@
 import asyncio
 import json
+import io
+from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from quote_state import fingerprint
-from quote_reference import observe, write_checkpoint
+from quote_reference import observe, write_checkpoint, main as reference_main
 from quote_report import analyze
 
 
@@ -27,6 +29,13 @@ class QuoteMeasurementTests(unittest.TestCase):
         for extra in ({'rate': float('nan')}, {'sequence': 2**53}, {'price': True}, {'timestamp': '2026-10-29T00:00:00'}):
             with self.assertRaises(ValueError):
                 fingerprint('prices', price(**extra))
+
+    def test_explicit_module_path_help_works_in_shallow_container_mount(self):
+        with patch('quote_reference.__file__', '/tools/quote_reference.py'), \
+             patch('sys.argv', ['quote_reference.py', '--help']), redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit) as result:
+                reference_main()
+            self.assertEqual(result.exception.code, 0)
 
     def fixture(self):
         state = fingerprint('prices', price())
@@ -96,7 +105,15 @@ class QuoteMeasurementTests(unittest.TestCase):
             async def get_message(self, **kwargs):
                 self.clock += 1
                 return self.messages.pop(0) if self.messages else None
-            async def mget(self, keys): return [json.dumps(price())]
+            def pipeline(self, transaction):
+                assert transaction is False
+                self.requested_keys = []
+                return self
+            def get(self, key): self.requested_keys.append(key)
+            async def execute(self):
+                assert self.requested_keys == ['price:Q00000']
+                return [json.dumps(price())]
+            async def mget(self, keys): raise AssertionError('cross-slot MGET must not be used')
             async def aclose(self): self.closed = True
         for reconnect in [False, True]:
             with tempfile.TemporaryDirectory() as root:
