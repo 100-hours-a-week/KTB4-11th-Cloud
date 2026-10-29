@@ -26,10 +26,13 @@ def analyze(plan, checkpoint, reference_events, events, end_ms, fault_ms=None):
             issues.append('reference changed after checkpoint')
             break
     subscriptions, latest, first_payload = {}, {}, []
+    violation_details = []
     for event in sorted(events, key=lambda e: e['at_ms']):
         if event['at_ms'] > end_ms:
             continue
         cid = str(event['client_id'])
+        if event['kind'] in {'quote_regression', 'quote_version_conflict'}:
+            violation_details.append(event)
         if event['kind'] == 'quote_measurement_error':
             issues.append('client fingerprint measurement error')
         if event['kind'] == 'quote_subscription':
@@ -75,7 +78,9 @@ def analyze(plan, checkpoint, reference_events, events, end_ms, fault_ms=None):
         rows.append({'client_id': cid, 'stream': sub['stream'], 'missing_codes': missing, 'same_version_mismatched_codes': mismatched,
                      'recovered': reached is not None, 'all_matched_at_ms': reached,
                      'regressions': sample['regressions'] if sample else None,
-                     'same_version_conflicts': sample['conflicts'] if sample else None})
+                     'same_version_conflicts': sample['conflicts'] if sample else None,
+                     'state_rollbacks': sample.get('state_rollbacks') if sample else None,
+                     'violation_details_suppressed': sample.get('violation_details_suppressed') if sample else None})
     recovered = [r for r in rows if r['recovered']]
     origin = fault_ms if fault_ms is not None else checkpoint['frozen_at_ms']
     return {'status': 'INCONCLUSIVE' if issues else 'MEASURED', 'measurement_issues': sorted(set(issues)),
@@ -94,6 +99,10 @@ def analyze(plan, checkpoint, reference_events, events, end_ms, fault_ms=None):
             'first_post_reconnect_payload': distribution(first_payload),
             'regressions': sum(r['regressions'] or 0 for r in rows),
             'same_version_conflicts': sum(r['same_version_conflicts'] or 0 for r in rows),
+            'state_rollbacks': sum(r['state_rollbacks'] for r in rows) if rows and all(r['state_rollbacks'] is not None for r in rows) else None,
+            'violation_details': violation_details,
+            'violation_details_suppressed': sum(r['violation_details_suppressed'] for r in rows) if rows and all(r['violation_details_suppressed'] is not None for r in rows) else None,
+            'violation_detail_policy': 'Up to 20 details per client across sessions; counters continue after the limit. Missing legacy details cannot reconstruct prior frames.',
             'conflict_detection_scope': 'final checkpoint vs independent reference; client conflicts at its highest observed version. Intermediate cross-reference comparisons are not inferred.',
             'percentiles_population': 'observed recovered clients only; missing clients remain in recovery-rate denominator',
             'coverage': 'final frozen checkpoint; continuous moving-reference convergence is not inferred',
