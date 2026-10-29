@@ -324,10 +324,8 @@ prometheus.scrape "backend_metrics" {
   scrape_interval = "15s"
   scrape_timeout = "5s"
   metrics_path = "/actuator/prometheus"
-  // Existing BE security reads access_token cookies, not Bearer headers.
-  http_headers = {
-    "Cookie" = [sys.env("BACKEND_METRICS_COOKIE")],
-  }
+  // BE permits unauthenticated GET /actuator/prometheus; reachability is limited
+  // to host-local Alloy by the task SG, and the public ALB blocks this path.
   follow_redirects = false
   forward_to = [prometheus.relabel.backend_metrics.receiver]
 }
