@@ -99,6 +99,11 @@ def profile_source(container):
     return Path(mounts[0]["Source"])
 
 
+def parse_time(value):
+    value = re.sub(r"(\.\d{6})\d+", r"\1", value)
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def armed_profile(container, source, statuses=("armed",)):
     matches = []
     for path in source.glob("*/profile-state.json"):
@@ -108,10 +113,7 @@ def armed_profile(container, source, statuses=("armed",)):
         if (
             state.get("hostname") == container["Config"]["Hostname"]
             and state.get("status") in statuses
-            and dt.datetime.fromisoformat(state["utc"])
-            >= dt.datetime.fromisoformat(
-                container["State"]["StartedAt"].replace("Z", "+00:00")
-            )
+            and parse_time(state["utc"]) >= parse_time(container["State"]["StartedAt"])
         ):
             matches.append(path)
     if len(matches) != 1:
@@ -158,7 +160,7 @@ def memory_sample(group, pid, proc_root=Path("/proc"), expected_start=None):
             sample[name] = int(value) if value != "max" else value
         except FileNotFoundError:
             sample[name] = None
-    for name in ["memory.events", "memory.stat"]:
+    for name in ["memory.events", "memory.stat", "cpu.stat"]:
         try:
             sample[name] = counters(group / name)
         except FileNotFoundError:
@@ -191,6 +193,21 @@ def metrics_address(container):
         for n in network["NetworkSettings"]["Networks"].values()
         if n.get("IPAddress")
     }
+    if not ips:
+        address = subprocess.check_output(
+            [
+                "docker",
+                "exec",
+                container["Id"],
+                "python",
+                "-c",
+                "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); "
+                "s.connect(('192.0.2.1',9)); print(s.getsockname()[0]); s.close()",
+            ],
+            text=True,
+            timeout=5,
+        ).strip()
+        ips = {address}
     if len(ips) != 1:
         raise ValueError("Expected a single Task IPv4 address")
     ip = ipaddress.ip_address(ips.pop())
@@ -257,9 +274,9 @@ def mirror_profiles(source, destination, hostname, selected=None):
     return {"copied_files": copied}
 
 
-def record(container, output, seconds, interval):
-    source = profile_source(container)
-    selected = armed_profile(container, source)
+def record(container, output, seconds, interval, profiles=True):
+    source = profile_source(container) if profiles else None
+    selected = armed_profile(container, source) if profiles else None
     group = task_cgroup(
         container["State"]["Pid"], container["verified_task_id"], 2 * 1024**3
     )
@@ -278,8 +295,9 @@ def record(container, output, seconds, interval):
         "seconds": seconds,
         "memory_interval": interval,
         "metrics_interval": 1,
-        "profile_root": str(source),
-        "profile_state": str(selected),
+        "profile_root": str(source) if profiles else None,
+        "profile_state": str(selected) if profiles else None,
+        "profiles_enabled": profiles,
         "hostname": container["Config"]["Hostname"],
         "image_id": container["Image"],
         "task_definition": container["Config"]["Labels"].get(
@@ -334,7 +352,7 @@ def record(container, output, seconds, interval):
                 if started >= next_poll:
                     if "metrics" not in jobs:
                         jobs["metrics"] = pool.submit(fetch_metrics, url)
-                    if "profiles" not in jobs:
+                    if profiles and "profiles" not in jobs:
                         jobs["profiles"] = pool.submit(
                             mirror_profiles,
                             source,
@@ -356,9 +374,10 @@ def record(container, output, seconds, interval):
                         ),
                     )
                 )
-        mirror_profiles(
-            source, output / "profiles", container["Config"]["Hostname"], selected
-        )
+        if profiles:
+            mirror_profiles(
+                source, output / "profiles", container["Config"]["Hostname"], selected
+            )
         manifest["status"] = "finished"
     except BaseException:
         manifest["status"] = "interrupted"
@@ -374,6 +393,8 @@ def recover(run_dir):
         manifest.get("task_arn", "")
     ):
         raise ValueError("Not a verified capture run")
+    if manifest.get("profiles_enabled") is False:
+        return {"copied_files": 0, "profiles_enabled": False}
     source = Path(manifest["profile_root"]).resolve()
     selected = Path(manifest["profile_state"]).resolve()
     if source != PROFILE_ROOT or not selected.is_relative_to(source):
@@ -411,9 +432,10 @@ def archive(run_dir, output):
     hashes = {}
     for path in files:
         with path.open("rb") as handle:
-            hashes[str(path.relative_to(run_dir))] = hashlib.file_digest(
-                handle, "sha256"
-            ).hexdigest()
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+            hashes[str(path.relative_to(run_dir))] = digest.hexdigest()
     checksum = run_dir / "sha256.json"
     checksum.write_text(json.dumps(hashes, indent=2))
     with output.open("xb") as handle, tarfile.open(fileobj=handle, mode="w:gz") as tar:
@@ -435,6 +457,7 @@ def main():
             p.add_argument("--output", type=Path, required=True)
             p.add_argument("--seconds", type=int, default=180)
             p.add_argument("--interval", type=float, default=0.25)
+            p.add_argument("--without-profiles", action="store_true")
     p = sub.add_parser("prepare-host")
     p.add_argument("--uid", type=int, default=10001)
     p.add_argument("--gid", type=int, default=10001)
@@ -463,7 +486,7 @@ def main():
     if args.command == "trigger":
         print(trigger(container, args.burst))
     else:
-        record(container, args.output, args.seconds, args.interval)
+        record(container, args.output, args.seconds, args.interval, not args.without_profiles)
         print(args.output)
 
 

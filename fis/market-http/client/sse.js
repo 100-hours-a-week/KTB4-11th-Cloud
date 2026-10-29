@@ -1,3 +1,4 @@
+import {QuoteState} from './quote_state.js';
 import sse from 'k6/x/sse';
 import http from 'k6/http';
 import exec from 'k6/execution';
@@ -39,6 +40,7 @@ let frames = 0;
 let outage = null;
 let outageNumber = 0;
 let samples = 0;
+let quoteState = null;
 const sources = {};
 
 function emit(kind, fields = {}) {
@@ -63,6 +65,7 @@ export default function () {
   attempt += 1;
   const group = exec.scenario.name;
   const cfg = plan.groups[group];
+  if (plan.quote_state_enabled && !quoteState) quoteState = new QuoteState(cfg.stream, emit);
   const available = plan.codes[cfg.stream];
   const offset = (exec.vu.idInTest * 7 + Object.keys(plan.groups).indexOf(group) * 31) % available.length;
   const codes = Array.from({length: cfg.code_count}, (_, i) => available[(offset + i) % available.length]);
@@ -83,6 +86,7 @@ export default function () {
   const seen = new Set();
   const advanced = new Set();
   emit('attempt');
+  if (quoteState) emit('quote_subscription', {codes});
   function transportError(detail) {
     if (!errorReported) {
       errors.add(1);
@@ -119,6 +123,14 @@ export default function () {
               emit('reconnected', {outage_id: outage.id});
             }
           }
+          if (payload && quoteState && outage && !outage.firstPayload) {
+            outage.firstPayload = now;
+            emit('recovery_first_payload', {outage_id: outage.id, elapsed_ms: now - outage.at});
+          }
+          if (payload && quoteState) {
+            try { quoteState.accept(payload, now); }
+            catch (error) { emit('quote_measurement_error', {detail: String(error)}); client.close(); return; }
+          }
           if (payload) {
             const stamp = Date.parse(payload.timestamp);
             const prior = sources[payload.code];
@@ -150,6 +162,7 @@ export default function () {
             outage = null;
           }
           if (!lastTick || now - lastTick >= plan.snapshot_interval_ms) {
+            if (quoteState) quoteState.snapshot(codes, now);
             emit('snapshot', {last_frame_ms: lastFrame, last_update_ms: lastUpdate,
               post_initial_updates: updates, frames,
               oldest_advancing_source_ms: oldest, newest_advancing_source_ms: newest});
@@ -160,6 +173,7 @@ export default function () {
       });
     if (!response || response.status !== 200 || response.error) transportError(response && response.error);
   } catch (error) { transportError(error); }
+  if (quoteState) quoteState.snapshot(codes, Date.now());
   if (connected || everConnected) {
     if (!outage) {
       outage = {id: ++outageNumber, at: Date.now(), lastUpdate};

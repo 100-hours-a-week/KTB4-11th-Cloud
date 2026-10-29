@@ -47,6 +47,8 @@ def validate_url(value):
 
 def validate_plan(plan):
     validate_url(plan["base_url"])
+    if not isinstance(plan.get("quote_state_enabled", False), bool):
+        raise ValueError("quote_state_enabled must be boolean")
     if plan.get("experiment", "T1") not in {"T1", "T2", "T3", "R1", "R2", "R3"}:
         raise ValueError("invalid experiment label")
     if (plan.get("schema") != 1 or plan["mode"] not in {"baseline", "fault"}
@@ -89,6 +91,7 @@ def make_plan(args):
     if budget > 7200:
         raise ValueError("total execution budget must not exceed two hours")
     return {
+        "quote_state_enabled": getattr(args, "quote_state", False),
         "schema": 1, "experiment": getattr(args, "experiment", "T1"), "mode": args.mode, "base_url": args.base_url.rstrip("/"),
         "connections": args.connections, "ramp_seconds": args.ramp,
         "baseline_seconds": args.baseline, "fault_wait_seconds": args.fault_wait,

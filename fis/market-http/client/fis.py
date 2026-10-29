@@ -132,6 +132,9 @@ def worker(folder):
                 current_markers = read_markers(folder)
                 fault = next((m for m in current_markers if m["event"] == "fault-start"), None)
                 stop = next((m for m in current_markers if m["event"] == "safety-stop"), None)
+                if event_path.stat().st_size > 512 * 1024**2:
+                    reason = "safety:measurement_log_budget"
+                    break
                 measured = state_model.snapshot(wall)
                 baseline_end = plan["ramp_seconds"] + plan["baseline_seconds"]
                 configured = (elapsed >= plan["ramp_seconds"]
@@ -313,6 +316,7 @@ def main():
                       help="per-code freshness criterion, not an upstream watermark guarantee")
     for name, value in (("ramp", 120), ("baseline", 600), ("fault-wait", 300), ("observe", 600)):
         plan.add_argument("--" + name, type=int, default=value, help="seconds")
+    plan.add_argument("--quote-state", action="store_true", help="opt-in per-code fingerprint snapshots")
     plan.add_argument("--output", required=True)
     start_parser = sub.add_parser("start", help="EXPLICITLY start real REST/SSE traffic")
     start_parser.add_argument("--plan", required=True)
