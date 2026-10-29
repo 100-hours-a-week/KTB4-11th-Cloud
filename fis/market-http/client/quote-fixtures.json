@@ -1,0 +1,134 @@
+[
+  {
+    "stream": "prices",
+    "payload": {
+      "code": "Q00000",
+      "price": 100,
+      "change": -1,
+      "rate": 9.876,
+      "volume": 123,
+      "timestamp": "2026-10-29T00:00:00.123456789Z"
+    },
+    "expected": {
+      "timestamp_ms": 1793232000123,
+      "timestamp_key": "001793232000123456789",
+      "sequence": null,
+      "hash": "83d554e7ee3d483a73286f468dad27b0fcb24da75e5fa3283048d2ccf47d66c1"
+    }
+  },
+  {
+    "stream": "prices",
+    "payload": {
+      "code": "Q00001",
+      "price": 0.0,
+      "change": -0.0,
+      "rate": 1e-12,
+      "volume": 100000000000,
+      "timestamp": "2026-10-29T09:00:00+09:00",
+      "sequence": 123
+    },
+    "expected": {
+      "timestamp_ms": 1793232000000,
+      "timestamp_key": "001793232000000000000",
+      "sequence": 123,
+      "hash": "ff84d95b1c4d643c6aa60d4707f066932fc06e0b4933f44c61737c60a6aa48b4"
+    }
+  },
+  {
+    "stream": "orderbooks",
+    "payload": {
+      "code": "Q00000",
+      "asks": [
+        {
+          "price": 100,
+          "qty": 0
+        },
+        {
+          "price": 100,
+          "qty": 1
+        },
+        {
+          "price": 100,
+          "qty": 2
+        },
+        {
+          "price": 100,
+          "qty": 3
+        },
+        {
+          "price": 100,
+          "qty": 4
+        },
+        {
+          "price": 100,
+          "qty": 5
+        },
+        {
+          "price": 100,
+          "qty": 6
+        },
+        {
+          "price": 100,
+          "qty": 7
+        },
+        {
+          "price": 100,
+          "qty": 8
+        },
+        {
+          "price": 100,
+          "qty": 9
+        }
+      ],
+      "bids": [
+        {
+          "price": 99,
+          "qty": 1
+        },
+        {
+          "price": 99,
+          "qty": 2
+        },
+        {
+          "price": 99,
+          "qty": 3
+        },
+        {
+          "price": 99,
+          "qty": 4
+        },
+        {
+          "price": 99,
+          "qty": 5
+        },
+        {
+          "price": 99,
+          "qty": 6
+        },
+        {
+          "price": 99,
+          "qty": 7
+        },
+        {
+          "price": 99,
+          "qty": 8
+        },
+        {
+          "price": 99,
+          "qty": 9
+        },
+        {
+          "price": 99,
+          "qty": 10
+        }
+      ],
+      "timestamp": "2026-10-29T00:00:00.123456Z"
+    },
+    "expected": {
+      "timestamp_ms": 1793232000123,
+      "timestamp_key": "001793232000123456000",
+      "sequence": null,
+      "hash": "179e9df76c9047316817aaf1282fbd12d340ef83bb62ec0a4def8fe6c2c87f08"
+    }
+  }
+]
