@@ -70,8 +70,11 @@ async def observe(client, plan, output, seconds, request_path, quiet_seconds, ma
                         if (not event and time.monotonic() - last_quote >= quiet_seconds
                                 and now_ms() >= frozen + quiet_seconds * 1000):
                             ordered = sorted(keys)
-                            raw = await client.mget([('price' if k.startswith('prices:') else 'orderbook')
-                                                     + ':' + k.split(':', 1)[1] for k in ordered])
+                            async with client.pipeline(transaction=False) as pipe:
+                                for key in ordered:
+                                    prefix = 'price' if key.startswith('prices:') else 'orderbook'
+                                    pipe.get(prefix + ':' + key.split(':', 1)[1])
+                                raw = await pipe.execute()
                             cached = {key: fingerprint(key.split(':', 1)[0], json.loads(value))
                                       for key, value in zip(ordered, raw) if value is not None}
                             if set(latest) == keys and latest == cached:

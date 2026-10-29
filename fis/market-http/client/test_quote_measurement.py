@@ -96,7 +96,15 @@ class QuoteMeasurementTests(unittest.TestCase):
             async def get_message(self, **kwargs):
                 self.clock += 1
                 return self.messages.pop(0) if self.messages else None
-            async def mget(self, keys): return [json.dumps(price())]
+            def pipeline(self, transaction):
+                assert transaction is False
+                self.requested_keys = []
+                return self
+            def get(self, key): self.requested_keys.append(key)
+            async def execute(self):
+                assert self.requested_keys == ['price:Q00000']
+                return [json.dumps(price())]
+            async def mget(self, keys): raise AssertionError('cross-slot MGET must not be used')
             async def aclose(self): self.closed = True
         for reconnect in [False, True]:
             with tempfile.TemporaryDirectory() as root:
