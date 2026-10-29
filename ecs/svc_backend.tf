@@ -111,6 +111,18 @@ resource "aws_iam_role_policy_attachment" "backend_db_write_replay_sqs" {
   policy_arn = data.terraform_remote_state.messaging_prod.outputs.backend_db_write_replay_producer_policy_arn
 }
 
+# Lets the BE publish orders to the order queue managed by the messaging root.
+resource "aws_iam_role_policy_attachment" "backend_order_producer_sqs" {
+  role       = aws_iam_role.backend_task.name
+  policy_arn = data.terraform_remote_state.messaging_prod.outputs.backend_producer_sqs_policy_arn
+}
+
+# Lets the BE consume orders from the order queue (ORDER_QUEUE_CONSUMER_ENABLED).
+resource "aws_iam_role_policy_attachment" "backend_order_consumer_sqs" {
+  role       = aws_iam_role.backend_task.name
+  policy_arn = data.terraform_remote_state.messaging_prod.outputs.order_consumer_sqs_policy_arn
+}
+
 # ---------------------------------------------------------------------------
 # Security Group
 # ---------------------------------------------------------------------------
