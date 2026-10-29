@@ -1,6 +1,5 @@
 # Keep production ECS telemetry enabled when planning from a clean checkout.
 plg_tempo_enabled                = true
 telemetry_sse_prometheus_enabled = true
-# Preserve the manually enabled Alloy backend scrape and host-to-task ingress.
-# The temporary SSM cookie still expires independently; this does not renew it.
+# Keep the host-local Alloy backend scrape and host-to-task ingress enabled.
 telemetry_backend_prometheus_enabled = true

@@ -221,6 +221,12 @@ variable "backend_path_patterns" {
   description = "ALB path patterns routed to the ECS backend"
   type        = list(string)
   default     = ["/api/*"]
+
+  # Actuator is unauthenticated for internal scraping; never route it publicly.
+  validation {
+    condition     = alltrue([for p in var.backend_path_patterns : !startswith(trimprefix(p, "/"), "actuator") && !contains(["*", "/*"], p)])
+    error_message = "backend_path_patterns must not route /actuator or a catch-all path to the backend."
+  }
 }
 
 # MySQL port used by the ProxySQL rehearsal targets.
