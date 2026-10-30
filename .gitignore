@@ -37,3 +37,11 @@ docs/
 
 test-infra/*
 !test-infra/sse-k6/
+!test-infra/dev-app/
+test-infra/dev-app/*
+!test-infra/dev-app/HTTPS.md
+!test-infra/dev-app/reload-nginx-after-renewal.sh
+!test-infra/dev-app/nginx/
+test-infra/dev-app/nginx/*
+!test-infra/dev-app/nginx/default.conf
+!test-infra/dev-app/nginx/default-http-bootstrap.conf

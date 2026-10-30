@@ -78,6 +78,15 @@ resource "aws_vpc_security_group_ingress_rule" "dev_app_http" {
   description       = "Allow HTTP traffic to the development application"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "dev_app_https" {
+  security_group_id = aws_security_group.dev_app.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "Allow HTTPS traffic to the development application"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "dev_app_ssh" {
   for_each = toset(var.ssh_allowed_cidrs)
 
