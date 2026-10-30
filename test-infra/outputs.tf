@@ -74,8 +74,8 @@ output "dev_app_public_ip" {
 }
 
 output "dev_app_public_url" {
-  description = "HTTP URL for the development application"
-  value       = "http://${aws_eip.dev_app.public_ip}"
+  description = "HTTPS URL for the development application"
+  value       = "https://${aws_eip.dev_app.public_ip}"
 }
 
 output "dev_app_private_ip" {
