@@ -79,3 +79,23 @@ resource "aws_iam_policy" "ai_sqs" {
     Name = "${local.name_prefix}-ai-sqs"
   }
 }
+
+# 임시 복구: ECS 역할 연결 해제 전 messaging root가 이 정책을 삭제하지 않도록 유지한다.
+data "aws_iam_policy_document" "backend_db_write_replay_producer" {
+  statement {
+    sid       = "SendDatabaseWriteReplayMessages"
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.db_write_replay.arn]
+  }
+}
+
+resource "aws_iam_policy" "backend_db_write_replay_producer" {
+  name        = "${local.name_prefix}-backend-db-write-replay-producer"
+  description = "Allows the V2 ${var.environment} Backend to enqueue failed database writes"
+  policy      = data.aws_iam_policy_document.backend_db_write_replay_producer.json
+
+  tags = {
+    Name = "${local.name_prefix}-backend-db-write-replay-producer"
+  }
+}
