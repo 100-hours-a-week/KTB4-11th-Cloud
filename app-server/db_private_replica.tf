@@ -214,10 +214,10 @@ resource "aws_iam_role_policy" "github_actions_db_private_replica_bootstrap" {
   })
 }
 
-# Configure and verify GTID auto-position replication without taking a data
-# snapshot. The source must still retain every GTID required by an empty replica.
-# Keeping this bootstrap here makes the dependency explicit: ecs is applied only
-# after the replication threads start successfully.
+# Stream a consistent source baseline into the empty private replica, record its
+# GTID set, and verify GTID auto-position replication. Keeping this bootstrap
+# here makes the dependency explicit: ecs is applied only after replication
+# threads start successfully.
 resource "terraform_data" "db_private_replica_bootstrap" {
   input = {
     primary_instance_id = aws_instance.db_migration[0].id

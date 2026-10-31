@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure GTID auto-position replication over SSM without taking a seed."""
+"""Seed a private MySQL replica and configure GTID auto-position over SSM."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from pathlib import Path
 
 REGION = os.environ.get("AWS_REGION", "ap-northeast-2")
 COMMAND_TIMEOUT_SECONDS = 900
+BASELINE_TIMEOUT_SECONDS = 14400
 POLL_SECONDS = 10
 
 SOURCE_PREFLIGHT = r"""#!/usr/bin/env bash
@@ -30,13 +31,29 @@ source_flags="$(mysql_root --batch --skip-column-names --execute='SELECT CONCAT_
   echo "The configured Primary is not writable with GTID/binlog enabled (flags: $source_flags); refusing replica configuration" >&2
   exit 1
 }
-purged_gtids="$(mysql_root --batch --skip-column-names --execute='SELECT @@GLOBAL.gtid_purged' | tr -d '\r\n')"
-[[ -z "$purged_gtids" ]] || {
-  echo 'SEED_REQUIRED: the Primary has purged GTID history. An empty replica cannot recover those existing rows from GTID replication alone.' >&2
-  echo 'Restore a baseline or retain the complete source binlog history before starting an empty replica.' >&2
-  exit 42
+application_schemas="$(mysql_root --batch --skip-column-names <<'SQL'
+SELECT COALESCE(GROUP_CONCAT(schema_name ORDER BY schema_name SEPARATOR ','), '')
+FROM information_schema.schemata
+WHERE schema_name NOT IN ('information_schema','mysql','performance_schema','sys');
+SQL
+)"
+[[ "$application_schemas" == 'stockspoon' ]] || {
+  echo "The Primary must contain exactly the stockspoon application schema (found: $application_schemas)" >&2
+  exit 1
 }
-echo 'PRIMARY_READY_FOR_SEEDLESS_GTID_REPLICATION'
+non_innodb_tables="$(mysql_root --batch --skip-column-names <<'SQL'
+SELECT COUNT(*)
+FROM information_schema.tables
+WHERE table_schema='stockspoon'
+  AND table_type='BASE TABLE'
+  AND engine <> 'InnoDB';
+SQL
+)"
+[[ "$non_innodb_tables" == '0' ]] || {
+  echo "The stockspoon schema contains $non_innodb_tables non-InnoDB tables; a consistent online baseline is not safe" >&2
+  exit 1
+}
+echo 'PRIMARY_READY_FOR_GTID_BASELINE'
 """
 
 SOURCE_PREPARE = r"""#!/usr/bin/env bash
@@ -70,6 +87,38 @@ SQL
 echo 'SOURCE_REPLICATION_ACCOUNT_READY'
 """
 
+SOURCE_SEED_PREPARE = r"""#!/usr/bin/env bash
+set -Eeuo pipefail
+AWS_REGION=ap-northeast-2
+TARGET_HOST=@@TARGET_IP@@
+PARAMETER=/stockspoon/v1/db-private-replica/replication-password
+MYSQL_CONTAINER=migration-mysql
+ROOT_PASSWORD_FILE=/opt/stockspoon-db-migration/mysql/secrets/mysql-root-password
+[[ "$TARGET_HOST" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+[[ -s "$ROOT_PASSWORD_FILE" ]]
+seed_password=''
+for attempt in $(seq 1 12); do
+  if seed_password="$(aws ssm get-parameter --region "$AWS_REGION" --name "$PARAMETER" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null)"; then
+    break
+  fi
+  [[ "$attempt" -lt 12 ]] || { echo 'Unable to retrieve the seed password from Parameter Store' >&2; exit 1; }
+  sleep 5
+done
+[[ "$seed_password" =~ ^[A-Fa-f0-9]{16,32}$ ]] || {
+  echo 'Seed password must be a 16-32 character hexadecimal SSM secret' >&2
+  exit 1
+}
+docker exec "$MYSQL_CONTAINER" sh -c \
+  'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root' <<SQL
+SET SESSION sql_log_bin=0;
+CREATE USER IF NOT EXISTS 'db_private_seed'@'$TARGET_HOST' IDENTIFIED BY '$seed_password' REQUIRE SSL;
+ALTER USER 'db_private_seed'@'$TARGET_HOST' IDENTIFIED BY '$seed_password' REQUIRE SSL;
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT ON stockspoon.* TO 'db_private_seed'@'$TARGET_HOST';
+GRANT RELOAD, SHOW_ROUTINE ON *.* TO 'db_private_seed'@'$TARGET_HOST';
+SQL
+echo 'SOURCE_BASELINE_SEED_ACCOUNT_READY'
+"""
+
 SOURCE_MONITOR_PREPARE = r"""#!/usr/bin/env bash
 set -Eeuo pipefail
 AWS_REGION=ap-northeast-2
@@ -96,7 +145,7 @@ SQL
 echo 'PRIMARY_PROXYSQL_MONITOR_READY'
 """
 
-SOURCE_DROP_LEGACY_SEED = r"""#!/usr/bin/env bash
+SOURCE_DROP_SEED = r"""#!/usr/bin/env bash
 set -Eeuo pipefail
 TARGET_HOST=@@TARGET_IP@@
 MYSQL_CONTAINER=migration-mysql
@@ -108,7 +157,7 @@ docker exec "$MYSQL_CONTAINER" sh -c \
 SET SESSION sql_log_bin=0;
 DROP USER IF EXISTS 'db_private_seed'@'$TARGET_HOST';
 SQL
-echo 'LEGACY_SEED_ACCOUNT_REMOVED'
+echo 'TEMPORARY_SEED_ACCOUNT_REMOVED'
 """
 
 
@@ -168,7 +217,7 @@ def run_ssm(instance_id: str, script: str, label: str, timeout: int = COMMAND_TI
         "DocumentName": "AWS-RunShellScript",
         "InstanceIds": [instance_id],
         "TimeoutSeconds": timeout,
-        "Parameters": {"commands": [script]},
+        "Parameters": {"commands": [script], "executionTimeout": [str(timeout)]},
         "Comment": f"StockSpoon private DB replica: {label}",
     }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", encoding="utf-8") as request_file:
@@ -261,6 +310,15 @@ exit 1
         raise RuntimeError("Private MySQL user-data did not report readiness")
 
 
+def remove_temporary_seed_account(source_id: str, target_ip: str) -> None:
+    run_ssm(
+        source_id,
+        with_target_host(SOURCE_DROP_SEED, target_ip),
+        "remove temporary baseline seed account",
+        timeout=300,
+    )
+
+
 def main() -> None:
     source_id, source_ip, target_id, target_ip = instance_environment()
     print(f"Checking private replica {target_id} against Primary {source_id}", flush=True)
@@ -270,55 +328,68 @@ def main() -> None:
 
     install_replica_helper(target_id)
 
-    status = run_ssm(
-        target_id,
-        f"sudo /usr/local/sbin/bootstrap-private-db-replica status {source_ip}",
-        "replica preflight",
-        timeout=300,
-    )
-    if "GTID_REPLICA_THREADS_RUNNING" in status:
-        print("Private GTID replica is already connected; binlog replay continues asynchronously", flush=True)
-    elif "NEEDS_GTID_CONFIGURATION" in status:
-        # A fresh empty replica needs the source's complete GTID history. An
-        # already-running replica can safely continue after older source logs
-        # have expired because those transactions are already in its GTID set.
-        run_ssm(source_id, SOURCE_PREFLIGHT, "verify Primary and retained GTID history", timeout=300)
-        run_ssm(
-            source_id,
-            with_target_host(SOURCE_PREPARE, target_ip),
-            "prepare GTID replication account",
-            timeout=300,
-        )
-        run_ssm(
-            source_id,
-            SOURCE_MONITOR_PREPARE,
-            "ensure Primary ProxySQL monitor account",
-            timeout=300,
-        )
-        run_ssm(
+    try:
+        status = run_ssm(
             target_id,
-            f"sudo /usr/local/sbin/bootstrap-private-db-replica bootstrap {source_ip}",
-            "configure GTID auto-position replication",
-            timeout=COMMAND_TIMEOUT_SECONDS,
+            f"sudo /usr/local/sbin/bootstrap-private-db-replica status {source_ip} {source_id}",
+            "replica preflight",
+            timeout=300,
         )
-    else:
-        raise RuntimeError("Private replica preflight returned an unknown state; refusing to reset it")
+        if "GTID_REPLICA_THREADS_RUNNING" in status:
+            print("Private GTID replica is already connected; binlog replay continues asynchronously", flush=True)
+        elif "NEEDS_BASELINE_SEED" in status or "BASELINE_SEEDED_NEEDS_GTID_CONFIGURATION" in status:
+            # A fresh replica streams an InnoDB snapshot and the source GTID set,
+            # then uses auto-position for all changes committed after that snapshot.
+            run_ssm(source_id, SOURCE_PREFLIGHT, "verify Primary schema and GTID readiness", timeout=300)
+            run_ssm(
+                source_id,
+                with_target_host(SOURCE_PREPARE, target_ip),
+                "prepare GTID replication account",
+                timeout=300,
+            )
+            run_ssm(
+                source_id,
+                with_target_host(SOURCE_SEED_PREPARE, target_ip),
+                "prepare temporary baseline seed account",
+                timeout=300,
+            )
+            run_ssm(
+                source_id,
+                SOURCE_MONITOR_PREPARE,
+                "ensure Primary ProxySQL monitor account",
+                timeout=300,
+            )
+            run_ssm(
+                target_id,
+                f"sudo /usr/local/sbin/bootstrap-private-db-replica seed {source_ip} {source_id}",
+                "stream and verify the GTID baseline",
+                timeout=BASELINE_TIMEOUT_SECONDS,
+            )
+            run_ssm(
+                target_id,
+                f"sudo /usr/local/sbin/bootstrap-private-db-replica bootstrap {source_ip} {source_id}",
+                "configure GTID auto-position replication",
+                timeout=COMMAND_TIMEOUT_SECONDS,
+            )
+        else:
+            raise RuntimeError("Private replica preflight returned an unknown state; refusing to reset it")
 
-    final_status = run_ssm(
-        target_id,
-        f"sudo /usr/local/sbin/bootstrap-private-db-replica status {source_ip}",
-        "verify GTID replication threads",
-        timeout=300,
-    )
-    if "GTID_REPLICA_THREADS_RUNNING" not in final_status:
-        raise RuntimeError("Private MySQL did not pass GTID replication thread verification")
+        final_status = run_ssm(
+            target_id,
+            f"sudo /usr/local/sbin/bootstrap-private-db-replica status {source_ip} {source_id}",
+            "verify GTID replication threads",
+            timeout=300,
+        )
+        if "GTID_REPLICA_THREADS_RUNNING" not in final_status:
+            raise RuntimeError("Private MySQL did not pass GTID replication thread verification")
+    except Exception:
+        try:
+            remove_temporary_seed_account(source_id, target_ip)
+        except Exception as cleanup_error:
+            print(f"Could not remove the temporary seed account after bootstrap failure: {cleanup_error}", flush=True)
+        raise
 
-    run_ssm(
-        source_id,
-        with_target_host(SOURCE_DROP_LEGACY_SEED, target_ip),
-        "remove obsolete temporary seed account",
-        timeout=300,
-    )
+    remove_temporary_seed_account(source_id, target_ip)
     print("Private GTID replica configured; available source binlogs are applying asynchronously", flush=True)
 
 
