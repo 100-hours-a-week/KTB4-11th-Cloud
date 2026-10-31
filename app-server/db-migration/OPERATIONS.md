@@ -737,12 +737,13 @@ Terraform CI 정책 가이드대로 CI 역할은 자기 권한을 변경할 수 
 | `/stockspoon/v2/prod/backend/MYSQL_USER` 및 `MYSQL_PASSWORD` | ProxySQL Backend 계정 |
 | `/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD` | ProxySQL read-only monitor 계정 |
 
-새 빈 Target의 최초 연결 시 Primary가 `read_only`/`super_read_only`, GTID, binlog, ROW-format 사전
-조건을 만족하지 않거나 `gtid_purged`가 비어 있지 않으면 CD bootstrap이 중단된다. 이미 복제 중인
-Target은 과거 GTID가 적용됐으므로 이후 binlog 만료와 `gtid_purged` 증가가 정상이며, 재적용 때 해당
-검사를 반복하지 않는다. Target에 application schema/GTID history만 있고 정상 채널이 없거나 기존 채널의
-상태가 비정상이면 자동으로 덮어쓰거나 GTID를 재설정하지 않는다. 이런 경우 원인을 확인하고 필요한
-데이터 baseline 또는 수동 복구를 먼저 결정한다.
+새 빈 Target의 최초 연결 전에는 Primary가 `read_only`/`super_read_only`, GTID, binlog, ROW-format 조건을
+만족하는지 확인한다. Primary의 `gtid_purged`가 있어도 baseline dump가 그 GTID 이력을 적재하므로
+복제를 시작할 수 있다. 단, snapshot 이후 catch-up에 필요한 binlog는 Primary에 남아 있어야 한다.
+baseline marker가 없는 기존 Target도 `stockspoon` 스키마와 GTID 이력이 있고, 예상 Primary·TLS·GTID
+auto-position·정상 IO/SQL thread 및 오류 없는 상태가 확인되면 기존 복제 채널을 채택한다. 정상 채널이
+없거나 Target 데이터/채널 검증에 실패하면 자동으로 덮어쓰거나 GTID를 재설정하지 않는다. 원인을 확인하고
+필요한 데이터 baseline 또는 수동 복구를 먼저 결정한다.
 
 ## 공식 문서
 

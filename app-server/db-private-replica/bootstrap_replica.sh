@@ -90,6 +90,17 @@ verify_seeded_data() {
   }
 }
 
+verify_existing_replica_data() {
+  [[ "$(application_schemas)" == 'stockspoon' ]] || {
+    echo 'Existing Private MySQL replica does not contain exactly the stockspoon application schema' >&2
+    return 1
+  }
+  [[ -n "$(target_gtid_executed)" ]] || {
+    echo 'Existing Private MySQL replica has no GTID history; refusing to adopt its replication channel' >&2
+    return 1
+  }
+}
+
 replica_status() {
   mysql_root --vertical --execute='SHOW REPLICA STATUS' | sed '/^Empty set /d'
 }
@@ -293,7 +304,7 @@ if [[ "$MODE" == "status" ]]; then
     exit 0
   fi
 
-  verify_seeded_data
+  verify_existing_replica_data
   verify_replica_running "$status_text"
   ensure_read_only
   verify_replica_settings

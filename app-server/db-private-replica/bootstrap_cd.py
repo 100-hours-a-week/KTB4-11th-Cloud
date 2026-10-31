@@ -328,6 +328,7 @@ def main() -> None:
 
     install_replica_helper(target_id)
 
+    seed_account_preparation_attempted = False
     try:
         status = run_ssm(
             target_id,
@@ -347,6 +348,7 @@ def main() -> None:
                 "prepare GTID replication account",
                 timeout=300,
             )
+            seed_account_preparation_attempted = True
             run_ssm(
                 source_id,
                 with_target_host(SOURCE_SEED_PREPARE, target_ip),
@@ -383,13 +385,15 @@ def main() -> None:
         if "GTID_REPLICA_THREADS_RUNNING" not in final_status:
             raise RuntimeError("Private MySQL did not pass GTID replication thread verification")
     except Exception:
-        try:
-            remove_temporary_seed_account(source_id, target_ip)
-        except Exception as cleanup_error:
-            print(f"Could not remove the temporary seed account after bootstrap failure: {cleanup_error}", flush=True)
+        if seed_account_preparation_attempted:
+            try:
+                remove_temporary_seed_account(source_id, target_ip)
+            except Exception as cleanup_error:
+                print(f"Could not remove the temporary seed account after bootstrap failure: {cleanup_error}", flush=True)
         raise
 
-    remove_temporary_seed_account(source_id, target_ip)
+    if seed_account_preparation_attempted:
+        remove_temporary_seed_account(source_id, target_ip)
     print("Private GTID replica configured; available source binlogs are applying asynchronously", flush=True)
 
 
