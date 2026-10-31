@@ -659,6 +659,54 @@ Prometheus 설정은 단일 파일 bind mount이므로 `prometheus.yml`을 교�
 컨테이너를 다시 만들어야 새 파일이 보인다. 적용 전 설정은
 `/opt/stockspoon-plg/backups/discord-alerts-20261026T003913Z/`에 보관했다.
 
+## 9. Private GTID replica 및 ProxySQL 배포
+
+Terraform root `app-server`가 Primary와 다른 AZ의 Private Subnet에 MySQL replica EC2를 만들고,
+root user-data가 Docker MySQL과 SSM 관리 에이전트를 준비한다. `app-server` root의
+`terraform_data.db_private_replica_bootstrap`이 apply 중 SSM으로 Primary와 private DB를
+초기화·검증한다. 이 단계가 성공해야 다음 `ecs` root가 적용되며, 실패하면 ProxySQL 전환과
+기존 EC2 정지는 진행하지 않는다. private DB가 이미 정상 복제 중이면 재적재하지 않고 상태만 확인한다.
+Private DB 운영 접속은 SSH inbound를 열지 않고 AWS Systems Manager Session Manager를 사용한다.
+
+초기 seed이면 Primary에서 target IP로 한정한 `db_private_replica` 계정에 dump에 필요한 권한을
+임시 부여한다. `stockspoon`의 모든 base table이 InnoDB인지 확인하고, Target에서 스키마를
+일관된 snapshot과 source GTID set으로 적재한 뒤 TLS와 `SOURCE_AUTO_POSITION=1`로 복제를 시작한다.
+초기 적재 중에는 스키마 DDL을 실행하지 않는다. routines/events를 포함하기 위해 별도의
+`db_private_seed` 계정에 Primary의 임시 `RELOAD`, global `SELECT` 및 schema read 권한을
+부여하고, 성공·실패 경로 모두에서 계정을 삭제하도록 시도한다. 이 계정은 replica의 private IP에서만
+인증할 수 있다. CD가 강제 취소되어 정리가 실행되지 않았으면 Primary에서 seed 계정을 확인해 삭제한다.
+GTID 복제 계정에는 `REPLICATION SLAVE` 권한만 유지한다. Primary에는 ProxySQL monitor 계정을 준비한다. Target은
+account 생성을 binlog에 기록하지 않고 앱 및 ProxySQL monitor 계정을 준비한 뒤
+read_only=ON, super_read_only=ON으로 운영한다. 복제본의 read-only 설정은 재시작 후에도 유지한다.
+
+복제가 정상이고 source 시점까지 따라잡힌 경우에만 `ecs` root 적용으로 진행한다. Fargate ProxySQL은
+현재 Primary를 writer hostgroup 10, private replica를 reader hostgroup 20에 등록하고, monitor가
+양쪽을 올바른 hostgroup의 `ONLINE` 상태로 확인한 뒤 서비스가 안정 상태로 전환된다. 앱 계정의
+기본 hostgroup은 10이므로 이 변경만으로 SELECT를 replica로 분산하지 않는다. 읽기 분산은 앱의
+트랜잭션·read-after-write 동작을 확인한 뒤 별도 query rule을 설계해야 한다. 그 다음 기존 public
+V1 App Server/replica EC2를
+Terraform resource `aws_ec2_instance_state.retired_v1_app`가 정상 정지한다.
+
+이 절차는 기존 GitHub Actions apply 역할에 SSM Run Command 권한을 추가한다. 저장소의
+Terraform CI 정책 가이드대로 CI 역할은 자기 권한을 변경할 수 없으므로, 최초에는 AWS 관리자
+자격으로 PR 브랜치에서 해당 정책만 먼저 Terraform state에 적용한 뒤 main CD를 실행한다.
+
+`terraform -chdir=app-server apply -target='aws_iam_role_policy.github_actions_db_private_replica_bootstrap[0]'`
+
+다음 Parameter Store SecureString은 Terraform state나 Git에 넣지 않고 사전에 관리한다.
+
+| 파라미터 | 사용처 |
+| --- | --- |
+| `/stockspoon/v1/db-private-replica/root-password` | Private MySQL root 계정 |
+| `/stockspoon/v1/db-private-replica/replication-password` | GTID replication 계정; 16–32자리 hexadecimal |
+| `/stockspoon/v2/prod/backend/MYSQL_USER` 및 `MYSQL_PASSWORD` | ProxySQL Backend 계정 |
+| `/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD` | ProxySQL read-only monitor 계정 |
+
+Primary의 DB endpoint가 `read_only` 또는 `super_read_only`이면 CD가 중단되고 ECS 전환과 기존 EC2
+정지는 실행되지 않는다. Target에 `stockspoon` 스키마가 이미 있지만 복제 채널이 없거나, 기존 채널의
+상태가 비정상이면 자동으로 초기화하거나 GTID를 재설정하지 않고 중단한다. 해당 상태는 먼저 원인을
+확인한 뒤 수동 복구한다.
+
 ## 공식 문서
 
 - [PMM MySQL 수집 지표](https://docs.percona.com/percona-monitoring-and-management/3/use/qan/mysql.html)

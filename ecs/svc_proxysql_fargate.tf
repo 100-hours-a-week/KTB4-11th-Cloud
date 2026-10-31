@@ -139,10 +139,10 @@ resource "aws_ecs_service" "proxysql_fargate" {
   depends_on = [
     aws_iam_role_policy.proxysql_task_exec,
     aws_vpc_security_group_egress_rule.proxysql_task_https,
-    aws_vpc_security_group_egress_rule.proxysql_task_to_v1_mysql,
     aws_vpc_security_group_egress_rule.proxysql_task_to_migration_mysql,
-    aws_vpc_security_group_ingress_rule.v1_mysql_from_proxysql,
+    aws_vpc_security_group_egress_rule.proxysql_task_to_private_replica_mysql,
     aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
+    aws_vpc_security_group_ingress_rule.private_replica_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.proxysql_from_db_write_replay_lambda,
     aws_vpc_security_group_ingress_rule.proxysql_metrics_from_pmm,
     aws_vpc_security_group_egress_rule.pmm_to_proxysql_metrics,
@@ -151,8 +151,20 @@ resource "aws_ecs_service" "proxysql_fargate" {
   tags = { Name = "${var.name_prefix}-proxysql-fargate" }
 }
 
+# Keep the old public V1 application/replica host available until the new
+# ProxySQL task is healthy against the Primary and private GTID replica.
+# The separate state resource makes the shutdown ordering explicit.
+resource "aws_ec2_instance_state" "retired_v1_app" {
+  count = var.proxysql_fargate_enabled ? 1 : 0
+
+  instance_id = data.terraform_remote_state.app.outputs.app_instance_id
+  state       = "stopped"
+
+  depends_on = [aws_ecs_service.proxysql_fargate]
+}
+
 output "proxysql_fargate" {
-  description = "Parallel Fargate ProxySQL endpoint for verification before BE cutover"
+  description = "Production Fargate ProxySQL endpoint for the Primary and private GTID replica"
   value = var.proxysql_fargate_enabled ? {
     service_name   = aws_ecs_service.proxysql_fargate[0].name
     dns_name       = local.proxysql_fargate_dns_name
