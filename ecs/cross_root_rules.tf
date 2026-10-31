@@ -83,16 +83,6 @@ resource "aws_vpc_security_group_ingress_rule" "ai_postgres_from_market_http" {
 }
 
 
-# V1 Backend가 아직 V1 MySQL을 직접 사용하므로 기존 경로를 유지한다.
-resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_backend" {
-  security_group_id            = data.terraform_remote_state.app.outputs.app_security_group_id
-  referenced_security_group_id = aws_security_group.backend_task.id
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow V2 backend tasks to use V1 MySQL"
-}
-
 # Backend task SG가 ProxySQL port로 접속할 수 있게 한다.
 resource "aws_vpc_security_group_ingress_rule" "proxysql_from_backend" {
   security_group_id            = aws_security_group.proxysql_task.id
@@ -101,17 +91,6 @@ resource "aws_vpc_security_group_ingress_rule" "proxysql_from_backend" {
   to_port                      = var.proxysql_port
   ip_protocol                  = "tcp"
   description                  = "Allow V2 backend tasks to connect to ProxySQL"
-}
-
-# The operator-triggered replay Lambda uses the same private ProxySQL endpoint
-# as Backend tasks after the promoted writer is ready.
-resource "aws_vpc_security_group_ingress_rule" "proxysql_from_db_write_replay_lambda" {
-  security_group_id            = aws_security_group.proxysql_task.id
-  referenced_security_group_id = data.terraform_remote_state.messaging_prod.outputs.db_write_replay_lambda_security_group_id
-  from_port                    = var.proxysql_port
-  to_port                      = var.proxysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow the DB write replay Lambda to execute queued writes through ProxySQL"
 }
 
 # Allow only the rehearsal Prometheus host to scrape Fargate ProxySQL metrics.
@@ -137,14 +116,4 @@ resource "aws_vpc_security_group_egress_rule" "pmm_to_proxysql_metrics" {
   to_port                      = 6070
   ip_protocol                  = "tcp"
   description                  = "Allow Prometheus to scrape Fargate ProxySQL metrics"
-}
-
-# ProxySQL task SG는 V1 MySQL에 접속할 수 있다.
-resource "aws_vpc_security_group_ingress_rule" "v1_mysql_from_proxysql" {
-  security_group_id            = data.terraform_remote_state.app.outputs.app_security_group_id
-  referenced_security_group_id = aws_security_group.proxysql_task.id
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow the ProxySQL ECS task to reach V1 MySQL"
 }

@@ -336,6 +336,5 @@ resource "aws_ecs_service" "backend" {
     aws_lb_listener_rule.backend_canary,
     aws_ecs_cluster_capacity_providers.main,
     aws_iam_role_policy_attachment.backend_valkey,
-    aws_vpc_security_group_ingress_rule.v1_mysql_from_backend,
   ]
 }

@@ -224,7 +224,35 @@ V1 Compose에는 호스트 3306 publish가 없다. 따라서 `10.0.1.246:3306` �
 운영 DB 재시작을 허용하지 않는 경우 별도 중계 또는 터널 방식으로 연결 경로를 설계한다.
 이번 안내에서는 운영 컨테이너 재생성이나 중계 설치를 실행하지 않는다.
 
-## 6. MySQL Shell 초기 적재 예시
+## 6. 초기 데이터 baseline
+
+### Private replica 자동 baseline
+
+현재 Terraform의 `db_private_replica_bootstrap`은 빈 Private replica에 Primary의 `stockspoon` 스키마를
+`mysqldump --single-transaction --set-gtid-purged=ON`으로 스트리밍하고, 적재된 GTID 이력을 검증한 뒤
+GTID auto-position 복제를 시작한다. 임시 seed 계정은 replica의 private IP와 TLS 연결로 제한하며,
+복제가 정상화되면 Primary에서 제거한다. 중간 dump 파일은 만들지 않는다.
+
+Primary에는 `stockspoon` 이외의 application schema가 없어야 하고 모든 기본 테이블이 InnoDB여야 한다.
+적재 중에는 이 schema에 `ALTER TABLE`, `CREATE TABLE`, `DROP TABLE`, `RENAME TABLE`,
+`TRUNCATE TABLE` 같은 DDL을 실행하지 않는다. dump 시작 시 GTID와 snapshot을 맞추기 위해
+짧은 global read lock을 잡으며, 오래 실행 중인 쓰기 문장이 있으면 시작이 지연될 수 있다.
+snapshot 이후 InnoDB DML은 계속 처리된다.
+적재 후 검증은 Primary의 현재 `gtid_purged`가 replica의 `gtid_executed`에 포함되는지 확인한다.
+따라서 Primary에 이미 purged된 이력이 있어도 baseline snapshot에 포함되면 복제를 시작할 수 있다.
+다만 적재 중이나 복제가 따라잡기 전에 필요한 binlog가 추가 purge되면 bootstrap은 중단된다.
+현재 binlog 보관 기간은 7일이므로 baseline 적재와 복제 catch-up을 그 안에 마쳐야 한다.
+
+적재가 실패하면 helper는 부분 데이터나 GTID를 자동 삭제·초기화하지 않는다. 완료 marker가 없는
+target은 재실행 시 overwrite를 거부하므로, 오류를 확인한 뒤 target을 복구하거나 새로 생성하고
+baseline 절차를 다시 시작한다. 정상 완료 후에도 source·target GTID 집합과 replication thread를 확인한다.
+초기 baseline 시작 전에는 application schema와 복제 채널이 없는 새 target에 한해, Docker 초기화에서
+생긴 target 자체의 로컬 binlog/GTID 기록을 비운다. Primary의 binlog나 GTID 기록은 변경하지 않는다.
+
+아래 MySQL Shell 절차는 기존의 수동 이관 실습용이다. Terraform이 관리하는 Private replica에
+자동 baseline을 이미 적용했다면 동일 데이터를 다시 적재하지 않는다.
+
+### MySQL Shell 수동 적재 예시
 
 전제: 위 확인과 연결 경로·권한 준비를 완료한 상태다. MySQL Shell은 이관 EC2에서 실행하는
 구성을 기준으로 한다. 설치되지 않았으므로 공식 8.4 LTS 배포물과 OS 지원 여부를 확인한 뒤 설치하고
@@ -659,6 +687,63 @@ Prometheus 설정은 단일 파일 bind mount이므로 `prometheus.yml`을 교�
 컨테이너를 다시 만들어야 새 파일이 보인다. 적용 전 설정은
 `/opt/stockspoon-plg/backups/discord-alerts-20261026T003913Z/`에 보관했다.
 
+## 9. Private GTID replica 및 ProxySQL 배포
+
+현재 Public Primary는 유지하고, Terraform root `app-server`가 같은 AZ의 Private Subnet에 MySQL
+replica EC2를 만든다. root user-data가 Docker MySQL과 SSM 관리 에이전트를 준비한다.
+`app-server` root의 `terraform_data.db_private_replica_bootstrap`은 apply 중 SSM으로 GTID
+복제를 설정한다. Private DB 운영 접속은 SSH inbound를 열지 않고 AWS Systems Manager Session
+Manager를 사용한다. Private subnet의 SSM·패키지 설치 통신에는 기존 NAT 경로가 필요하다.
+
+`db_private_replica_bootstrap`은 Private replica에 `stockspoon`의 일관된 InnoDB baseline을
+Primary에서 직접 스트리밍한다. dump에는 source 시점의 GTID 집합이 기록되므로, 이전 적재에서
+`gtid_purged`에 들어간 트랜잭션도 baseline에 포함되고, 이후 변경분은 `SOURCE_AUTO_POSITION=1`로
+따라잡는다. Primary의 기존 데이터 변경이 과거 binlog에 남아 있어야 할 필요는 없다.
+
+Source는 `stockspoon` 외 application schema가 없어야 하고 모든 기본 테이블이 InnoDB여야 한다.
+baseline은 중간 파일 없이 MySQL 클라이언트 pipeline으로 전달된다. 복제본 시작 전 GTID 이력을
+검증하고, Primary가 snapshot 이후 필요한 변경 binlog를 purge한 경우에는 복제를 시작하지 않는다.
+현재 Primary binlog 보관 기간은 7일이며, 복제 IO/SQL thread가 정상으로 시작된 뒤 backlog는
+비동기로 적용된다. 이 단계는 lag 0까지 기다리지 않는다.
+
+새 복제본의 초기 GTID 이력이 있으면, application schema와 복제 채널이 없는 target에서만
+target 자체의 초기화 GTID/binlog를 지운 뒤 baseline을 적재한다. Primary의 binlog·GTID 상태는
+변경하지 않는다. baseline 중간 실패는 자동 초기화·덮어쓰기를 하지 않으므로 target 복구 후 재시도한다.
+
+Primary에는 복제 대상 Private IP에만 한정된 TLS `db_private_replica` 계정과 임시
+`db_private_seed` 계정을 준비한다. seed 계정은 baseline 적재 권한만 받고 정상 복제 확인 뒤 제거된다.
+복제본은 계정 생성을 binlog에 기록하지 않고 로컬 ProxySQL monitor 계정을 준비한 뒤
+`read_only=ON`, `super_read_only=ON`으로 운영하며 이 설정은 재시작 후에도 유지한다.
+
+bootstrap이 복제 thread를 검증한 뒤 `ecs` root를 적용하면, Fargate ProxySQL이 현재 Public Primary를
+writer hostgroup 10, Private replica를 read-only monitor 기반 reader hostgroup 20에 등록한다.
+앱 계정의 기본 hostgroup은 10이므로 등록만으로 SELECT가 replica로 분산되지는 않는다. 읽기 분산은
+앱의 트랜잭션·read-after-write 동작을 확인한 뒤 별도 query rule을 설계해야 한다. ProxySQL 서비스가
+정상화된 다음 Terraform resource `aws_ec2_instance_state.retired_v1_app`가 기존 public V1 App
+Server/replica EC2를 정상 정지한다. 현재 Primary는 계속 운영한다.
+
+이 절차는 기존 GitHub Actions apply 역할에 SSM Run Command 권한을 추가한다. 저장소의
+Terraform CI 정책 가이드대로 CI 역할은 자기 권한을 변경할 수 없으므로, 최초에는 AWS 관리자
+자격으로 PR 브랜치에서 해당 정책만 먼저 Terraform state에 적용한 뒤 main CD를 실행한다.
+
+`terraform -chdir=app-server apply -target='aws_iam_role_policy.github_actions_db_private_replica_bootstrap[0]'`
+
+다음 Parameter Store SecureString은 Terraform state나 Git에 넣지 않고 사전에 관리한다.
+
+| 파라미터 | 사용처 |
+| --- | --- |
+| `/stockspoon/v1/db-private-replica/root-password` | Private MySQL root 계정 |
+| `/stockspoon/v1/db-private-replica/replication-password` | GTID replication 계정; 16–32자리 hexadecimal |
+| `/stockspoon/v2/prod/backend/MYSQL_USER` 및 `MYSQL_PASSWORD` | ProxySQL Backend 계정 |
+| `/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD` | ProxySQL read-only monitor 계정 |
+
+새 빈 Target의 최초 연결 시 Primary가 `read_only`/`super_read_only`, GTID, binlog, ROW-format 사전
+조건을 만족하지 않거나 `gtid_purged`가 비어 있지 않으면 CD bootstrap이 중단된다. 이미 복제 중인
+Target은 과거 GTID가 적용됐으므로 이후 binlog 만료와 `gtid_purged` 증가가 정상이며, 재적용 때 해당
+검사를 반복하지 않는다. Target에 application schema/GTID history만 있고 정상 채널이 없거나 기존 채널의
+상태가 비정상이면 자동으로 덮어쓰거나 GTID를 재설정하지 않는다. 이런 경우 원인을 확인하고 필요한
+데이터 baseline 또는 수동 복구를 먼저 결정한다.
+
 ## 공식 문서
 
 - [PMM MySQL 수집 지표](https://docs.percona.com/percona-monitoring-and-management/3/use/qan/mysql.html)
@@ -671,6 +756,8 @@ Prometheus 설정은 단일 파일 bind mount이므로 `prometheus.yml`을 교�
 - [MySQL Shell load와 GTID](https://dev.mysql.com/doc/mysql-shell/8.4/en/mysql-shell-utilities-load-dump.html)
 - [온라인 GTID 활성화](https://dev.mysql.com/doc/refman/8.4/en/replication-mode-change-online-enable-gtids.html)
 - [GTID 기반 복제 연결](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-howto.html)
+- [GTID auto-position과 purged transaction](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-auto-positioning.html)
+- [MySQL Shell loadDump의 GTID 업데이트](https://dev.mysql.com/doc/dev/mysqlsh-api-javascript/8.4/group__util.html)
 - [GTID 대기 함수](https://dev.mysql.com/doc/refman/8.4/en/gtid-functions.html)
 - [Grafana Alloy로 로그 수집](https://grafana.com/docs/alloy/latest/tutorials/logs-and-relabeling-basics/)
 - [Alloy Docker 로그 수집기](https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.docker/)

@@ -1,0 +1,58 @@
+name: stockspoon-private-db-replica
+
+services:
+  mysql:
+    image: mysql:8.4.11
+    container_name: stockspoon-private-db-replica
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    command:
+      - --server-id=105
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-bin=private-replica-bin
+      - --log-replica-updates=ON
+      - --binlog-format=ROW
+      - --binlog-expire-logs-seconds=604800
+      - --read-only=ON
+      - --super-read-only=ON
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+      - --innodb-buffer-pool-size=1G
+      - --performance-schema=ON
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      TZ: Asia/Seoul
+    secrets:
+      - mysql_root_password
+    volumes:
+      - mysql-data:/var/lib/mysql
+    cpus: 1.5
+    mem_limit: 2560m
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$$(cat /run/secrets/mysql_root_password)"
+          mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306
+          --connect-timeout=2 --user=root --batch --skip-column-names
+          --execute='SELECT 1' >/dev/null
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+secrets:
+  mysql_root_password:
+    file: ./secrets/mysql-root-password
+
+volumes:
+  mysql-data:

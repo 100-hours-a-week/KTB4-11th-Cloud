@@ -109,6 +109,20 @@ output "db_migration_host" {
   } : null
 }
 
+output "db_private_replica_host" {
+  description = "Connection and disk identifiers for the private GTID MySQL replica"
+  value = {
+    instance_id       = aws_instance.db_private_replica.id
+    instance_type     = aws_instance.db_private_replica.instance_type
+    availability_zone = aws_instance.db_private_replica.availability_zone
+    private_ip        = aws_instance.db_private_replica.private_ip
+    security_group_id = aws_security_group.db_private_replica.id
+    root_volume_id    = aws_instance.db_private_replica.root_block_device[0].volume_id
+    vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
+    subnet_id         = local.db_private_replica_subnet_id
+  }
+}
+
 output "db_migration_support_hosts" {
   description = "Connection details for the API load generator and PMM EC2 hosts"
   value = {

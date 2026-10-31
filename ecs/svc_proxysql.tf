@@ -1,23 +1,24 @@
-# DB migration rehearsal ProxySQL service.
-# A bootstrap sidecar reapplies routing configuration on every fresh ECS task.
+# Shared ProxySQL task-definition template and supporting network resources.
+# The Fargate service reuses these resources and reapplies routing on each task.
 
 locals {
   proxysql_subnet_ids = [data.terraform_remote_state.shared.outputs.private_subnet_ids[0]]
-  proxysql_dns_name   = "${var.proxysql_dns_service_name}.${var.proxysql_dns_namespace}"
 
-  proxysql_v1_mysql_host         = data.terraform_remote_state.app.outputs.app_private_ip
-  proxysql_migration_mysql_host  = try(data.terraform_remote_state.app.outputs.db_migration_host.private_ip, "")
-  proxysql_migration_mysql_sg    = try(data.terraform_remote_state.app.outputs.db_migration_host.security_group_id, "")
-  proxysql_pmm_security_group_id = try(data.terraform_remote_state.app.outputs.db_migration_support_hosts["pmm"].security_group_id, "")
-  proxysql_monitor_password_arn  = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/PROXYSQL_MONITOR_PASSWORD"
+  # i-081 remains the writer; register the new private GTID replica as reader.
+  proxysql_primary_host             = try(data.terraform_remote_state.app.outputs.db_migration_host.private_ip, "")
+  proxysql_private_replica_host     = try(data.terraform_remote_state.app.outputs.db_private_replica_host.private_ip, "")
+  proxysql_primary_mysql_sg         = try(data.terraform_remote_state.app.outputs.db_migration_host.security_group_id, "")
+  proxysql_private_replica_mysql_sg = try(data.terraform_remote_state.app.outputs.db_private_replica_host.security_group_id, "")
+  proxysql_pmm_security_group_id    = try(data.terraform_remote_state.app.outputs.db_migration_support_hosts["pmm"].security_group_id, "")
+  proxysql_monitor_password_arn     = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/PROXYSQL_MONITOR_PASSWORD"
 
   # ProxySQL starts with an empty config database, then this sidecar sets the
   # servers, app user, read_only monitoring, and writer/reader hostgroups.
   proxysql_bootstrap_command = <<-EOT
     set -eu
 
-    if [ -z "$PROXYSQL_MIGRATION_HOST" ]; then
-      echo "ERROR: migration MySQL host is missing from Terraform remote state" >&2
+    if [ -z "$PROXYSQL_PRIMARY_HOST" ] || [ -z "$PROXYSQL_PRIVATE_REPLICA_HOST" ]; then
+      echo "ERROR: Primary or private replica host is missing from Terraform remote state" >&2
       exit 1
     fi
     : "$PROXYSQL_APP_USER"
@@ -54,16 +55,15 @@ locals {
     monitor_password_sql=$(sql_escape "$PROXYSQL_MONITOR_PASSWORD")
 
     mysql --defaults-extra-file=/tmp/proxysql-admin.cnf <<SQL
-    DELETE FROM mysql_servers
-      WHERE hostname IN ('${local.proxysql_v1_mysql_host}', '${local.proxysql_migration_mysql_host}');
+    DELETE FROM mysql_servers;
     INSERT INTO mysql_servers (hostgroup_id, hostname, port, comment) VALUES
-      (10, '${local.proxysql_v1_mysql_host}', ${var.v1_mysql_port}, 'V1 primary candidate'),
-      (20, '${local.proxysql_migration_mysql_host}', ${var.v1_mysql_port}, 'Migration replica candidate');
+      (10, '${local.proxysql_primary_host}', ${var.v1_mysql_port}, 'Current GTID Primary'),
+      (20, '${local.proxysql_private_replica_host}', ${var.v1_mysql_port}, 'Private GTID replica');
 
     DELETE FROM mysql_replication_hostgroups
       WHERE writer_hostgroup = 10 OR reader_hostgroup = 20;
     INSERT INTO mysql_replication_hostgroups (writer_hostgroup, reader_hostgroup, check_type, comment)
-      VALUES (10, 20, 'read_only', 'V1 and migration DB');
+      VALUES (10, 20, 'read_only', 'Current Primary and private replica');
 
     DELETE FROM mysql_users WHERE username = '$app_user_sql';
     INSERT INTO mysql_users
@@ -85,26 +85,26 @@ locals {
     SAVE MYSQL USERS TO DISK;
     SQL
 
-    echo "ProxySQL bootstrap completed for V1 and migration MySQL"
+    echo "ProxySQL bootstrap completed for the Primary and private GTID replica"
   EOT
 
-  proxysql_healthcheck_command = "mysql --defaults-extra-file=/tmp/proxysql-admin.cnf -Nse \"SELECT IF((SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostname IN ('${local.proxysql_v1_mysql_host}', '${local.proxysql_migration_mysql_host}') AND status = 'ONLINE') = 2 AND (SELECT COUNT(*) FROM runtime_mysql_replication_hostgroups WHERE writer_hostgroup = 10 AND reader_hostgroup = 20) = 1 AND (SELECT COUNT(DISTINCT username) FROM runtime_mysql_users) >= 1, 1, 0)\" | grep -qx '1'"
+  proxysql_healthcheck_command = "mysql --defaults-extra-file=/tmp/proxysql-admin.cnf -Nse \"SELECT IF((SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id = 10 AND hostname = '${local.proxysql_primary_host}' AND status = 'ONLINE') = 1 AND (SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id = 20 AND hostname = '${local.proxysql_private_replica_host}' AND status = 'ONLINE') = 1 AND (SELECT COUNT(*) FROM runtime_mysql_replication_hostgroups WHERE writer_hostgroup = 10 AND reader_hostgroup = 20) = 1 AND (SELECT COUNT(DISTINCT username) FROM runtime_mysql_users) >= 1, 1, 0)\" | grep -qx '1'"
 
   proxysql_network_check_command = join("\n", concat(
     [
       "status=0",
-      "if nc -z -w 3 ${local.proxysql_v1_mysql_host} ${var.v1_mysql_port}; then",
-      "  echo TCP_OK V1 ${local.proxysql_v1_mysql_host}:${var.v1_mysql_port}",
+      "if nc -z -w 3 ${local.proxysql_primary_host} ${var.v1_mysql_port}; then",
+      "  echo TCP_OK PRIMARY ${local.proxysql_primary_host}:${var.v1_mysql_port}",
       "else",
-      "  echo TCP_FAIL V1 ${local.proxysql_v1_mysql_host}:${var.v1_mysql_port}",
+      "  echo TCP_FAIL PRIMARY ${local.proxysql_primary_host}:${var.v1_mysql_port}",
       "  status=1",
       "fi",
     ],
-    local.proxysql_migration_mysql_host == "" ? [] : [
-      "if nc -z -w 3 ${local.proxysql_migration_mysql_host} ${var.v1_mysql_port}; then",
-      "  echo TCP_OK MIGRATION ${local.proxysql_migration_mysql_host}:${var.v1_mysql_port}",
+    local.proxysql_private_replica_host == "" ? [] : [
+      "if nc -z -w 3 ${local.proxysql_private_replica_host} ${var.v1_mysql_port}; then",
+      "  echo TCP_OK PRIVATE_REPLICA ${local.proxysql_private_replica_host}:${var.v1_mysql_port}",
       "else",
-      "  echo TCP_FAIL MIGRATION ${local.proxysql_migration_mysql_host}:${var.v1_mysql_port}",
+      "  echo TCP_FAIL PRIVATE_REPLICA ${local.proxysql_private_replica_host}:${var.v1_mysql_port}",
       "  status=1",
       "fi",
     ],
@@ -129,27 +129,9 @@ resource "aws_service_discovery_private_dns_namespace" "proxysql" {
   }
 }
 
-resource "aws_service_discovery_service" "proxysql" {
-  name = var.proxysql_dns_service_name
-
-  dns_config {
-    namespace_id   = aws_service_discovery_private_dns_namespace.proxysql.id
-    routing_policy = "MULTIVALUE"
-
-    dns_records {
-      ttl  = 10
-      type = "A"
-    }
-  }
-
-  tags = {
-    Name = "${var.name_prefix}-proxysql"
-  }
-}
-
 resource "aws_iam_role" "proxysql_task" {
   name               = "${var.name_prefix}-proxysql-task-role"
-  description        = "Task role for ECS Exec into the ProxySQL rehearsal task"
+  description        = "Task role for ECS Exec into the ProxySQL service task"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
 }
 
@@ -183,15 +165,6 @@ resource "aws_security_group" "proxysql_task" {
   }
 }
 
-resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_v1_mysql" {
-  security_group_id            = aws_security_group.proxysql_task.id
-  referenced_security_group_id = data.terraform_remote_state.app.outputs.app_security_group_id
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow ProxySQL network checks and later proxy traffic to V1 MySQL"
-}
-
 resource "aws_vpc_security_group_egress_rule" "proxysql_task_https" {
   security_group_id = aws_security_group.proxysql_task.id
   cidr_ipv4         = "0.0.0.0/0"
@@ -202,25 +175,47 @@ resource "aws_vpc_security_group_egress_rule" "proxysql_task_https" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_migration_mysql" {
-  count = local.proxysql_migration_mysql_sg == "" ? 0 : 1
+  count = local.proxysql_primary_mysql_sg == "" ? 0 : 1
 
   security_group_id            = aws_security_group.proxysql_task.id
-  referenced_security_group_id = local.proxysql_migration_mysql_sg
+  referenced_security_group_id = local.proxysql_primary_mysql_sg
   from_port                    = var.v1_mysql_port
   to_port                      = var.v1_mysql_port
   ip_protocol                  = "tcp"
-  description                  = "Allow ProxySQL network checks and later proxy traffic to the migration MySQL"
+  description                  = "Allow ProxySQL network checks and proxy traffic to the current Primary"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "migration_mysql_from_proxysql" {
-  count = local.proxysql_migration_mysql_sg == "" ? 0 : 1
+  count = local.proxysql_primary_mysql_sg == "" ? 0 : 1
 
-  security_group_id            = local.proxysql_migration_mysql_sg
+  security_group_id            = local.proxysql_primary_mysql_sg
   referenced_security_group_id = aws_security_group.proxysql_task.id
   from_port                    = var.v1_mysql_port
   to_port                      = var.v1_mysql_port
   ip_protocol                  = "tcp"
-  description                  = "Allow the ProxySQL ECS task to reach the migration MySQL"
+  description                  = "Allow the ProxySQL ECS task to reach the current Primary"
+}
+
+resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_private_replica_mysql" {
+  count = local.proxysql_private_replica_mysql_sg == "" ? 0 : 1
+
+  security_group_id            = aws_security_group.proxysql_task.id
+  referenced_security_group_id = local.proxysql_private_replica_mysql_sg
+  from_port                    = var.v1_mysql_port
+  to_port                      = var.v1_mysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow ProxySQL network checks and proxy traffic to the private GTID replica"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "private_replica_mysql_from_proxysql" {
+  count = local.proxysql_private_replica_mysql_sg == "" ? 0 : 1
+
+  security_group_id            = local.proxysql_private_replica_mysql_sg
+  referenced_security_group_id = aws_security_group.proxysql_task.id
+  from_port                    = var.v1_mysql_port
+  to_port                      = var.v1_mysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow the ProxySQL ECS task to reach the private GTID replica"
 }
 
 resource "aws_ecs_task_definition" "proxysql" {
@@ -309,8 +304,8 @@ resource "aws_ecs_task_definition" "proxysql" {
       entryPoint = ["/bin/sh", "-ec"]
       command    = [local.proxysql_bootstrap_command]
       environment = [
-        { name = "PROXYSQL_V1_HOST", value = local.proxysql_v1_mysql_host },
-        { name = "PROXYSQL_MIGRATION_HOST", value = local.proxysql_migration_mysql_host },
+        { name = "PROXYSQL_PRIMARY_HOST", value = local.proxysql_primary_host },
+        { name = "PROXYSQL_PRIVATE_REPLICA_HOST", value = local.proxysql_private_replica_host },
         { name = "PROXYSQL_MONITOR_USER", value = var.proxysql_monitor_username },
       ]
       secrets = [
@@ -370,48 +365,4 @@ resource "aws_ecs_task_definition" "proxysql" {
       }
     },
   ])
-}
-
-resource "aws_ecs_service" "proxysql" {
-  name                               = "${var.name_prefix}-proxysql"
-  cluster                            = aws_ecs_cluster.main.id
-  task_definition                    = aws_ecs_task_definition.proxysql.arn
-  desired_count                      = 1
-  enable_execute_command             = true
-  health_check_grace_period_seconds  = 60
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
-  wait_for_steady_state              = true
-
-  capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.service.name
-    weight            = 1
-    base              = 0
-  }
-
-  network_configuration {
-    subnets          = local.proxysql_subnet_ids
-    security_groups  = [aws_security_group.proxysql_task.id]
-    assign_public_ip = false
-  }
-
-  service_registries {
-    registry_arn = aws_service_discovery_service.proxysql.arn
-  }
-
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-
-  depends_on = [
-    aws_vpc_security_group_egress_rule.proxysql_task_https,
-    aws_vpc_security_group_ingress_rule.v1_mysql_from_proxysql,
-    aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
-    aws_vpc_security_group_ingress_rule.proxysql_from_db_write_replay_lambda,
-  ]
-
-  tags = {
-    Name = "${var.name_prefix}-proxysql"
-  }
 }
