@@ -104,13 +104,6 @@ resource "aws_iam_role_policy_attachment" "backend_valkey" {
   policy_arn = local.valkey_policies[local.backend_valkey_role]
 }
 
-# Lets the BE publish failed writes to the queue managed by the messaging root.
-# Apply messaging/prod before this ECS root so the policy output exists.
-resource "aws_iam_role_policy_attachment" "backend_db_write_replay_sqs" {
-  role       = aws_iam_role.backend_task.name
-  policy_arn = data.terraform_remote_state.messaging_prod.outputs.backend_db_write_replay_producer_policy_arn
-}
-
 # Lets the BE publish orders to the order queue managed by the messaging root.
 resource "aws_iam_role_policy_attachment" "backend_order_producer_sqs" {
   role       = aws_iam_role.backend_task.name
@@ -232,12 +225,6 @@ resource "aws_ecs_task_definition" "backend" {
       # 변경 후에는 BE CD 재배포 또는 aws ecs update-service --force-new-deployment로 Task를 교체한다.
       environment = concat(
         local.backend_environment,
-        [
-          # During database promotion, queue only the configured ProxySQL write failures.
-          { name = "DB_WRITE_REPLAY_ENABLED", value = tostring(var.backend_db_write_replay_enabled) },
-          { name = "DB_WRITE_REPLAY_QUEUE_URL", value = data.terraform_remote_state.messaging_prod.outputs.db_write_replay_queue_url },
-          { name = "DB_WRITE_REPLAY_PROXYSQL_ERROR_CODES", value = "9001,1290" },
-        ],
         [{
           name  = "TF_DATASOURCE_URL_PARAMETER_VERSION"
           value = tostring(aws_ssm_parameter.backend_datasource_url.version)

@@ -5,4 +5,3 @@ project_name = "stockspoon"
 proxysql_dns_namespace    = "stockspoon-v2.internal"
 proxysql_dns_service_name = "proxysql"
 proxysql_port             = 6033
-db_write_replay_database  = "stockspoon"
