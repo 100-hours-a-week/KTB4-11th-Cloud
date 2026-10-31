@@ -38,9 +38,9 @@ variable "frontend_price_class" {
 }
 
 variable "frontend_deployment_branch" {
-  description = "Single source for FE V2 deployment trust; switch dev to main when the production branch moves"
+  description = "FE V2 production branch authorized by the publish and ECS deployment roles"
   type        = string
-  default     = "dev"
+  default     = "main"
 
   validation {
     condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9._/-]*$", var.frontend_deployment_branch))
