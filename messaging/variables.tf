@@ -43,9 +43,3 @@ variable "proxysql_port" {
   type        = number
   default     = 6033
 }
-
-variable "db_write_replay_database" {
-  description = "MySQL schema used by the backend and the DB replay receipt table"
-  type        = string
-  default     = "stockspoon"
-}

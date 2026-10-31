@@ -1,4 +1,4 @@
-# The Backend and operator-triggered write replay use the Fargate ProxySQL endpoint.
+# The Backend uses the Fargate ProxySQL endpoint.
 variable "proxysql_fargate_enabled" {
   description = "Keep the Fargate ProxySQL service required by the Backend datasource enabled"
   type        = bool

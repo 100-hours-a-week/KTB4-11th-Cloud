@@ -29,8 +29,6 @@ resource "aws_cloudwatch_dashboard" "sqs" {
             [".", "ApproximateNumberOfMessagesNotVisible", ".", ".", { label = "Report in flight" }],
             [".", "ApproximateNumberOfMessagesVisible", ".", aws_sqs_queue.order.name, { label = "Order visible" }],
             [".", "ApproximateNumberOfMessagesNotVisible", ".", ".", { label = "Order in flight" }],
-            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", aws_sqs_queue.db_write_replay.name, { label = "DB write replay visible" }],
-            [".", "ApproximateNumberOfMessagesNotVisible", ".", ".", { label = "DB write replay in flight" }],
           ]
         }
       },
@@ -49,7 +47,6 @@ resource "aws_cloudwatch_dashboard" "sqs" {
           metrics = [
             ["AWS/SQS", "ApproximateAgeOfOldestMessage", "QueueName", aws_sqs_queue.report_request.name, { label = "Report oldest age" }],
             [".", ".", ".", aws_sqs_queue.order.name, { label = "Order oldest age" }],
-            [".", ".", ".", aws_sqs_queue.db_write_replay.name, { label = "DB write replay oldest age" }],
           ]
         }
       },
@@ -86,44 +83,6 @@ resource "aws_cloudwatch_dashboard" "sqs" {
           metrics = [
             ["AWS/SQS", "NumberOfMessagesSent", "QueueName", aws_sqs_queue.order.name, { label = "Sent" }],
             [".", "NumberOfMessagesDeleted", ".", ".", { label = "Deleted" }],
-          ]
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 12
-        width  = 12
-        height = 6
-        properties = {
-          title  = "Database write replay queue throughput"
-          region = var.aws_region
-          view   = "timeSeries"
-          period = 60
-          stat   = "Sum"
-          metrics = [
-            ["AWS/SQS", "NumberOfMessagesSent", "QueueName", aws_sqs_queue.db_write_replay.name, { label = "Sent" }],
-            [".", "NumberOfMessagesReceived", ".", ".", { label = "Received" }],
-            [".", "NumberOfMessagesDeleted", ".", ".", { label = "Deleted" }],
-          ]
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 12
-        width  = 12
-        height = 6
-        properties = {
-          title  = "Database write replay Lambda"
-          region = var.aws_region
-          view   = "timeSeries"
-          period = 60
-          stat   = "Sum"
-          metrics = [
-            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.db_write_replay_forwarder.function_name, { label = "Invocations" }],
-            [".", "Errors", ".", ".", { label = "Errors" }],
-            [".", "Throttles", ".", ".", { label = "Throttles" }],
           ]
         }
       },
@@ -179,28 +138,6 @@ resource "aws_cloudwatch_metric_alarm" "order_dlq_not_empty" {
 
   dimensions = {
     QueueName = aws_sqs_queue.order_dlq.name
-  }
-
-  depends_on = [aws_lambda_permission.sqs_cloudwatch_alarms]
-}
-
-resource "aws_cloudwatch_metric_alarm" "db_write_replay_dlq_not_empty" {
-  alarm_name          = "${local.sqs_alarm_prefix}-db-write-replay-dlq-not-empty"
-  alarm_description   = "The V2 ${var.environment} database write replay DLQ contains at least one visible message."
-  namespace           = "AWS/SQS"
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  statistic           = "Maximum"
-  period              = 60
-  evaluation_periods  = 1
-  datapoints_to_alarm = 1
-  threshold           = 1
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  treat_missing_data  = "notBreaching"
-  alarm_actions       = [aws_lambda_function.sqs_discord_notifier.arn]
-  ok_actions          = [aws_lambda_function.sqs_discord_notifier.arn]
-
-  dimensions = {
-    QueueName = aws_sqs_queue.db_write_replay_dlq.name
   }
 
   depends_on = [aws_lambda_permission.sqs_cloudwatch_alarms]

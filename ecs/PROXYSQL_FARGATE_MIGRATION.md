@@ -89,9 +89,9 @@ aws ecs update-service --region ap-northeast-2 \
 
 ## 3. EC2 ProxySQL 서비스 정리
 
-Fargate ProxySQL이 `ACTIVE`, `running=1`, `desired=1`이고 Backend의 `SPRING_DATASOURCE_URL`이 `proxysql-fargate.stockspoon-v2.internal`을 가리키는 것을 확인한 뒤 정리합니다. Plan은 EC2 ProxySQL ECS 서비스와 전용 `proxysql` Cloud Map 서비스 등록, write-replay Lambda의 ProxySQL 6033 송신·수신 규칙을 제거해야 합니다. Lambda 함수와 그 외 리소스는 유지합니다. Fargate 서비스, `aws_ecs_task_definition.proxysql` 템플릿, 공유 IAM 역할·보안 그룹·로그 그룹, Cloud Map namespace는 삭제 대상이 아니어야 합니다.
+Fargate ProxySQL이 `ACTIVE`, `running=1`, `desired=1`이고 Backend의 `SPRING_DATASOURCE_URL`이 `proxysql-fargate.stockspoon-v2.internal`을 가리키는 것을 확인한 뒤 정리합니다. Plan은 EC2 ProxySQL ECS 서비스와 전용 `proxysql` Cloud Map 서비스 등록을 제거해야 합니다. Fargate 서비스, `aws_ecs_task_definition.proxysql` 템플릿, 공유 IAM 역할·보안 그룹·로그 그룹, Cloud Map namespace는 삭제 대상이 아니어야 합니다.
 
-Apply root 순서는 `messaging@prod`가 먼저, `ecs`가 다음입니다. Lambda의 ProxySQL 네트워크 접근이 제거된 뒤 EC2 서비스와 이전 DNS 등록이 제거됩니다. `fis/market-http/terraform`은 이 ProxySQL 정리의 영향을 받지 않습니다.
+`fis/market-http/terraform`은 이 ProxySQL 정리의 영향을 받지 않습니다.
 
 ## 롤백
 

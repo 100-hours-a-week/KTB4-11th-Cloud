@@ -283,12 +283,6 @@ variable "backend_kiwoom_stream_enabled" {
   default     = true
 }
 
-variable "backend_db_write_replay_enabled" {
-  description = "Enable queueing replayable Backend writes rejected by ProxySQL during database promotion"
-  type        = bool
-  default     = true
-}
-
 variable "backend_canary_enabled" {
   description = "Enable weighted routing for all backend API requests; false sends API requests through the default V1 route"
   type        = bool
