@@ -10,7 +10,7 @@ locals {
   db_private_replica_repl_password_parameter = "/stockspoon/v1/db-private-replica/replication-password"
   db_private_replica_subnet_ids = sort([
     for subnet_id, subnet in data.aws_subnet.db_private_replica_candidates :
-    subnet_id if subnet.availability_zone != aws_instance.db_migration[0].availability_zone
+    subnet_id if subnet.availability_zone == aws_instance.db_migration[0].availability_zone
   ])
   db_private_replica_subnet_id = local.db_private_replica_subnet_ids[0]
 }
@@ -55,7 +55,7 @@ resource "aws_vpc_security_group_egress_rule" "db_private_replica_to_primary" {
   from_port                    = 3306
   to_port                      = 3306
   ip_protocol                  = "tcp"
-  description                  = "GTID replication and initial seed from the current Primary"
+  description                  = "GTID auto-position replication from the current Primary"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "primary_mysql_from_private_replica" {
@@ -64,7 +64,7 @@ resource "aws_vpc_security_group_ingress_rule" "primary_mysql_from_private_repli
   from_port                    = 3306
   to_port                      = 3306
   ip_protocol                  = "tcp"
-  description                  = "GTID replication and initial seed from the private replica"
+  description                  = "Allow the private GTID replica to connect to the current Primary"
 }
 
 resource "aws_iam_role" "db_private_replica" {
@@ -93,8 +93,6 @@ resource "aws_iam_role_policy" "db_private_replica_parameters" {
       Resource = [
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.db_private_replica_root_password_parameter}",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.db_private_replica_repl_password_parameter}",
-        "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/MYSQL_USER",
-        "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/MYSQL_PASSWORD",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD",
       ]
     }]
@@ -151,7 +149,7 @@ resource "aws_instance" "db_private_replica" {
     volume_type           = "gp3"
     volume_size           = var.db_migration_root_volume_size_gib
     encrypted             = true
-    delete_on_termination = false
+    delete_on_termination = true
 
     tags = merge(local.db_private_replica_tags, {
       Name = "stockspoon-v1-db-private-replica-root"
@@ -216,10 +214,10 @@ resource "aws_iam_role_policy" "github_actions_db_private_replica_bootstrap" {
   })
 }
 
-# Seed and verify the private replica during this root's apply. Keeping the
-# bootstrap here makes the dependency explicit: ecs is applied only after this
-# provisioner exits successfully, and the root change does not expand CI to
-# every unrelated Terraform root.
+# Configure and verify GTID auto-position replication without taking a data
+# snapshot. The source must still retain every GTID required by an empty replica.
+# Keeping this bootstrap here makes the dependency explicit: ecs is applied only
+# after the replication threads start successfully.
 resource "terraform_data" "db_private_replica_bootstrap" {
   input = {
     primary_instance_id = aws_instance.db_migration[0].id
