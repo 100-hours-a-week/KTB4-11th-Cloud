@@ -1,9 +1,8 @@
-# DB migration rehearsal ProxySQL service.
-# A bootstrap sidecar reapplies routing configuration on every fresh ECS task.
+# Shared ProxySQL task-definition template and supporting network resources.
+# The Fargate service reuses these resources and reapplies routing on each task.
 
 locals {
   proxysql_subnet_ids = [data.terraform_remote_state.shared.outputs.private_subnet_ids[0]]
-  proxysql_dns_name   = "${var.proxysql_dns_service_name}.${var.proxysql_dns_namespace}"
 
   # i-081 remains the writer; register the new private GTID replica as reader.
   proxysql_primary_host             = try(data.terraform_remote_state.app.outputs.db_migration_host.private_ip, "")
@@ -130,27 +129,9 @@ resource "aws_service_discovery_private_dns_namespace" "proxysql" {
   }
 }
 
-resource "aws_service_discovery_service" "proxysql" {
-  name = var.proxysql_dns_service_name
-
-  dns_config {
-    namespace_id   = aws_service_discovery_private_dns_namespace.proxysql.id
-    routing_policy = "MULTIVALUE"
-
-    dns_records {
-      ttl  = 10
-      type = "A"
-    }
-  }
-
-  tags = {
-    Name = "${var.name_prefix}-proxysql"
-  }
-}
-
 resource "aws_iam_role" "proxysql_task" {
   name               = "${var.name_prefix}-proxysql-task-role"
-  description        = "Task role for ECS Exec into the ProxySQL rehearsal task"
+  description        = "Task role for ECS Exec into the ProxySQL service task"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
 }
 
@@ -384,48 +365,4 @@ resource "aws_ecs_task_definition" "proxysql" {
       }
     },
   ])
-}
-
-resource "aws_ecs_service" "proxysql" {
-  name                               = "${var.name_prefix}-proxysql"
-  cluster                            = aws_ecs_cluster.main.id
-  task_definition                    = aws_ecs_task_definition.proxysql.arn
-  desired_count                      = 1
-  enable_execute_command             = true
-  health_check_grace_period_seconds  = 60
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
-  wait_for_steady_state              = true
-
-  capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.service.name
-    weight            = 1
-    base              = 0
-  }
-
-  network_configuration {
-    subnets          = local.proxysql_subnet_ids
-    security_groups  = [aws_security_group.proxysql_task.id]
-    assign_public_ip = false
-  }
-
-  service_registries {
-    registry_arn = aws_service_discovery_service.proxysql.arn
-  }
-
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-
-  depends_on = [
-    aws_vpc_security_group_egress_rule.proxysql_task_https,
-    aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
-    aws_vpc_security_group_ingress_rule.private_replica_mysql_from_proxysql,
-    aws_vpc_security_group_ingress_rule.proxysql_from_db_write_replay_lambda,
-  ]
-
-  tags = {
-    Name = "${var.name_prefix}-proxysql"
-  }
 }

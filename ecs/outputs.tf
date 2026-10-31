@@ -54,13 +54,13 @@ output "backend_task_security_group_id" {
 }
 
 output "proxysql_service_name" {
-  description = "Standalone ProxySQL ECS service used for the database migration rehearsal"
-  value       = aws_ecs_service.proxysql.name
+  description = "Production Fargate ProxySQL ECS service"
+  value       = try(aws_ecs_service.proxysql_fargate[0].name, null)
 }
 
 output "proxysql_dns_name" {
-  description = "Stable private DNS name for the ProxySQL ECS service"
-  value       = local.proxysql_dns_name
+  description = "Stable private DNS name for the production Fargate ProxySQL service"
+  value       = local.proxysql_fargate_dns_name
 }
 
 output "proxysql_log_group_name" {

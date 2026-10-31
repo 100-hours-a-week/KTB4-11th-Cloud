@@ -1,5 +1,4 @@
-# Keep the EC2 ProxySQL service and its DNS untouched while it is still needed.
-# The Backend datasource is pinned to the Fargate ProxySQL endpoint.
+# The Backend and operator-triggered write replay use the Fargate ProxySQL endpoint.
 variable "proxysql_fargate_enabled" {
   description = "Keep the Fargate ProxySQL service required by the Backend datasource enabled"
   type        = bool
@@ -143,7 +142,6 @@ resource "aws_ecs_service" "proxysql_fargate" {
     aws_vpc_security_group_egress_rule.proxysql_task_to_private_replica_mysql,
     aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.private_replica_mysql_from_proxysql,
-    aws_vpc_security_group_ingress_rule.proxysql_from_db_write_replay_lambda,
     aws_vpc_security_group_ingress_rule.proxysql_metrics_from_pmm,
     aws_vpc_security_group_egress_rule.pmm_to_proxysql_metrics,
   ]

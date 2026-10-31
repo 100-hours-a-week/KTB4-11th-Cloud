@@ -45,6 +45,17 @@ MODULE_CONSUMERS = {
 }
 
 DEFAULT_ENVIRONMENTS = {"ecs": "prod", "monitoring": "prod", "fis/market-http/terraform": "prod"}
+MARKET_HTTP_FIS_ECS_PATHS = {
+    "ecs/market_http_fis.tf",
+    "ecs/locals.tf",
+    "ecs/platform_cluster.tf",
+    "ecs/remote_state.tf",
+    "ecs/service_scaling.tf",
+    "ecs/svc_market_common.tf",
+    "ecs/svc_market_http.tf",
+    "ecs/variables.tf",
+    "ecs/environments/prod/terraform.tfvars.example",
+}
 
 
 def dependency_order(
@@ -90,14 +101,23 @@ def root_environment(root: str) -> str:
 
 
 def changes_workflow(path: PurePosixPath) -> bool:
-    """배포 도구 변경 시 전체 root를 검증한다. 일반 인프라 변경은 확장하지 않는다."""
+    """Workflow/plan/apply helper changes validate all roots; selector edits do not."""
     return (
         path.as_posix() in {
             ".github/workflows/terraform-plan.yml",
             ".github/workflows/terraform-apply.yml",
         }
         or (path.parent.as_posix() == ".github/scripts"
-            and path.name.startswith("terraform_") and path.suffix == ".py")
+            and path.name.startswith("terraform_") and path.name != "terraform_roots.py"
+            and path.suffix == ".py")
+    )
+
+
+def changes_market_http_fis_target(paths: list[str]) -> bool:
+    """Return whether a change can alter the market-http ECS target or its scope."""
+    return any(
+        PurePosixPath(raw_path.strip()).as_posix() in MARKET_HTTP_FIS_ECS_PATHS
+        for raw_path in paths
     )
 
 
@@ -143,6 +163,15 @@ def affected_roots(paths: list[str]) -> list[str]:
     while pending:
         current = pending.pop()
         for dependent in DEPENDENTS.get(current, set()):
+            # FIS deployment variables resolve a live market-http task at plan
+            # time. Only market-http-related ECS changes should refresh that
+            # target; unrelated ECS changes otherwise create task-ARN diffs.
+            # FIS source changes still select the root directly.
+            if (
+                dependent == "fis/market-http/terraform"
+                and not changes_market_http_fis_target(paths)
+            ):
+                continue
             if dependent not in selected:
                 selected.add(dependent)
                 pending.append(dependent)

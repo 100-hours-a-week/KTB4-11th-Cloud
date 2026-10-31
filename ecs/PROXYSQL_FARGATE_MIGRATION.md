@@ -1,6 +1,8 @@
 # ProxySQL EC2 → Fargate 단계 전환
 
-기존 `stockspoon-v2-prod-proxysql` 서비스를 계속 실행한 채, 동일한 설정으로 `stockspoon-v2-prod-proxysql-fargate`를 추가합니다. DB 계정·복제·데이터는 바꾸지 않습니다. 로그는 기존 CloudWatch 그룹 `/ecs/stockspoon-v2-prod/proxysql`을 공유합니다. Backend JDBC 주소는 Terraform 코드에서 Fargate endpoint로 고정되어 있습니다. 기존 ProxySQL은 별도 정리 전까지 계속 실행합니다.
+운영 Backend는 `stockspoon-v2-prod-proxysql-fargate`를 사용합니다. 이번 정리에서는 기존 EC2 capacity provider 기반 `stockspoon-v2-prod-proxysql` 서비스와 전용 Cloud Map 서비스 등록을 제거합니다. DB 계정·복제·데이터는 바꾸지 않습니다. Fargate 서비스는 기존 CloudWatch 로그 그룹 `/ecs/stockspoon-v2-prod/proxysql`, Task Definition 템플릿, IAM 역할, 보안 그룹, Cloud Map namespace를 계속 공유합니다.
+
+1, 2단계는 Fargate 전환 당시 절차입니다. 이미 전환이 끝난 운영 환경에서는 다시 실행하지 말고, 아래 3단계만 검토합니다.
 
 ## 1. Fargate ProxySQL만 추가
 
@@ -85,6 +87,12 @@ aws ecs update-service --region ap-northeast-2 \
 
 배포 중 기존 태스크는 기존 ProxySQL에, 새 태스크는 Fargate ProxySQL에 연결됩니다. 두 ProxySQL 모두 같은 현재 DB 구성으로 쓰므로 DB 승격은 동시에 진행하지 않습니다. 새 Backend 태스크의 로그와 실제 DB `@@hostname`, `@@server_id`, `@@read_only`를 확인하고, 이전 Backend 태스크가 모두 종료된 뒤 Fargate 경로 전환이 끝난 것으로 봅니다.
 
+## 3. EC2 ProxySQL 서비스 정리
+
+Fargate ProxySQL이 `ACTIVE`, `running=1`, `desired=1`이고 Backend의 `SPRING_DATASOURCE_URL`이 `proxysql-fargate.stockspoon-v2.internal`을 가리키는 것을 확인한 뒤 정리합니다. Plan은 EC2 ProxySQL ECS 서비스와 전용 `proxysql` Cloud Map 서비스 등록, write-replay Lambda의 ProxySQL 6033 송신·수신 규칙을 제거해야 합니다. Lambda 함수와 그 외 리소스는 유지합니다. Fargate 서비스, `aws_ecs_task_definition.proxysql` 템플릿, 공유 IAM 역할·보안 그룹·로그 그룹, Cloud Map namespace는 삭제 대상이 아니어야 합니다.
+
+Apply root 순서는 `messaging@prod`가 먼저, `ecs`가 다음입니다. Lambda의 ProxySQL 네트워크 접근이 제거된 뒤 EC2 서비스와 이전 DNS 등록이 제거됩니다. `fis/market-http/terraform`은 이 ProxySQL 정리의 영향을 받지 않습니다.
+
 ## 롤백
 
-기존 ProxySQL을 정리하기 전에는 SSM 주소를 기본값 `proxysql.stockspoon-v2.internal`로 되돌리는 계획을 만들고 적용한 뒤 Backend를 다시 배포하면 됩니다. 기존 서비스를 계속 켜두므로 DB 복구나 복제 방향 변경은 필요하지 않습니다. 롤백을 확인하기 전까지 Fargate 서비스를 삭제하지 않습니다.
+정리 후에는 이전 `proxysql.stockspoon-v2.internal` endpoint로 롤백할 수 없습니다. ProxySQL 연결 문제는 Fargate 서비스 상태와 `proxysql-fargate.stockspoon-v2.internal` DNS를 확인하고, 필요하면 ECS 서비스 배포를 롤백합니다. DB 복구나 복제 방향 변경은 이 작업의 롤백에 포함되지 않습니다.

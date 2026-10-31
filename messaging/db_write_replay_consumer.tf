@@ -126,7 +126,6 @@ resource "aws_lambda_function" "db_write_replay_forwarder" {
     aws_iam_role_policy.db_write_replay_forwarder,
     aws_iam_role_policy_attachment.db_write_replay_forwarder_sqs,
     aws_cloudwatch_log_group.db_write_replay_forwarder,
-    aws_vpc_security_group_egress_rule.db_write_replay_to_proxysql,
     aws_vpc_security_group_egress_rule.db_write_replay_https,
   ]
 
@@ -137,21 +136,12 @@ resource "aws_lambda_function" "db_write_replay_forwarder" {
 
 resource "aws_security_group" "db_write_replay_forwarder" {
   name        = "${local.db_write_replay_consumer_name}-sg"
-  description = "Allows the manually invoked DB write replay Lambda to reach ProxySQL"
+  description = "Security group for the manually invoked DB write replay Lambda"
   vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
 
   tags = {
     Name = "${local.db_write_replay_consumer_name}-sg"
   }
-}
-
-resource "aws_vpc_security_group_egress_rule" "db_write_replay_to_proxysql" {
-  security_group_id = aws_security_group.db_write_replay_forwarder.id
-  cidr_ipv4         = data.terraform_remote_state.shared.outputs.vpc_cidr_block
-  from_port         = var.proxysql_port
-  to_port           = var.proxysql_port
-  ip_protocol       = "tcp"
-  description       = "Allow the replay Lambda to reach the ProxySQL client port in the VPC"
 }
 
 resource "aws_vpc_security_group_egress_rule" "db_write_replay_https" {
