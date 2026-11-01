@@ -110,129 +110,7 @@ locals {
     ],
     ["exit $status"],
   ))
-}
-
-resource "aws_cloudwatch_log_group" "proxysql" {
-  name              = "/ecs/${var.name_prefix}/proxysql"
-  retention_in_days = var.container_log_retention_days
-}
-
-# ECS task private IPs can change on replacement. Cloud Map keeps a stable
-# in-VPC DNS name and updates its A record as the service task is registered.
-resource "aws_service_discovery_private_dns_namespace" "proxysql" {
-  name        = var.proxysql_dns_namespace
-  description = "Private DNS namespace for the V2 migration rehearsal"
-  vpc         = data.terraform_remote_state.shared.outputs.vpc_id
-
-  tags = {
-    Name = "${var.name_prefix}-service-discovery"
-  }
-}
-
-resource "aws_iam_role" "proxysql_task" {
-  name               = "${var.name_prefix}-proxysql-task-role"
-  description        = "Task role for ECS Exec into the ProxySQL service task"
-  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-}
-
-# ECS Exec opens its control/data channels through ssmmessages.
-resource "aws_iam_role_policy" "proxysql_task_exec" {
-  name = "${var.name_prefix}-proxysql-task-exec"
-  role = aws_iam_role.proxysql_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ssmmessages:CreateControlChannel",
-        "ssmmessages:CreateDataChannel",
-        "ssmmessages:OpenControlChannel",
-        "ssmmessages:OpenDataChannel",
-      ]
-      Resource = "*"
-    }]
-  })
-}
-
-resource "aws_security_group" "proxysql_task" {
-  name        = "${var.name_prefix}-proxysql-task-sg"
-  description = "ProxySQL ECS task for MySQL network reachability checks"
-  vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
-
-  tags = {
-    Name = "${var.name_prefix}-proxysql-task-sg"
-  }
-}
-
-resource "aws_vpc_security_group_egress_rule" "proxysql_task_https" {
-  security_group_id = aws_security_group.proxysql_task.id
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = 443
-  to_port           = 443
-  ip_protocol       = "tcp"
-  description       = "Allow ECS Exec SSM message channels through the existing NAT route"
-}
-
-resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_migration_mysql" {
-  count = local.proxysql_primary_mysql_sg == "" ? 0 : 1
-
-  security_group_id            = aws_security_group.proxysql_task.id
-  referenced_security_group_id = local.proxysql_primary_mysql_sg
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow ProxySQL network checks and proxy traffic to the current Primary"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "migration_mysql_from_proxysql" {
-  count = local.proxysql_primary_mysql_sg == "" ? 0 : 1
-
-  security_group_id            = local.proxysql_primary_mysql_sg
-  referenced_security_group_id = aws_security_group.proxysql_task.id
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow the ProxySQL ECS task to reach the current Primary"
-}
-
-resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_private_replica_mysql" {
-  count = local.proxysql_private_replica_mysql_sg == "" ? 0 : 1
-
-  security_group_id            = aws_security_group.proxysql_task.id
-  referenced_security_group_id = local.proxysql_private_replica_mysql_sg
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow ProxySQL network checks and proxy traffic to the private GTID replica"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "private_replica_mysql_from_proxysql" {
-  count = local.proxysql_private_replica_mysql_sg == "" ? 0 : 1
-
-  security_group_id            = local.proxysql_private_replica_mysql_sg
-  referenced_security_group_id = aws_security_group.proxysql_task.id
-  from_port                    = var.v1_mysql_port
-  to_port                      = var.v1_mysql_port
-  ip_protocol                  = "tcp"
-  description                  = "Allow the ProxySQL ECS task to reach the private GTID replica"
-}
-
-resource "aws_ecs_task_definition" "proxysql" {
-  family                   = "${var.name_prefix}-proxysql"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["EC2"]
-  cpu                      = var.proxysql_task_cpu
-  memory                   = var.proxysql_task_memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.proxysql_task.arn
-
-  runtime_platform {
-    operating_system_family = "LINUX"
-    cpu_architecture        = "X86_64"
-  }
-
-  container_definitions = jsonencode([
+  proxysql_container_definitions = [
     {
       name       = "proxysql"
       image      = var.proxysql_image
@@ -364,5 +242,128 @@ resource "aws_ecs_task_definition" "proxysql" {
         }
       }
     },
-  ])
+  ]
+}
+
+resource "aws_cloudwatch_log_group" "proxysql" {
+  name              = "/ecs/${var.name_prefix}/proxysql"
+  retention_in_days = var.container_log_retention_days
+}
+
+# ECS task private IPs can change on replacement. Cloud Map keeps a stable
+# in-VPC DNS name and updates its A record as the service task is registered.
+resource "aws_service_discovery_private_dns_namespace" "proxysql" {
+  name        = var.proxysql_dns_namespace
+  description = "Private DNS namespace for the V2 migration rehearsal"
+  vpc         = data.terraform_remote_state.shared.outputs.vpc_id
+
+  tags = {
+    Name = "${var.name_prefix}-service-discovery"
+  }
+}
+
+resource "aws_iam_role" "proxysql_task" {
+  name               = "${var.name_prefix}-proxysql-task-role"
+  description        = "Task role for ECS Exec into the ProxySQL service task"
+  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
+}
+
+# ECS Exec opens its control/data channels through ssmmessages.
+resource "aws_iam_role_policy" "proxysql_task_exec" {
+  name = "${var.name_prefix}-proxysql-task-exec"
+  role = aws_iam_role.proxysql_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_security_group" "proxysql_task" {
+  name        = "${var.name_prefix}-proxysql-task-sg"
+  description = "ProxySQL ECS task for MySQL network reachability checks"
+  vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
+
+  tags = {
+    Name = "${var.name_prefix}-proxysql-task-sg"
+  }
+}
+
+resource "aws_vpc_security_group_egress_rule" "proxysql_task_https" {
+  security_group_id = aws_security_group.proxysql_task.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "Allow ECS Exec SSM message channels through the existing NAT route"
+}
+
+resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_migration_mysql" {
+  count = local.proxysql_primary_mysql_sg == "" ? 0 : 1
+
+  security_group_id            = aws_security_group.proxysql_task.id
+  referenced_security_group_id = local.proxysql_primary_mysql_sg
+  from_port                    = var.v1_mysql_port
+  to_port                      = var.v1_mysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow ProxySQL network checks and proxy traffic to the current Primary"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "migration_mysql_from_proxysql" {
+  count = local.proxysql_primary_mysql_sg == "" ? 0 : 1
+
+  security_group_id            = local.proxysql_primary_mysql_sg
+  referenced_security_group_id = aws_security_group.proxysql_task.id
+  from_port                    = var.v1_mysql_port
+  to_port                      = var.v1_mysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow the ProxySQL ECS task to reach the current Primary"
+}
+
+resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_private_replica_mysql" {
+  count = local.proxysql_private_replica_mysql_sg == "" ? 0 : 1
+
+  security_group_id            = aws_security_group.proxysql_task.id
+  referenced_security_group_id = local.proxysql_private_replica_mysql_sg
+  from_port                    = var.v1_mysql_port
+  to_port                      = var.v1_mysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow ProxySQL network checks and proxy traffic to the private GTID replica"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "private_replica_mysql_from_proxysql" {
+  count = local.proxysql_private_replica_mysql_sg == "" ? 0 : 1
+
+  security_group_id            = local.proxysql_private_replica_mysql_sg
+  referenced_security_group_id = aws_security_group.proxysql_task.id
+  from_port                    = var.v1_mysql_port
+  to_port                      = var.v1_mysql_port
+  ip_protocol                  = "tcp"
+  description                  = "Allow the ProxySQL ECS task to reach the private GTID replica"
+}
+
+resource "aws_ecs_task_definition" "proxysql" {
+  family                   = "${var.name_prefix}-proxysql"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["EC2"]
+  cpu                      = var.proxysql_task_cpu
+  memory                   = var.proxysql_task_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.proxysql_task.arn
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "X86_64"
+  }
+
+  container_definitions = jsonencode(local.proxysql_container_definitions)
 }
