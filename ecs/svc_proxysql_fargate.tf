@@ -73,7 +73,7 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
   # Reuse the existing containers, secrets and CloudWatch group. Set the
   # Fargate health check and monitor bootstrap command explicitly.
   container_definitions = jsonencode([
-    for container in jsondecode(aws_ecs_task_definition.proxysql.container_definitions) : merge(
+    for container in local.proxysql_container_definitions : merge(
       container,
       container.name == "proxysql" ? {
         healthCheck = {
