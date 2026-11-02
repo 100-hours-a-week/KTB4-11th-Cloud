@@ -334,7 +334,7 @@ prometheus.relabel "backend_metrics" {
   forward_to = [prometheus.remote_write.server.receiver]
   rule {
     source_labels = ["__name__"]
-    regex = "http_server_requests_seconds_(bucket|sum|count|max)|tomcat_threads_(busy|current)_threads|tomcat_threads_config_max_threads|hikaricp_connections(_(active|idle|pending|max|min|timeout_total|acquire_seconds_(sum|count|max)))?|up"
+    regex = "http_server_requests_seconds_(bucket|sum|count|max)|tomcat_threads_(busy|current)_threads|tomcat_threads_config_max_threads|hikaricp_connections(_(active|idle|pending|max|min|timeout_total|acquire_seconds_(bucket|sum|count|max)))?|jvm_memory_(used|max|committed)_bytes|jvm_gc_pause_seconds_(bucket|sum|count|max)|jvm_threads_(live|daemon|peak)_threads|jvm_threads_states_threads|up"
     action = "keep"
   }
   rule {

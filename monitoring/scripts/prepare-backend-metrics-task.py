@@ -48,6 +48,12 @@ def merge_task(document, image):
         'management.metrics.distribution.percentiles-histogram.http.server.requests': True,
         'management.metrics.distribution.minimum-expected-value.http.server.requests': '1ms',
         'management.metrics.distribution.maximum-expected-value.http.server.requests': '30s',
+        'management.metrics.distribution.percentiles-histogram.hikaricp.connections.acquire': True,
+        'management.metrics.distribution.minimum-expected-value.hikaricp.connections.acquire': '1ms',
+        'management.metrics.distribution.maximum-expected-value.hikaricp.connections.acquire': '30s',
+        'management.metrics.distribution.percentiles-histogram.jvm.gc.pause': True,
+        'management.metrics.distribution.minimum-expected-value.jvm.gc.pause': '1ms',
+        'management.metrics.distribution.maximum-expected-value.jvm.gc.pause': '30s',
     })
     environment['SPRING_APPLICATION_JSON'] = json.dumps(application, separators=(',', ':'))
     # The ordinary backend does not need the Alloy credential or the JWT signing key copied into env.
