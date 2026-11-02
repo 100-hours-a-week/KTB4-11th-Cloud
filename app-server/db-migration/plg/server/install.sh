@@ -4,15 +4,15 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLG_DIRECTORY="/opt/stockspoon-plg"
 AWS_REGION="${AWS_REGION:-ap-northeast-2}"
-V1_PRIVATE_IP="${1:-10.0.1.246}"
-MIGRATION_DB_PRIVATE_IP="${2:-10.0.1.217}"
+PRIMARY_DB_PRIVATE_IP="${1:-10.0.1.217}"
+PRIVATE_REPLICA_DB_PRIVATE_IP="${2:-10.0.11.144}"
 
 is_ipv4() {
   [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 }
 
-if ! is_ipv4 "$V1_PRIVATE_IP" || ! is_ipv4 "$MIGRATION_DB_PRIVATE_IP"; then
-  printf '%s\n' 'Usage: sudo bash install.sh [V1_PRIVATE_IP] [MIGRATION_DB_PRIVATE_IP]' >&2
+if ! is_ipv4 "$PRIMARY_DB_PRIVATE_IP" || ! is_ipv4 "$PRIVATE_REPLICA_DB_PRIVATE_IP"; then
+  printf '%s\n' 'Usage: sudo bash install.sh [PRIMARY_DB_PRIVATE_IP] [PRIVATE_REPLICA_DB_PRIVATE_IP]' >&2
   exit 2
 fi
 
@@ -30,8 +30,8 @@ fi
 GRAFANA_ADMIN_PASSWORD="$(cat "$PLG_DIRECTORY/grafana-admin-password")"
 cat > "$PLG_DIRECTORY/.env" <<EOF
 GRAFANA_ADMIN_PASSWORD=$GRAFANA_ADMIN_PASSWORD
-V1_PRIVATE_IP=$V1_PRIVATE_IP
-MIGRATION_DB_PRIVATE_IP=$MIGRATION_DB_PRIVATE_IP
+PRIMARY_DB_PRIVATE_IP=$PRIMARY_DB_PRIVATE_IP
+PRIVATE_REPLICA_DB_PRIVATE_IP=$PRIVATE_REPLICA_DB_PRIVATE_IP
 EOF
 chmod 0600 "$PLG_DIRECTORY/.env" "$PLG_DIRECTORY/grafana-admin-password"
 
@@ -78,8 +78,8 @@ chown root:65534 "$PLG_DIRECTORY/alertmanager/secrets" "$PLG_DIRECTORY/alertmana
 chmod 0440 "$PLG_DIRECTORY/alertmanager/secrets/discord-webhook"
 
 sed \
-  -e "s/__V1_PRIVATE_IP__/$V1_PRIVATE_IP/g" \
-  -e "s/__MIGRATION_DB_PRIVATE_IP__/$MIGRATION_DB_PRIVATE_IP/g" \
+  -e "s/__PRIMARY_DB_PRIVATE_IP__/$PRIMARY_DB_PRIVATE_IP/g" \
+  -e "s/__PRIVATE_REPLICA_DB_PRIVATE_IP__/$PRIVATE_REPLICA_DB_PRIVATE_IP/g" \
   "$SCRIPT_DIR/prometheus.yml.tmpl" > "$PLG_DIRECTORY/prometheus.yml"
 
 cd "$PLG_DIRECTORY"
@@ -96,7 +96,8 @@ if docker container inspect migration-pmm-server >/dev/null 2>&1 \
   docker stop migration-pmm-server >/dev/null
 fi
 
-if ! "${COMPOSE[@]}" up -d; then
+if ! "${COMPOSE[@]}" up -d --remove-orphans \
+  || ! "${COMPOSE[@]}" up -d --no-deps --force-recreate prometheus grafana; then
   if [ "$PMM_WAS_RUNNING" = true ]; then docker start migration-pmm-server >/dev/null; fi
   exit 1
 fi
@@ -120,4 +121,5 @@ if [ "$ready" != true ]; then
 fi
 
 printf 'PLG is ready. Grafana admin password: %s/grafana-admin-password\n' "$PLG_DIRECTORY"
-printf 'Prometheus targets use V1=%s and migration DB=%s.\n' "$V1_PRIVATE_IP" "$MIGRATION_DB_PRIVATE_IP"
+printf 'DB monitoring targets use Primary=%s and private replica=%s.\n' \
+  "$PRIMARY_DB_PRIVATE_IP" "$PRIVATE_REPLICA_DB_PRIVATE_IP"

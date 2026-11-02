@@ -10,11 +10,17 @@ case "$HOST_ROLE" in
   v1)
     MYSQL_CONTAINER="${3:-db}"
     ;;
+  primary)
+    MYSQL_CONTAINER="${3:-migration-mysql}"
+    ;;
+  private-replica)
+    MYSQL_CONTAINER="${3:-stockspoon-private-db-replica}"
+    ;;
   migration-db)
     MYSQL_CONTAINER="${3:-migration-mysql}"
     ;;
   *)
-    printf '%s\n' 'Usage: sudo bash install.sh <v1|migration-db> <LOKI_PRIVATE_IP> [MYSQL_CONTAINER]' >&2
+    printf '%s\n' 'Usage: sudo bash install.sh <v1|primary|private-replica|migration-db> <LOKI_PRIVATE_IP> [MYSQL_CONTAINER]' >&2
     exit 2
     ;;
 esac

@@ -23,7 +23,7 @@ data "aws_subnet" "db_private_replica_candidates" {
 
 resource "aws_security_group" "db_private_replica" {
   name        = "stockspoon-v1-db-private-replica-sg"
-  description = "Private MySQL replica; only ProxySQL and the source DB can reach MySQL"
+  description = "Private MySQL replica; allow only ProxySQL, the source DB, and monitoring"
   vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
 
   tags = merge(local.db_private_replica_tags, {
@@ -56,6 +56,60 @@ resource "aws_vpc_security_group_egress_rule" "db_private_replica_to_primary" {
   to_port                      = 3306
   ip_protocol                  = "tcp"
   description                  = "GTID auto-position replication from the current Primary"
+}
+
+resource "aws_vpc_security_group_egress_rule" "db_private_replica_to_loki" {
+  security_group_id            = aws_security_group.db_private_replica.id
+  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
+  from_port                    = 3100
+  to_port                      = 3100
+  ip_protocol                  = "tcp"
+  description                  = "Allow the private replica Alloy agent to push DB logs to Loki"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "db_private_replica_mysql_from_monitoring" {
+  security_group_id            = aws_security_group.db_private_replica.id
+  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
+  from_port                    = 3306
+  to_port                      = 3306
+  ip_protocol                  = "tcp"
+  description                  = "Read-only MySQL metrics collection from the monitoring host"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "db_private_replica_node_exporter_from_monitoring" {
+  security_group_id            = aws_security_group.db_private_replica.id
+  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
+  from_port                    = 9100
+  to_port                      = 9100
+  ip_protocol                  = "tcp"
+  description                  = "Prometheus node exporter scrape from the monitoring host"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "db_private_replica_loki_from_replica" {
+  security_group_id            = aws_security_group.db_migration_support["pmm"].id
+  referenced_security_group_id = aws_security_group.db_private_replica.id
+  from_port                    = 3100
+  to_port                      = 3100
+  ip_protocol                  = "tcp"
+  description                  = "Private replica Alloy log push to Loki"
+}
+
+resource "aws_vpc_security_group_egress_rule" "db_migration_pmm_to_private_replica_mysql" {
+  security_group_id            = aws_security_group.db_migration_support["pmm"].id
+  referenced_security_group_id = aws_security_group.db_private_replica.id
+  from_port                    = 3306
+  to_port                      = 3306
+  ip_protocol                  = "tcp"
+  description                  = "Prometheus MySQL scrape of the private GTID replica"
+}
+
+resource "aws_vpc_security_group_egress_rule" "db_migration_pmm_to_private_replica_node_exporter" {
+  security_group_id            = aws_security_group.db_migration_support["pmm"].id
+  referenced_security_group_id = aws_security_group.db_private_replica.id
+  from_port                    = 9100
+  to_port                      = 9100
+  ip_protocol                  = "tcp"
+  description                  = "Prometheus node exporter scrape of the private GTID replica"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "primary_mysql_from_private_replica" {

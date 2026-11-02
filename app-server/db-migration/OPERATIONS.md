@@ -9,6 +9,17 @@
 | 부하기 | i-0b766e6efa26389c9 | 10.0.1.116 | 13.209.83.189 | cloud-init 완료, k6 설치 |
 | PMM | i-00dce75378431daf7 | 10.0.1.85 | 3.35.13.60 | cloud-init 완료, PMM healthy, 로그인 화면 HTTP 200 |
 
+## 현재 DB 모니터링 대상 — 2026-11-02 변경 목표
+
+기존 V1 app-server의 MySQL 컨테이너는 더 이상 DB 대상이 아니다. 모니터링 호스트
+`i-00dce75378431daf7` (`10.0.1.85`, `3.35.13.60`)에서 현재 Primary
+`i-081a5f4798f592f49` (`10.0.1.217`)와 Private Replica
+`i-09169188e83886d23` (`10.0.11.144`)를 함께 수집한다. 두 DB의 MySQL 지표와 복제 알림,
+Replica 호스트 지표·컨테이너 로그를 수집하도록 변경한다. Terraform Apply와 모니터링 호스트 배포 전 상태다.
+V1 app-server EC2는 현재 stopped다.
+모니터링 호스트와 Replica는 같은 VPC라 DB 수집·로그 전송은 VPC 내부 경로를 사용하고 NAT를 거치지 않는다.
+NAT는 Replica의 패키지·컨테이너 이미지 다운로드와 SSM 외부 통신에 쓰인다. 설치 명령은 8-2, 8-3, 8-5를 따른다.
+
 점검은 읽기 전용으로 수행했다. PMM에 등록된 서비스는 자체 PostgreSQL이며,
 V1 MySQL과 이관 MySQL은 등록되지 않았다. 아래 설정·적재·복제 명령은 아직 실행하지 않았다.
 
@@ -391,12 +402,13 @@ AWS_PROFILE=stockspoon terraform -chdir=app-server apply db-migration-plg.tfplan
 scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/server ubuntu@<모니터링-공인-IP>:/tmp/
 ```
 
-모니터링 호스트에서 아래를 실행한다. 기본 private IP는 현재 확인된 V1 `10.0.1.246`,
-이관 DB `10.0.1.217`이다. 설치 과정은 SSM에서 기존 `pmm` 계정 비밀번호를 읽어
+Terraform으로 새 Replica SG 규칙을 적용하고 8-3의 DB agent를 설치한 뒤 모니터링 호스트에서 실행한다.
+현재 Primary는 `10.0.1.217`, Private Replica는
+`10.0.11.144`이다. 설치 과정은 SSM에서 기존 `pmm` 계정 비밀번호를 읽어
 mysqld exporter에 전달하며 비밀번호를 출력하지 않는다.
 
 ```bash
-sudo bash /tmp/server/install.sh 10.0.1.246 10.0.1.217
+sudo bash /tmp/server/install.sh 10.0.1.217 10.0.11.144
 sudo docker compose --env-file /opt/stockspoon-plg/.env \
   -f /opt/stockspoon-plg/compose.yaml ps
 ```
@@ -422,34 +434,30 @@ sudo docker compose --env-file /opt/stockspoon-plg/.env \
 sudo docker start migration-pmm-server
 ```
 
-### 8-3. V1·이관 DB 로그와 호스트 지표 연결
+### 8-3. Primary·Private Replica 로그와 호스트 지표 연결
 
 각 DB 호스트에 Alloy와 node exporter를 추가한다. 구성은 MySQL 데이터 볼륨을 자동 탐지해
 읽기 전용으로 마운트하고, Docker 컨테이너 stdout/stderr와 `general.log`, `slow.log`를 수집한다.
 Alloy의 Docker API 소켓 마운트는 호스트 Docker daemon에 대한 강한 권한을 준다.
 실행 전에 `agent/compose.yaml`과 `agent/config.alloy`를 검토한다.
 
-모니터링 호스트의 private IP는 Terraform output `db_migration_support_hosts`에서 확인한다.
-로컬에서 두 DB 호스트에 각각 agent 구성을 복사한다.
+모니터링 호스트 private IP는 `10.0.1.85`다. Primary에는 기존 agent가 설치되어 있다면
+역할 label을 `primary`로 갱신하고, Private Replica에는 SSM으로 agent를 설치한다.
+이 스크립트는 로컬의 agent 파일을 SSM Run Command로 전달하므로 Private IP에 SSH를 열지 않는다.
 
 ```bash
-scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/agent ubuntu@<V1-공인-IP>:/tmp/
-scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/agent ubuntu@<이관DB-공인-IP>:/tmp/
-```
+AWS_PROFILE=stockspoon AWS_REGION=ap-northeast-2 \
+  bash app-server/db-migration/plg/deploy_agent_via_ssm.sh \
+  i-081a5f4798f592f49 primary 10.0.1.85 migration-mysql
 
-각 호스트에서 실행한다. `<모니터링-private-IP>`는 위 output 값이다.
-
-```bash
-# V1 EC2
-sudo bash /tmp/agent/install.sh v1 <모니터링-private-IP> db
-
-# 이관 DB EC2
-sudo bash /tmp/agent/install.sh migration-db <모니터링-private-IP> migration-mysql
+AWS_PROFILE=stockspoon AWS_REGION=ap-northeast-2 \
+  bash app-server/db-migration/plg/deploy_agent_via_ssm.sh \
+  i-09169188e83886d23 private-replica 10.0.1.85 stockspoon-private-db-replica
 ```
 
 ### 8-4. 관측 시작과 Grafana 검색
 
-MySQL `general.log`는 SQL 접수 내용을 남긴다. 부하 실험의 짧은 구간에만 V1 관리자 세션에서
+MySQL `general.log`는 SQL 접수 내용을 남긴다. 부하 실험의 짧은 구간에만 현재 Primary 관리자 세션에서
 `SET GLOBAL log_output='FILE'`, `SET GLOBAL general_log_file='/var/lib/mysql/general.log'`,
 `SET GLOBAL general_log=ON`을 적용하고, 실험이 끝나면 `general_log=OFF`로 되돌린다.
 원래 설정을 먼저 기록한다. 상세 단계와 로그 보안 주의사항은 이 문서의 `4. MySQL 로그 설정`을 따른다.
@@ -464,24 +472,27 @@ sum(count_over_time({host="v1", job="mysql-general"} |~ "(?i)(INSERT|UPDATE|DELE
 ```
 
 ```promql
-mysql_up{job=~"mysql-(v1|migration)",db_node!=""}
+mysql_up{job=~"mysql-(primary|private-replica)",db_node!=""}
 mysql_slave_status_seconds_behind_source or mysql_slave_status_seconds_behind_master
 node_memory_MemAvailable_bytes
 ```
 
-### ROW 바이너리 로그 이벤트를 Loki로 보내기
+### 과거 이관 실험: ROW 바이너리 로그 이벤트를 Loki로 보내기
 
-Alloy는 바이너리 로그 파일을 직접 읽지 않는다. 이관 EC2 호스트에 설치된 `mysqlbinlog`로 V1의
+아래는 V1 app-server DB를 source로 사용하던 이관 실험의 기록이다. 현재 Primary·Private Replica의
+운영 지표 수집 및 알림 대상은 8-5를 따른다.
+
+Alloy는 바이너리 로그 파일을 직접 읽지 않는다. 당시 이관 EC2 호스트에 설치된 `mysqlbinlog`로 V1의
 원격 이벤트를 텍스트로 해독하고, Alloy가 읽는 파일에 기록한다. 이 방법은 V1의 `log_bin=ON`,
 `binlog_format=ROW` 설정을 사용하므로 MySQL 서버 설정을 추가로 바꾸지 않는다.
 
-먼저 로컬에서 갱신된 agent 구성을 이관 EC2로 복사한다.
+먼저 로컬에서 갱신된 agent 구성을 이관 EC2로 복사한다. 이 절차는 과거 topology 기준이다.
 
 ```bash
 scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/agent ubuntu@<이관DB-공인-IP>:/tmp/
 ```
 
-이관 EC2에서 Alloy 구성을 갱신한다. 기존 Loki 주소를 `.env`에서 읽어 사용한다.
+당시 이관 EC2에서 Alloy 구성을 갱신했다. 기존 Loki 주소를 `.env`에서 읽어 사용했다.
 
 ```bash
 LOKI_PRIVATE_IP=$(sudo sed -n 's#^LOKI_PUSH_URL=http://\([^:]*\):3100/loki/api/v1/push$#\1#p' \
@@ -531,19 +542,26 @@ General log에 SQL 값이 포함될 수 있고 DB I/O와 로그 저장량도 늘
 현재 로그 형식만으로 API `requestId`와 MySQL 세션을 직접 연결하지는 못한다.
 애플리케이션 밖에서 DB에 도착하지 않은 요청의 SQL 원문은 MySQL 로그에도 없다.
 
-### 8-5. 양쪽 MySQL 지표 수집 — 2026-10-24 적용
+### 8-5. Primary·Private Replica MySQL 지표 수집 — 2026-11-02 변경
 
-현재 PLG 모니터링 호스트의 Prometheus에 다음 두 DB를 등록했다. `db_node`는 서버 식별자이며
-switchover 이후에도 유지한다. 현재 쓰기 허용 여부는 `mysql_global_variables_read_only`로
-확인한다. 기존 `db_role=migration-replica` label은 이전 쿼리 호환성을 위해 남겨 두었으며,
-새 대시보드는 이 label을 역할 판단에 사용하지 않는다.
+Prometheus 설정은 중지된 V1 app-server를 감시 대상에서 제외하고 다음 두 DB를 대상으로 한다. `db_node`는
+서버 식별자이며 역할은 `mysql_global_variables_read_only`로 판단한다. 아래 값은 코드의
+목표 구성이다. Terraform Apply와 모니터링 호스트 재배포 후 수집 상태를 확인한다.
 
-| 노드 | Prometheus job | 현재 역할 | 확인 결과 |
+| 노드 | Prometheus job | 현재 역할 | 재배포 후 확인 |
 | --- | --- | --- | --- |
-| V1, `10.0.1.246:3306` | `mysql-v1` | Primary | `mysql_up=1`, `read_only=0` |
-| 이관 DB, `10.0.1.217:3306` | `mysql-migration` | Replica | `mysql_up=1`, `read_only=1`, I/O·SQL 스레드 1, native lag 0초 |
+| Primary, `10.0.1.217:3306` | `mysql-primary` | Primary | `mysql_up=1`, `read_only=0` |
+| Private Replica, `10.0.11.144:3306` | `mysql-private-replica` | Replica | `mysql_up=1`, `read_only=1`, 복제 I/O·SQL 스레드 1, native lag 확인 |
 
-적용 전 replica exporter는 HTTP 수집 자체는 성공했지만 DB 인증이 거절되어 `mysql_up=0`이었다.
+새 Replica SG는 모니터링 SG에서 MySQL `3306/tcp`와 node exporter `9100/tcp`를 받고,
+Replica Alloy는 모니터링 Loki `3100/tcp`로 로그를 보낸다. 이 규칙은 `app-server` Terraform
+root에서 관리한다. Apply 전 Plan에서 Replica EC2 교체·중지/시작이 없는지 확인한다.
+
+배포 순서는 `app-server` Terraform Apply → 8-3의 Primary/Replica agent 설치 → 8-2의 PLG 재설치다.
+Plan에서 EC2 교체·중지/시작이 없는지 확인한다. PLG 스크립트는 Prometheus와 Grafana를 재생성해
+새 scrape target, 알림 규칙, 대시보드를 읽는다. DB 컨테이너는 재시작하지 않는다.
+
+이전 2026-10-24 배포 기록: replica exporter는 HTTP 수집 자체는 성공했지만 DB 인증이 거절되어 `mysql_up=0`이었다.
 복제된 MySQL 계정이 Docker 네트워크에서만 접속하도록 제한되어 있어 모니터링 호스트의
 `10.0.1.85` 접속을 허용하지 못했다. Primary에 기존 모니터링 계정과 같은 인증정보를 사용하는
 `pmm@10.0.1.85` 계정을 만들고 정상 복제로 전달했다. 이 계정에는 TLS 연결, 최대 연결 3개,
@@ -561,7 +579,7 @@ Grafana가 이미 실행 중이면 관리자 인증으로 `POST /api/admin/provi
 Prometheus는 `promtool check config` 검증 후 `POST /-/reload`로 반영했다. 적용 전 설정은
 모니터링 호스트의 `/opt/stockspoon-plg/backups/mysql-monitoring-20261024T024111Z/`에 보관했다.
 
-검증 시 양쪽 `mysql_up`의 2분 최솟값이 모두 1이었고, Grafana를 통한 12개 패널의
+이전 topology 검증 당시 양쪽 `mysql_up`의 2분 최솟값이 모두 1이었고, Grafana를 통한 12개 패널의
 13개 쿼리가 모두 실제 데이터를 반환했다. 이 변경에는 heartbeat와 새 알림 규칙은 포함하지 않는다.
 
 ### 8-6. Grafana public IP HTTPS 접속 — 2026-10-26 적용
@@ -619,30 +637,30 @@ chronyc tracking   # Reference ID가 169.254.169.123, Leap status Normal
 
 **Heartbeat.** switchover 스크립트는 애플리케이션 스키마가 `stockspoon` 하나이고 InnoDB 기본
 테이블만 있어야 하므로, 별도 스키마 대신 `stockspoon.monitoring_heartbeat`
-(pt-heartbeat 형식, InnoDB)를 V1 Primary에 만들고 복제로 전달했다. 기존 앱 테이블 16개는 변경하지 않았다.
+(pt-heartbeat 형식, InnoDB)를 Primary에 만들고 복제로 전달했다. 기존 앱 테이블 16개는 변경하지 않았다.
 
 | 항목 | 값 |
 | --- | --- |
-| writer | 모니터링 호스트의 `migration-heartbeat-v1`, `migration-heartbeat-migration` (`percona/percona-toolkit:3.7.2`, 1초 간격, `--utc`) |
-| 계정 | `heartbeat@10.0.1.85`, `heartbeat@172.18.0.%`. TLS 필수, 최대 연결 2, 해당 테이블 `SELECT/INSERT/UPDATE/DELETE`와 `REPLICATION CLIENT`만 부여 |
+| writer | 모니터링 호스트의 `migration-heartbeat-primary`, `migration-heartbeat-private-replica` (`percona/percona-toolkit:3.7.2`, 1초 간격, `--utc`) |
+| 계정 | `heartbeat@10.0.1.85`. TLS 필수, 최대 연결 2, 해당 테이블 `SELECT/INSERT/UPDATE/DELETE`와 `REPLICATION CLIENT`만 부여 |
 | 비밀번호 | 모니터링 호스트 `/opt/stockspoon-plg/secrets/mysql-heartbeat-password` (root 전용) |
 | 수집 | mysqld exporter `--collect.heartbeat*`, 기록 규칙 `mysql:heartbeat_lag_seconds` |
 
-V1의 외부 3306 접속은 V1 호스트의 `v1-db-repl-proxy` 컨테이너(172.18.0.4)를 거쳐 들어오므로,
-기존 `pmm@172.18.0.%`와 같이 V1 경로용 계정을 따로 두었다. 두 writer 모두 `--check-read-only`로
-실행하므로 read-only 노드에는 쓰지 않는다. switchover 후에는 새 Primary 쪽 writer가 자동으로 기록한다.
+두 writer 모두 `--check-read-only`로 실행하므로 read-only 노드에는 쓰지 않는다. switchover 후에는
+새 Primary 쪽 writer가 자동으로 기록한다. 기존 V1 Docker 경로 전용 계정은 이번 구성에서 사용하지 않는다.
 heartbeat 계정에는 SUPER/CONNECTION_ADMIN이 없어 switchover가 `read_only=ON`으로 동결하는 순간
 기록도 멈추므로, 동결 후 체크섬 비교에 영향을 주지 않는다.
 
 지연 값은 대상 DB의 UTC 현재 시각에서 writer가 기록한 UTC 시각을 뺀 값이며, 가장 최근 행을 기준으로 한다.
 writer 주기 때문에 정상 상태에서도 0~1초 값이 나온다. `ts`는 모니터링 호스트 시계로 기록되므로
-위 시간 동기화가 이 측정의 전제다. 2026-10-26 적용 직후 측정값은 V1 1.0초, 이관 DB 0.8초였다.
+위 시간 동기화가 이 측정의 전제다.
 
 **ProxySQL.** Cloud Map `proxysql-fargate.stockspoon-v2.internal`의 A 레코드를 `dns_sd_configs`로
-수집해 Fargate task가 바뀌거나 늘어도 task별로 수집한다. 적용 시 대상은 `10.0.11.176:6070` 하나였고,
-hostgroup 10(writer) V1, hostgroup 20(reader) 이관 DB 모두 ONLINE이었다.
+수집해 Fargate task가 바뀌거나 늘어도 task별로 수집한다. ProxySQL은 hostgroup 10(writer)에 현재
+Primary `10.0.1.217`, hostgroup 20(reader)에 Private Replica `10.0.11.144`를 등록한다.
 
-**알림.** `prometheus-rules/db-alerts.yml`에 기록 규칙 1개와 알림 16개를 두었다. MySQL 수집 실패,
+**알림.** 변경 후 `prometheus-rules/db-alerts.yml`은 현재 Primary·Private Replica 대상으로
+기록 규칙 1개와 알림 16개를 평가한다. MySQL 수집 실패,
 쓰기 가능 노드 수가 1이 아님, 복제 스레드 중지, read-only인데 복제 채널 없음, heartbeat 지연
 10초/60초, Primary heartbeat 기록 중단, heartbeat 수집 실패, 연결 수 80% 초과, ProxySQL 수집
 실패·대상 없음·writer ONLINE 없음·backend 비정상·풀 획득 실패, DB 호스트 시간 비동기화와
