@@ -51,8 +51,8 @@ class AlertingTest(unittest.TestCase):
             for _ in range(2):
                 alerting.render(provisioning, URLS['prod'], URLS['dev-app'], URLS['dev-ai'], PROD_URLS, DEV_URLS)
                 rules = self.rules(provisioning)
-                self.assertEqual(len(rules), 46)
-                self.assertEqual(len({r['uid'] for r in rules}), 46)
+                self.assertEqual(len(rules), 42)
+                self.assertEqual(len({r['uid'] for r in rules}), 42)
                 for rule in rules:
                     self.assertFalse(rule['isPaused'])
                     self.assertEqual(rule['notification_settings']['receiver'], alerting.RECEIVERS[self.route(rule)])
@@ -187,16 +187,28 @@ class AlertingTest(unittest.TestCase):
                 self.assertIn(alerting.PROD_PARAMETERS[component], run.call_args.args[0])
                 self.assertIn('--with-decryption', run.call_args.args[0])
 
-    def test_backend_logs_notify_separately_in_the_same_be_channel(self):
+    def test_retired_collector_alerts_are_deleted_after_rendering(self):
+        with self.stack() as (_, provisioning):
+            alerting.render(provisioning, None)
+            document = json.loads((provisioning / 'prod-services-rules.json').read_text())
+            self.assertEqual(document['deleteRules'], [
+                {'orgId': 1, 'uid': 'stockspoon-prod-backend-collector-' + suffix}
+                for suffix in ['cpu', 'memory', 'tasks', 'logs']
+            ])
+            self.assertFalse(any(
+                rule.get('labels', {}).get('service_name') == 'backend-collector'
+                for group in document['groups'] for rule in group['rules']
+            ))
+
+    def test_backend_logs_notify_in_the_be_channel(self):
         with self.stack() as (_, provisioning):
             alerting.render(provisioning, None, production_webhooks={'be': PROD_URLS['be']})
             rules = [rule for rule in self.rules(provisioning)
                      if rule['labels'].get('component') == 'be'
                      and rule['labels']['environment'] == 'prod'
                      and rule['data'][0]['datasourceUid'] == 'loki']
-            self.assertEqual(len(rules), 2)
-            self.assertEqual({r['labels']['service_name'] for r in rules}, {'backend', 'backend-collector'})
-            self.assertEqual(len({r['title'] for r in rules}), 2)
+            self.assertEqual(len(rules), 1)
+            self.assertEqual({r['labels']['service_name'] for r in rules}, {'backend'})
             for rule in rules:
                 service = rule['labels']['service_name']
                 self.assertIn('service_name="' + service + '"', rule['data'][0]['model']['expr'])

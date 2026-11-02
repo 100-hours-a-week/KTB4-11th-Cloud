@@ -44,6 +44,9 @@ def snapshot(service="backend"):
 
 
 class TracingPreparationTest(unittest.TestCase):
+    def test_only_active_application_services_are_prepared(self):
+        self.assertEqual(prepare.SERVICES, {'backend': 'backend', 'market-http': 'market-http'})
+
     def test_keep_running_resources_roles_secrets_healthcheck_and_sidecars(self):
         source = snapshot()
         original = copy.deepcopy(source)
@@ -68,11 +71,6 @@ class TracingPreparationTest(unittest.TestCase):
         self.assertEqual(env["JAVA_TOOL_OPTIONS"], "-XX:MaxRAMPercentage=75 -Dexisting=true")
         self.assertNotIn("-javaagent", env["JAVA_TOOL_OPTIONS"])
 
-    def test_collector_has_a_distinct_service_name(self):
-        task = prepare.instrumented_task(snapshot("backend-collector"), "backend-collector", environment("backend-collector"), "public.ecr.aws/example/app:tempo-collector")
-        env = {item["name"]: item["value"] for item in task["containerDefinitions"][0]["environment"]}
-        self.assertEqual(env["OTEL_SERVICE_NAME"], "backend-collector")
-
     def test_reject_conflicting_java_agent_and_python_entrypoint(self):
         java = snapshot()
         java["taskDefinition"]["containerDefinitions"][0]["environment"][0]["value"] = "-javaagent:/existing.jar"
@@ -91,7 +89,7 @@ class TracingPreparationTest(unittest.TestCase):
                 prepare.running_image("public.ecr.aws/example/app:old-tag", digests)
 
     def test_reject_mismatched_service_and_non_trace_exporters(self):
-        for key, value in [("OTEL_SERVICE_NAME", "backend-collector"), ("OTEL_METRICS_EXPORTER", "otlp"), ("OTEL_LOGS_EXPORTER", "otlp")]:
+        for key, value in [("OTEL_SERVICE_NAME", "other-service"), ("OTEL_METRICS_EXPORTER", "otlp"), ("OTEL_LOGS_EXPORTER", "otlp")]:
             env = environment("backend")
             env[key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
