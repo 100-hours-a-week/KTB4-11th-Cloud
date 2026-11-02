@@ -92,7 +92,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by(host_role,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",cluster=\"stockspoon-v2-dev\",service_name=\"backend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+          "expr": "sum by(host_role,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",cluster=\"stockspoon-v2-dev\",service_name=\"backend\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
           "queryType": "range",
           "legendFormat": "{{host_role}} / {{service_name}}"
         }
@@ -150,7 +150,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{environment=\"dev\",host_role=\"app\",cluster=\"stockspoon-v2-dev\",service_name=\"backend\"} |~ \"(?i)error|exception|fatal\"",
+          "expr": "{environment=\"dev\",host_role=\"app\",cluster=\"stockspoon-v2-dev\",service_name=\"backend\"} |~ \"(?i)error|exception\\\\b|fatal\"",
           "queryType": "range",
           "legendFormat": "{{host_role}} / {{service_name}}"
         }
