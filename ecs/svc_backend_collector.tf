@@ -1,7 +1,7 @@
 variable "backend_collector_enabled" {
   description = "Run one private REST collector using the existing BE application"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "backend_collector_image_tag" {
