@@ -147,6 +147,8 @@ resource "aws_iam_role_policy" "db_private_replica_parameters" {
       Resource = [
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.db_private_replica_root_password_parameter}",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.db_private_replica_repl_password_parameter}",
+        "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v1/db-migration/mysql-monitoring",
+        "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v1/db-migration/mysql-heartbeat",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD",
       ]
     }]

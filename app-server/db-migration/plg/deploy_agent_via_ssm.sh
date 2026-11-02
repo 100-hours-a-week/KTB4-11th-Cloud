@@ -47,9 +47,16 @@ commands = [
     "set -Eeuo pipefail",
     "install -d -m 0700 /tmp/stockspoon-plg-agent",
     f"printf '%s' {shlex.quote(archive)} | base64 -d | tar -xz -C /tmp/stockspoon-plg-agent",
-    "bash /tmp/stockspoon-plg-agent/install.sh "
-    f"{shlex.quote(host_role)} {shlex.quote(loki_ip)} {shlex.quote(mysql_container)}",
 ]
+if host_role == "private-replica":
+    commands.append(
+        "bash /tmp/stockspoon-plg-agent/configure_replica_monitoring_user.sh "
+        f"{shlex.quote(loki_ip)} {shlex.quote(mysql_container)}"
+    )
+commands.append(
+    "bash /tmp/stockspoon-plg-agent/install.sh "
+    f"{shlex.quote(host_role)} {shlex.quote(loki_ip)} {shlex.quote(mysql_container)}"
+)
 request = {
     "DocumentName": "AWS-RunShellScript",
     "InstanceIds": [os.environ["INSTANCE_ID"]],

@@ -55,8 +55,19 @@ chmod 0440 "$PLG_DIRECTORY/mysqld-exporter/.my.cnf"
 # The heartbeat MySQL accounts are created on the primary with this password
 # (OPERATIONS.md 8-7). A new password here requires ALTER USER on the primary.
 if [ ! -s "$PLG_DIRECTORY/secrets/mysql-heartbeat-password" ]; then
-  (umask 077; openssl rand -hex 24 > "$PLG_DIRECTORY/secrets/mysql-heartbeat-password")
+  aws ssm get-parameter --region "$AWS_REGION" \
+    --name /stockspoon/v1/db-migration/mysql-heartbeat --with-decryption \
+    --query Parameter.Value --output text \
+    > "$PLG_DIRECTORY/secrets/mysql-heartbeat-password" || {
+      printf '%s\n' 'Heartbeat password is missing locally and in SSM; recover the existing Primary credential before deploying.' >&2
+      exit 1
+    }
 fi
+chmod 0600 "$PLG_DIRECTORY/secrets/mysql-heartbeat-password"
+aws ssm put-parameter --region "$AWS_REGION" \
+  --name /stockspoon/v1/db-migration/mysql-heartbeat \
+  --type SecureString --value "file://$PLG_DIRECTORY/secrets/mysql-heartbeat-password" \
+  --overwrite --query Version --output text >/dev/null
 (umask 077; printf '[client]\nuser = heartbeat\npassword = %s\n' \
   "$(cat "$PLG_DIRECTORY/secrets/mysql-heartbeat-password")" > "$PLG_DIRECTORY/heartbeat/.my.cnf")
 chown root:root "$PLG_DIRECTORY/heartbeat/.my.cnf"

@@ -402,10 +402,24 @@ AWS_PROFILE=stockspoon terraform -chdir=app-server apply db-migration-plg.tfplan
 scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/server ubuntu@<모니터링-공인-IP>:/tmp/
 ```
 
-Terraform으로 새 Replica SG 규칙을 적용하고 8-3의 DB agent를 설치한 뒤 모니터링 호스트에서 실행한다.
+Terraform으로 새 Replica SG와 IAM 규칙을 적용한 뒤 먼저 heartbeat 비밀번호를 SSM에 동기화하고,
+8-3의 DB agent를 설치한 다음 모니터링 호스트에서 실행한다.
 현재 Primary는 `10.0.1.217`, Private Replica는
 `10.0.11.144`이다. 설치 과정은 SSM에서 기존 `pmm` 계정 비밀번호를 읽어
-mysqld exporter에 전달하며 비밀번호를 출력하지 않는다.
+mysqld exporter에 전달하며 비밀번호를 출력하지 않는다. 기존 heartbeat 비밀번호도
+모니터링 호스트의 root 전용 파일에서 SSM SecureString으로 동기화한다. 복제본 role에는
+두 SecureString의 `GetParameter`만 추가하며 secret 값은 명령 인자나 로그에 넣지 않는다.
+
+PMM 호스트 Session Manager에서 아래 명령을 먼저 실행해 기존 heartbeat 비밀번호를 SSM에
+저장한다. 파일 내용은 출력하지 않는다.
+
+```bash
+sudo aws ssm put-parameter --region ap-northeast-2 \
+  --name /stockspoon/v1/db-migration/mysql-heartbeat \
+  --type SecureString \
+  --value file:///opt/stockspoon-plg/secrets/mysql-heartbeat-password \
+  --overwrite --query Version --output text
+```
 
 ```bash
 sudo bash /tmp/server/install.sh 10.0.1.217 10.0.11.144
@@ -444,6 +458,11 @@ Alloy의 Docker API 소켓 마운트는 호스트 Docker daemon에 대한 강한
 모니터링 호스트 private IP는 `10.0.1.85`다. Primary에는 기존 agent가 설치되어 있다면
 역할 label을 `primary`로 갱신하고, Private Replica에는 SSM으로 agent를 설치한다.
 이 스크립트는 로컬의 agent 파일을 SSM Run Command로 전달하므로 Private IP에 SSH를 열지 않는다.
+Private Replica에서는 agent 설치 전에 SSM SecureString을 가져와 `pmm`과 `heartbeat` 계정을
+`10.0.1.85`에서만 접속 가능하도록 준비한다. 복제 baseline은 application schema만 가져오고
+`mysql` 시스템 계정은 옮기지 않으므로 두 계정은 replica에 별도로 만든다. 계정 변경은
+replica의 binlog에 기록하지 않고 작업 후 `read_only`와 `super_read_only`를 다시 켠다.
+`stockspoon.monitoring_heartbeat`가 복제되어 있어야 하므로 replication catch-up 후 실행한다.
 
 ```bash
 AWS_PROFILE=stockspoon AWS_REGION=ap-northeast-2 \
@@ -557,7 +576,12 @@ Prometheus 설정은 중지된 V1 app-server를 감시 대상에서 제외하고
 Replica Alloy는 모니터링 Loki `3100/tcp`로 로그를 보낸다. 이 규칙은 `app-server` Terraform
 root에서 관리한다. Apply 전 Plan에서 Replica EC2 교체·중지/시작이 없는지 확인한다.
 
-배포 순서는 `app-server` Terraform Apply → 8-3의 Primary/Replica agent 설치 → 8-2의 PLG 재설치다.
+이 경로는 Prometheus, exporter, Alloy의 지표·로그 수집 전용이다. Backend와 Primary/Private Replica의
+애플리케이션 DB 접속 및 hostgroup 등록은 기존 Fargate ProxySQL 구성을 그대로 사용한다. Fargate
+ProxySQL의 Cloud Map scrape 설정도 유지한다.
+
+배포 순서는 `app-server` Terraform Apply → heartbeat secret SSM 동기화 → 8-3의 Primary/Replica
+agent 설치 → 8-2의 PLG 재설치다.
 Plan에서 EC2 교체·중지/시작이 없는지 확인한다. PLG 스크립트는 Prometheus와 Grafana를 재생성해
 새 scrape target, 알림 규칙, 대시보드를 읽는다. DB 컨테이너는 재시작하지 않는다.
 
