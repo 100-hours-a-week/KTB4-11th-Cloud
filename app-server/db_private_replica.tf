@@ -199,6 +199,7 @@ resource "aws_instance" "db_private_replica" {
     docker_compose_version  = var.docker_compose_version
     mysql_compose           = file("${path.module}/db-private-replica/mysql-compose.yaml")
     root_password_parameter = local.db_private_replica_root_password_parameter
+    chrony_config           = file("${path.module}/db-migration/chrony/10-stockspoon-aws-time-sync.conf")
   })
 
   root_block_device {

@@ -8,10 +8,19 @@ MYSQL_DIRECTORY="/opt/stockspoon-db-private-replica"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -o Acquire::Retries=3
-apt-get install -y awscli ca-certificates curl docker.io gzip jq netcat-openbsd openssl
+apt-get install -y awscli ca-certificates chrony curl docker.io gzip jq netcat-openbsd openssl
 systemctl enable --now docker
 usermod -aG docker ubuntu
 timedatectl set-timezone Asia/Seoul
+
+CHRONY_CONFIG_PATH="/etc/chrony/conf.d/10-stockspoon-aws-time-sync.conf"
+install -d -m 0755 "$(dirname "$CHRONY_CONFIG_PATH")"
+cat > "$CHRONY_CONFIG_PATH" <<'CHRONY'
+${chrony_config}
+CHRONY
+chmod 0644 "$CHRONY_CONFIG_PATH"
+systemctl enable chrony
+systemctl restart chrony
 
 install -d -m 0755 /usr/local/lib/docker/cli-plugins
 curl --fail --silent --show-error --location --retry 3 \
