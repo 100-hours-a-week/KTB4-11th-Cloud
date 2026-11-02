@@ -40,8 +40,8 @@ class EnvironmentDashboardTest(unittest.TestCase):
         dashboards = [json.loads(p.read_text()) for p in (ROOT / 'config/grafana/dashboards').rglob('*.json')]
         uids = [d['uid'] for d in dashboards]
         self.assertEqual(len(set(uids)), len(uids))
-        self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb', 'stockspoon-frontend-edge'} <= set(uids))
-        self.assertEqual(len(dashboards), 12)
+        self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb', 'stockspoon-frontend-edge', 'stockspoon-http-flood'} <= set(uids))
+        self.assertEqual(len(dashboards), 13)
 
     def test_dedicated_development_dashboards_cannot_include_other_services(self):
         for service in ['frontend', 'backend']:
