@@ -43,11 +43,17 @@ locals {
     var.telemetry_backend_prometheus_enabled ? [{
       name = "SPRING_APPLICATION_JSON"
       value = jsonencode({
-        "management.endpoints.web.exposure.include"                                   = "health,metrics,prometheus"
-        "server.tomcat.mbeanregistry.enabled"                                         = true
-        "management.metrics.distribution.percentiles-histogram.http.server.requests"  = true
-        "management.metrics.distribution.minimum-expected-value.http.server.requests" = "1ms"
-        "management.metrics.distribution.maximum-expected-value.http.server.requests" = "30s"
+        "management.endpoints.web.exposure.include"                                           = "health,metrics,prometheus"
+        "server.tomcat.mbeanregistry.enabled"                                                 = true
+        "management.metrics.distribution.percentiles-histogram.http.server.requests"          = true
+        "management.metrics.distribution.minimum-expected-value.http.server.requests"         = "1ms"
+        "management.metrics.distribution.maximum-expected-value.http.server.requests"         = "30s"
+        "management.metrics.distribution.percentiles-histogram.hikaricp.connections.acquire"  = true
+        "management.metrics.distribution.minimum-expected-value.hikaricp.connections.acquire" = "1ms"
+        "management.metrics.distribution.maximum-expected-value.hikaricp.connections.acquire" = "30s"
+        "management.metrics.distribution.percentiles-histogram.jvm.gc.pause"                  = true
+        "management.metrics.distribution.minimum-expected-value.jvm.gc.pause"                 = "1ms"
+        "management.metrics.distribution.maximum-expected-value.jvm.gc.pause"                 = "30s"
       })
     }] : [],
     var.plg_tempo_enabled ? [{ name = "OTEL_SERVICE_NAME", value = "backend" }] : [],
