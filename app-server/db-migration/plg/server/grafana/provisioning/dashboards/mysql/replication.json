@@ -37,9 +37,9 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values(mysql_up{job=~\"mysql-(v1|migration)\"}, db_node)",
+        "definition": "label_values(mysql_up{job=~\"mysql-(primary|private-replica)\"}, db_node)",
         "query": {
-          "query": "label_values(mysql_up{job=~\"mysql-(v1|migration)\"}, db_node)",
+          "query": "label_values(mysql_up{job=~\"mysql-(primary|private-replica)\"}, db_node)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -82,7 +82,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_up{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_up{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -159,7 +159,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_global_variables_read_only{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_global_variables_read_only{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -232,7 +232,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_global_status_threads_connected{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_global_status_threads_connected{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -293,7 +293,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_global_status_threads_running{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_global_status_threads_running{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -354,7 +354,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_slave_status_replica_io_running{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"} or mysql_slave_status_slave_io_running{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_slave_status_replica_io_running{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"} or mysql_slave_status_slave_io_running{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -431,7 +431,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_slave_status_replica_sql_running{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"} or mysql_slave_status_slave_sql_running{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_slave_status_replica_sql_running{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"} or mysql_slave_status_slave_sql_running{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -508,7 +508,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_slave_status_seconds_behind_source{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"} or mysql_slave_status_seconds_behind_master{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_slave_status_seconds_behind_source{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"} or mysql_slave_status_seconds_behind_master{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -577,7 +577,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_slave_status_last_io_errno{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_slave_status_last_io_errno{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}} I/O",
           "refId": "A",
           "range": true
@@ -587,7 +587,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_slave_status_last_sql_errno{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_slave_status_last_sql_errno{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}} SQL",
           "refId": "B",
           "range": true
@@ -652,7 +652,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(mysql_global_status_queries{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}[1m])",
+          "expr": "rate(mysql_global_status_queries{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}[1m])",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -714,7 +714,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_global_status_threads_connected{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_global_status_threads_connected{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -776,7 +776,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(mysql_global_status_slow_queries{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}[5m])",
+          "expr": "rate(mysql_global_status_slow_queries{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}[5m])",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -838,7 +838,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(mysql_global_status_innodb_buffer_pool_reads{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}[5m]) / clamp_min(rate(mysql_global_status_innodb_buffer_pool_read_requests{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}[5m]), 1)",
+          "expr": "rate(mysql_global_status_innodb_buffer_pool_reads{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}[5m]) / clamp_min(rate(mysql_global_status_innodb_buffer_pool_read_requests{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}[5m]), 1)",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "range": true
@@ -913,7 +913,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql:heartbeat_lag_seconds{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql:heartbeat_lag_seconds{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}}",
           "refId": "A",
           "instant": true
@@ -982,7 +982,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql:heartbeat_lag_seconds{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql:heartbeat_lag_seconds{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}} heartbeat",
           "refId": "A",
           "range": true
@@ -992,7 +992,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "mysql_slave_status_seconds_behind_source{job=~\"mysql-(v1|migration)\",db_node=~\"$node\",db_node!=\"\"}",
+          "expr": "mysql_slave_status_seconds_behind_source{job=~\"mysql-(primary|private-replica)\",db_node=~\"$node\",db_node!=\"\"}",
           "legendFormat": "{{db_node}} native",
           "refId": "B",
           "range": true

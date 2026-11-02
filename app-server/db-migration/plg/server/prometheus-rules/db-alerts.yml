@@ -10,14 +10,14 @@ groups:
       - record: mysql:heartbeat_lag_seconds
         expr: |
           min by (job, instance, db_node) (
-            mysql_heartbeat_now_timestamp_seconds{job=~"mysql-(v1|migration)"}
-            - mysql_heartbeat_stored_timestamp_seconds{job=~"mysql-(v1|migration)"}
+            mysql_heartbeat_now_timestamp_seconds{job=~"mysql-(primary|private-replica)"}
+            - mysql_heartbeat_stored_timestamp_seconds{job=~"mysql-(primary|private-replica)"}
           )
 
   - name: stockspoon-mysql
     rules:
       - alert: MySQLDown
-        expr: mysql_up{job=~"mysql-(v1|migration)"} == 0
+        expr: mysql_up{job=~"mysql-(primary|private-replica)"} == 0
         for: 1m
         labels:
           severity: critical
@@ -26,7 +26,7 @@ groups:
           description: "exporter가 {{ $labels.db_node }}({{ $labels.instance }})에 1분 이상 접속하지 못했다."
 
       - alert: MySQLWritableNodeCountNotOne
-        expr: (count(mysql_global_variables_read_only{job=~"mysql-(v1|migration)"} == 0) or vector(0)) != 1
+        expr: (count(mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == 0) or vector(0)) != 1
         for: 1m
         labels:
           severity: critical
@@ -36,8 +36,8 @@ groups:
 
       - alert: MySQLReplicationThreadStopped
         expr: |
-          mysql_slave_status_replica_io_running{job=~"mysql-(v1|migration)"} == 0
-          or mysql_slave_status_replica_sql_running{job=~"mysql-(v1|migration)"} == 0
+          mysql_slave_status_replica_io_running{job=~"mysql-(primary|private-replica)"} == 0
+          or mysql_slave_status_replica_sql_running{job=~"mysql-(primary|private-replica)"} == 0
         for: 1m
         labels:
           severity: critical
@@ -47,8 +47,8 @@ groups:
 
       - alert: MySQLReadOnlyNodeWithoutReplication
         expr: |
-          mysql_global_variables_read_only{job=~"mysql-(v1|migration)"} == 1
-          unless on (job, instance) mysql_slave_status_replica_sql_running{job=~"mysql-(v1|migration)"}
+          mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == 1
+          unless on (job, instance) mysql_slave_status_replica_sql_running{job=~"mysql-(primary|private-replica)"}
         for: 5m
         labels:
           severity: warning
@@ -87,10 +87,10 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.db_node }}(Primary) heartbeat 기록 중단"
-          description: "Primary 자신의 heartbeat가 30초 이상 갱신되지 않았다. migration-heartbeat-* 컨테이너와 heartbeat 계정을 확인한다. 이 동안 replica 지연 값은 신뢰할 수 없다."
+          description: "Primary 자신의 heartbeat가 30초 이상 갱신되지 않았다. migration-heartbeat-primary 컨테이너와 heartbeat 계정을 확인한다. 이 동안 replica 지연 값은 신뢰할 수 없다."
 
       - alert: MySQLHeartbeatCollectorFailing
-        expr: mysql_exporter_collector_success{job=~"mysql-(v1|migration)",collector="collect.heartbeat"} == 0
+        expr: mysql_exporter_collector_success{job=~"mysql-(primary|private-replica)",collector="collect.heartbeat"} == 0
         for: 2m
         labels:
           severity: warning
@@ -100,8 +100,8 @@ groups:
 
       - alert: MySQLConnectionsHigh
         expr: |
-          mysql_global_status_threads_connected{job=~"mysql-(v1|migration)"}
-          / mysql_global_variables_max_connections{job=~"mysql-(v1|migration)"} > 0.8
+          mysql_global_status_threads_connected{job=~"mysql-(primary|private-replica)"}
+          / mysql_global_variables_max_connections{job=~"mysql-(primary|private-replica)"} > 0.8
         for: 5m
         labels:
           severity: warning
