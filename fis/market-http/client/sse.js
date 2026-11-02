@@ -81,6 +81,11 @@ export default function () {
     } catch (_) { emit('initial_rest_error', {status: null}); }
     if (!restReady) { retry(); return; }
   }
+  const sessionStarted = Date.now();
+  let headersAt = null;
+  let connectedAt = null;
+  let sessionPayloads = 0;
+  const codePayloads = {};
   let connected = false;
   let errorReported = false;
   const seen = new Set();
@@ -98,7 +103,7 @@ export default function () {
     const response = sse.open(`${plan.base_url}/${cfg.stream}/stream?codes=${query}`,
       {method: 'GET', timeout: `${plan.budget_seconds + 30}s`,
         headers: {Accept: 'text/event-stream', 'Cache-Control': 'no-cache'}, tags: {name: `sse-${cfg.stream}`}}, client => {
-        client.on('open', () => emit('headers'));
+        client.on('open', () => { headersAt = Date.now(); emit('headers'); });
         client.on('event', event => {
           const now = Date.now();
           let payload = null;
@@ -115,6 +120,7 @@ export default function () {
           frames += 1;
           if (!connected) {
             connected = true;
+            connectedAt = now;
             everConnected = true;
             emit('connected', {post_initial_updates: updates, last_update_ms: lastUpdate});
             if (outage && !outage.connected) {
@@ -128,7 +134,14 @@ export default function () {
             emit('recovery_first_payload', {outage_id: outage.id, elapsed_ms: now - outage.at});
           }
           if (payload && quoteState) {
-            try { quoteState.accept(payload, now); }
+            sessionPayloads++;
+            codePayloads[payload.code] = (codePayloads[payload.code] || 0) + 1;
+            try { quoteState.accept(payload, now, {
+              attempt, session_started_ms: sessionStarted, session_headers_ms: headersAt,
+              session_connected_ms: connectedAt, session_payload_index: sessionPayloads,
+              code_payload_index: codePayloads[payload.code], event_name: String(event.name || ''),
+              event_id: event.id == null ? undefined : String(event.id).slice(0, 128),
+            }); }
             catch (error) { emit('quote_measurement_error', {detail: String(error)}); client.close(); return; }
           }
           if (payload) {
