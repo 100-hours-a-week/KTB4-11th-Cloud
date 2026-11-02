@@ -44,8 +44,8 @@ resource "aws_iam_role_policy" "db_migration_monitoring_credentials" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["ssm:GetParameter", "ssm:PutParameter"]
+      Effect = "Allow"
+      Action = ["ssm:GetParameter", "ssm:PutParameter"]
       Resource = [
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:parameter/stockspoon/v1/db-migration/mysql-monitoring",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.monitoring.account_id}:parameter/stockspoon/v1/db-migration/mysql-heartbeat",
