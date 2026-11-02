@@ -73,6 +73,16 @@ data "aws_iam_policy_document" "terraform_ci_write_application" {
     resources = [var.resource_arns.backend_datasource_url_parameter]
   }
 
+  dynamic "statement" {
+    for_each = var.resource_arns.backend_collector_url_parameter == null ? [] : [var.resource_arns.backend_collector_url_parameter]
+    content {
+      sid       = "DeleteBackendCollectorUrl"
+      effect    = "Allow"
+      actions   = ["ssm:DeleteParameter"]
+      resources = [statement.value]
+    }
+  }
+
   statement {
     sid    = "ManageRepositorySecrets"
     effect = "Allow"

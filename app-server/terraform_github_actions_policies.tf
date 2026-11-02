@@ -530,6 +530,7 @@ module "terraform_ci_policies" {
   resource_arns = {
     backend_rollback_parameter       = local.backend_rollback_parameter_arn
     backend_datasource_url_parameter = local.backend_datasource_url_parameter_arn
+    backend_collector_url_parameter  = "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/v2/prod/backend/KIWOOM_COLLECTOR_URL"
     alb_logs                         = local.alb_access_log_bucket_arn
     stock_logos                      = local.stock_logo_bucket_arn
     frontend_assets                  = local.frontend_assets_bucket_arn

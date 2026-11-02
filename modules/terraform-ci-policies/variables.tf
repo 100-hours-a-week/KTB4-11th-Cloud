@@ -3,6 +3,7 @@ variable "resource_arns" {
   type = object({
     backend_rollback_parameter       = string
     backend_datasource_url_parameter = string
+    backend_collector_url_parameter  = optional(string)
     alb_logs                         = string
     stock_logos                      = string
     frontend_assets                  = string
