@@ -23,7 +23,7 @@ data "aws_subnet" "db_private_replica_candidates" {
 
 resource "aws_security_group" "db_private_replica" {
   name        = "stockspoon-v1-db-private-replica-sg"
-  description = "Private MySQL replica; allow only ProxySQL, the source DB, and monitoring"
+  description = "Private MySQL replica; only ProxySQL and the source DB can reach MySQL"
   vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
 
   tags = merge(local.db_private_replica_tags, {
