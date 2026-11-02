@@ -18,12 +18,11 @@ discovery.relabel "apps" {
   }
   rule {
     source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_container_name"]
-    regex = "backend|backend-collector|market-http|frontend"
+    regex = "backend|market-http|frontend"
     action = "keep"
   }
   rule {
-    // backend-collector also calls its container "backend"; derive the
-    // service from the task family to keep its logs separate from REST.
+    // Derive the service label from the ECS task family.
     source_labels = ["__meta_docker_container_label_com_amazonaws_ecs_task_definition_family"]
     regex = sys.env("TASK_FAMILY_REGEX")
     replacement = "$1"
@@ -101,7 +100,7 @@ prometheus.relabel "task_resources" {
   }
   rule {
     source_labels = ["container_label_com_amazonaws_ecs_container_name"]
-    regex = "backend|backend-collector|frontend|market-http"
+    regex = "backend|frontend|market-http"
     action = "keep"
   }
   rule {

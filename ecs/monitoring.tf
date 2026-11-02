@@ -35,8 +35,6 @@ locals {
     market_http = aws_security_group.market_http_task.id
     }, var.frontend_enabled ? {
     frontend = aws_security_group.frontend_task[0].id
-    } : {}, var.backend_collector_enabled ? {
-    backend_collector = aws_security_group.backend_collector[0].id
   } : {}) : {}
 }
 
@@ -152,7 +150,7 @@ resource "aws_ecs_task_definition" "telemetry_alloy" {
       { name = "MARKET_HTTP_SERVICE", value = "${var.name_prefix}-market-http" },
       { name = "SSE_PROMETHEUS_ENABLED", value = tostring(var.telemetry_sse_prometheus_enabled) },
       { name = "DEPLOYMENT_ENVIRONMENT", value = "prod" },
-      { name = "TASK_FAMILY_REGEX", value = "${var.name_prefix}-(backend|backend-collector|market-http|frontend)" },
+      { name = "TASK_FAMILY_REGEX", value = "${var.name_prefix}-(backend|market-http|frontend)" },
       { name = "LOKI_PUSH_URL", value = local.telemetry_server.loki_push_url },
       { name = "PROMETHEUS_WRITE_URL", value = local.telemetry_server.prometheus_write_url },
     ]
