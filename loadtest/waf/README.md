@@ -63,6 +63,20 @@ export NORMAL_ACCOUNT_ID='<테스트 계좌 ID>'
 
 `smoke`와 `normal`은 정상 시나리오만 실행하고 `flood`는 별도 실행합니다. H3를 확인하려면 서로 다른 egress IP를 가진 두 테스트 발생기에서 동시에 실행해야 합니다. 하나의 호스트에서 터미널만 두 개 띄우면 출발지 IP가 같으므로 H3가 되지 않습니다.
 
+## Flood 모니터링 대시보드
+
+`monitoring/config/grafana/dashboards/prod/http-flood.json`은 다음 신호를 한 화면에서 비교합니다.
+
+- WAF rate rule의 `CountedRequests`와 `BlockedRequests`
+- CloudFront 전체 요청·오류율, V2 Backend Target Group의 요청·오류·응답시간
+- Spring API route별 요청량·p95·앱 429/5xx
+- Tomcat 스레드, Hikari 연결 풀, ECS Task CPU·메모리
+- Loki의 Spring 요청 감사 로그에서 앱 429/5xx와 1초 이상 지연 요청
+
+`CountedRequests`는 전체 API 요청 수가 아니라 rate rule에 매칭된 요청 수입니다. WAF 지표는 약 1분 단위로 보고되므로 k6 실행 시각을 기록하고 같은 시간 범위로 비교합니다.
+
+요청별 출발지 IP와 URI가 필요하면 CloudWatch Logs의 `aws-waf-logs-stockspoon-api-rate-limit` 로그 그룹을 `us-east-1`에서 확인합니다. 현재 Grafana IAM 권한은 ECS 성능 로그 그룹만 Logs Insights 조회를 허용하므로, WAF 상세 로그는 AWS 콘솔에서 조회합니다. Grafana 대시보드는 저장소에서 파일로 관리되며, 이 파일을 실제 모니터링 서버에 배포해야 화면에 나타납니다.
+
 ## 해석 범위
 
 이 실험은 단일 viewer IP 기준 `/api/` rate rule을 확인합니다. 여러 IP에 분산된 요청이나 SSE 장기 연결 한도는 이 스크립트의 검증 범위가 아닙니다. AWS WAF 적용, CloudFront 배포, 실제 부하 실행은 이 문서 작성 과정에서 수행하지 않았습니다.

@@ -1,0 +1,862 @@
+{
+  "uid": "stockspoon-http-flood",
+  "title": "Stockspoon 운영 HTTP API Flooding",
+  "description": "CloudFront WAF 감지·차단부터 ALB, Spring API, ECS 포화 징후까지 한 화면에서 상관 분석합니다.",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "aws",
+    "prod",
+    "security",
+    "http-flood"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "stockspoon"
+      ],
+      "asDropdown": true,
+      "title": "Stockspoon 운영 대시보드"
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "1. 엣지에서 WAF가 감지·차단했는가",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "title": "WAF API rate rule · Count 감지 / Block 차단 (분당)",
+      "description": "CountedRequests는 rate rule이 기준 초과 요청에 매칭된 수입니다. 전체 API 요청 수가 아닙니다. Count 모드에서는 감지, Block 모드에서는 차단 지표를 확인하세요. Terraform 기본값은 IP당 300초에 500회이며, 실제 적용값은 Apply 후 확인하세요. CloudFront WAF 지표는 us-east-1에서 약 1분 간격으로 보고됩니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/WAFV2",
+          "metricName": "CountedRequests",
+          "statistic": "Sum",
+          "dimensions": {
+            "WebACL": "stockspoon-api-rate-limit",
+            "Rule": "stockspoon-api-per-source-ip"
+          },
+          "period": "60",
+          "label": "Count 매칭",
+          "matchExact": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/WAFV2",
+          "metricName": "BlockedRequests",
+          "statistic": "Sum",
+          "dimensions": {
+            "WebACL": "stockspoon-api-rate-limit",
+            "Rule": "stockspoon-api-per-source-ip"
+          },
+          "period": "60",
+          "label": "Block 차단",
+          "matchExact": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "CloudFront · 전체 배포 요청 수 (분당)",
+      "description": "정적 파일과 웹 페이지 요청을 포함한 배포 전체 요청 수입니다. /api/ 요청만의 수치는 아닙니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/CloudFront",
+          "metricName": "Requests",
+          "statistic": "Sum",
+          "dimensions": {
+            "DistributionId": "E2Y9S3V9X3DRMW",
+            "Region": "Global"
+          },
+          "period": "60",
+          "label": "전체 요청",
+          "matchExact": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "CloudFront · 4xx / 5xx 비율",
+      "description": "엣지 오류 추세를 확인합니다. WAF Block 응답도 4xx에 반영될 수 있지만, 차단 여부의 기준 지표는 위 WAF BlockedRequests입니다. CloudFront 전체 배포 기준입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/CloudFront",
+          "metricName": "4xxErrorRate",
+          "statistic": "Average",
+          "dimensions": {
+            "DistributionId": "E2Y9S3V9X3DRMW",
+            "Region": "Global"
+          },
+          "period": "60",
+          "label": "4xx",
+          "matchExact": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/CloudFront",
+          "metricName": "5xxErrorRate",
+          "statistic": "Average",
+          "dimensions": {
+            "DistributionId": "E2Y9S3V9X3DRMW",
+            "Region": "Global"
+          },
+          "period": "60",
+          "label": "5xx",
+          "matchExact": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "2. 요청이 ALB와 백엔드까지 도달했는가",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 6,
+      "title": "V2 Backend Target Group · 요청 수 (분당)",
+      "description": "현재 운영 V2 Backend Green Target Group을 기준으로 한 요청 수입니다. WAF Block 요청은 ALB까지 도달하지 않습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RequestCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-backend-green/6e3ed88eada0cd60"
+          },
+          "period": "60",
+          "label": "Backend 요청",
+          "matchExact": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "V2 Backend Target Group · HTTP 4xx / 5xx (분당)",
+      "description": "Target 응답 코드입니다. WAF가 CloudFront에서 반환한 429는 백엔드 메트릭에 나타나지 않습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_Target_4XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-backend-green/6e3ed88eada0cd60"
+          },
+          "period": "60",
+          "label": "Target 4xx",
+          "matchExact": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_Target_5XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-backend-green/6e3ed88eada0cd60"
+          },
+          "period": "60",
+          "label": "Target 5xx",
+          "matchExact": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "V2 Backend Target Group · 응답 지연",
+      "description": "ALB 관점의 TargetResponseTime p50/p95/p99입니다. 백엔드 내부 API 지연은 아래 Spring 메트릭과 비교합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p50",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-backend-green/6e3ed88eada0cd60"
+          },
+          "period": "60",
+          "label": "p50",
+          "matchExact": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p95",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-backend-green/6e3ed88eada0cd60"
+          },
+          "period": "60",
+          "label": "p95",
+          "matchExact": true
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p99",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-backend-green/6e3ed88eada0cd60"
+          },
+          "period": "60",
+          "label": "p99",
+          "matchExact": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "3. 백엔드 처리량과 포화 징후",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "title": "Spring API · 요청 수 (분당, route별)",
+      "description": "Spring Actuator 요청 메트릭입니다. URI는 정규화된 route label이므로 쿼리스트링/개별 ID를 시계열 label로 만들지 않습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(uri,method) (rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",uri=~\"/api/.*\",uri!~\"/actuator.*\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{method}} {{uri}}",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Spring API · 429 / 5xx 응답 수 (분당)",
+      "description": "Count 모드의 WAF 요청은 앱까지 통과합니다. Block 모드의 WAF 429는 앱 메트릭에 기록되지 않으므로 위 WAF BlockedRequests와 함께 봅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 19,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",uri=~\"/api/.*\",uri!~\"/actuator.*\",status=\"429\"}[$__rate_interval])) * 60",
+          "legendFormat": "앱 429",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(http_server_requests_seconds_count{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",uri=~\"/api/.*\",uri!~\"/actuator.*\",status=~\"5..\"}[$__rate_interval])) * 60",
+          "legendFormat": "앱 5xx",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Spring API · route별 p95 응답시간",
+      "description": "Spring MVC 요청 완료 기준의 p95입니다. ALB TargetResponseTime과 나란히 보면 앱 처리시간 증가 여부를 구분하는 데 도움이 됩니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 19,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by(le,uri) (rate(http_server_requests_seconds_bucket{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\",uri=~\"/api/.*\",uri!~\"/actuator.*\"}[$__rate_interval])))",
+          "legendFormat": "{{uri}}",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "4. 스레드·DB 풀·Task 자원",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 14,
+      "title": "Tomcat · 사용 중 요청 스레드 비율",
+      "description": "Task별 busy thread / 최대 thread 비율입니다. 지속 상승하면 요청 대기와 지연 증가를 함께 확인합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * tomcat_threads_busy_threads{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\"} / tomcat_threads_config_max_threads{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\"}",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Hikari · DB 연결 상태 (Task별)",
+      "description": "활성·최대·대기 연결 수입니다. 대기 연결이 증가하면 DB 풀 고갈 여부를 확인합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 28,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_active{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\"}",
+          "legendFormat": "{{task_id}} active",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_max{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\"}",
+          "legendFormat": "{{task_id}} max",
+          "range": true
+        },
+        {
+          "refId": "C",
+          "expr": "hikaricp_connections_pending{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",task_id!=\"\"}",
+          "legendFormat": "{{task_id}} pending",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "ECS Backend · Task CPU (코어)",
+      "description": "Task별 컨테이너 CPU 사용량입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 28,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (rate(container_cpu_usage_seconds_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=\"stockspoon-v2-prod-backend\",task_id!=\"\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "ECS Backend · Task 메모리 Working Set",
+      "description": "Task별 컨테이너 Working Set입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (container_memory_working_set_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",ecs_service=\"stockspoon-v2-prod-backend\",task_id!=\"\"})",
+          "legendFormat": "{{task_id}}",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "WAF 로그에서 출발지 IP 확인",
+      "type": "text",
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 12,
+        "h": 8
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### 요청별 출발지 IP와 URI\nWAF 상세 로그는 CloudWatch Logs의 `aws-waf-logs-stockspoon-api-rate-limit`에 저장되며 리전은 **us-east-1 (N. Virginia)** 입니다. Grafana IAM은 현재 ECS 성능 로그 그룹만 Logs Insights 조회를 허용하므로, 요청별 IP 확인은 AWS 콘솔의 CloudWatch Logs Insights에서 수행합니다.\n\nCount 모드에서는 `nonTerminatingMatchingRules`의 `api-per-source-ip` / `COUNT`를 찾습니다. 이 경우 `terminatingRuleId`는 `Default_Action`일 수 있습니다. Block 모드에서는 `terminatingRuleId`, `action=BLOCK`, `responseCodeSent=429`를 확인합니다.\n\n```\nfields @timestamp, action, terminatingRuleId, responseCodeSent, httpRequest.clientIp, httpRequest.httpMethod, httpRequest.uri, nonTerminatingMatchingRules\n| filter @message like /api-per-source-ip/\n| sort @timestamp desc\n| limit 100\n```\n\n로그 설정은 Cookie, Authorization 헤더와 query string을 redaction하도록 구성돼 있습니다. WAF 지표는 약 1분 단위로 보고되므로 테스트 실행 시각을 기록하고 같은 시간 범위로 대조하세요."
+      }
+    },
+    {
+      "id": 19,
+      "title": "Spring 요청 감사 로그 · 앱 429/5xx 및 1초 이상 지연",
+      "description": "기존 RequestLoggingFilter 로그의 route, status, elapsedMs, requestId를 확인합니다. WAF Block 응답은 앱 로그에 도달하지 않습니다.",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend\"} |= \"event=http_response_audit\" |~ \"status=429|status=5..\"",
+          "queryType": "range",
+          "legendFormat": "앱 오류"
+        },
+        {
+          "refId": "B",
+          "expr": "{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend\"} |= \"event=http_response_audit\" |~ \"elapsedMs=[1-9][0-9]{3,}\"",
+          "queryType": "range",
+          "legendFormat": "1초 이상 지연"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}
