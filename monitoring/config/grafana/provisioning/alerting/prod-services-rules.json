@@ -367,7 +367,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=~\"market-http\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=~\"market-http\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
@@ -1254,7 +1254,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
@@ -1336,7 +1336,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend-collector\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"backend-collector\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,

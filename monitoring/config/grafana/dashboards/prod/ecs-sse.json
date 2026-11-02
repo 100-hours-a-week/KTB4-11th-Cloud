@@ -757,7 +757,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+          "expr": "sum(count_over_time({environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
           "queryType": "range",
           "datasource": {
             "type": "loki",
@@ -867,7 +867,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"} |~ \"(?i)error|exception|fatal\"",
+          "expr": "{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"} |~ \"(?i)error|exception\\\\b|fatal\"",
           "queryType": "range",
           "datasource": {
             "type": "loki",

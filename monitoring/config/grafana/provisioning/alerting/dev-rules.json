@@ -430,7 +430,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=\"nginx\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=\"nginx\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
@@ -596,7 +596,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=\"backend\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"app\",service_name=\"backend\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
@@ -1092,7 +1092,7 @@
                   "type": "loki",
                   "uid": "loki"
                 },
-                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"ai\",service_name=~\"news-http|portfolio-rebalancer|report-builder|news-preprocessor|news-clusterer|market-syncer|news-graph-builder|market-collector|market-streamer|portfolio-builder|market-http\"} |~ \"(?i)error|exception|fatal\" [5m]))",
+                "expr": "sum by(environment,cluster,service_name) (count_over_time({environment=\"dev\",host_role=\"ai\",service_name=~\"news-http|portfolio-rebalancer|report-builder|news-preprocessor|news-clusterer|market-syncer|news-graph-builder|market-collector|market-streamer|portfolio-builder|market-http\"} |~ \"(?i)error|exception\\\\b|fatal\" [5m]))",
                 "queryType": "instant",
                 "instant": true,
                 "intervalMs": 1000,
