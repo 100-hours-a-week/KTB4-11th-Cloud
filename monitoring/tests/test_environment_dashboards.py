@@ -43,6 +43,22 @@ class EnvironmentDashboardTest(unittest.TestCase):
         self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb', 'stockspoon-frontend-edge', 'stockspoon-http-flood'} <= set(uids))
         self.assertEqual(len(dashboards), 13)
 
+    def test_http_flood_dashboard_cloudwatch_queries_have_explicit_metrics_mode(self):
+        dashboard = json.loads((ROOT / 'config/grafana/dashboards/prod/http-flood.json').read_text())
+        targets = [
+            target
+            for panel in dashboard['panels']
+            for target in panel.get('targets', [])
+            if (target.get('datasource') or {}).get('uid') == 'cloudwatch'
+        ]
+        self.assertTrue(targets)
+        for target in targets:
+            with self.subTest(ref_id=target['refId']):
+                self.assertEqual(target['id'], target['refId'].lower())
+                self.assertEqual(target['metricEditorMode'], 0)
+                self.assertEqual(target['metricQueryType'], 0)
+                self.assertFalse(target['hide'])
+
     def test_dedicated_development_dashboards_cannot_include_other_services(self):
         for service in ['frontend', 'backend']:
             dashboard = json.loads((ROOT / 'config/grafana/dashboards/dev' / (service + '.json')).read_text())

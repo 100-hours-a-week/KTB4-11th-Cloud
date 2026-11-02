@@ -70,6 +70,7 @@
       "targets": [
         {
           "refId": "A",
+          "id": "a",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -85,10 +86,14 @@
           },
           "period": "60",
           "label": "Count 매칭",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         },
         {
           "refId": "B",
+          "id": "b",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -104,7 +109,10 @@
           },
           "period": "60",
           "label": "Block 차단",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         }
       ],
       "options": {
@@ -143,6 +151,7 @@
       "targets": [
         {
           "refId": "A",
+          "id": "a",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -158,7 +167,10 @@
           },
           "period": "60",
           "label": "전체 요청",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         }
       ],
       "options": {
@@ -197,6 +209,7 @@
       "targets": [
         {
           "refId": "A",
+          "id": "a",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -212,10 +225,14 @@
           },
           "period": "60",
           "label": "4xx",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         },
         {
           "refId": "B",
+          "id": "b",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -231,7 +248,10 @@
           },
           "period": "60",
           "label": "5xx",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         }
       ],
       "options": {
@@ -283,6 +303,7 @@
       "targets": [
         {
           "refId": "A",
+          "id": "a",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -298,7 +319,10 @@
           },
           "period": "60",
           "label": "Backend 요청",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         }
       ],
       "options": {
@@ -337,6 +361,7 @@
       "targets": [
         {
           "refId": "A",
+          "id": "a",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -352,10 +377,14 @@
           },
           "period": "60",
           "label": "Target 4xx",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         },
         {
           "refId": "B",
+          "id": "b",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -371,7 +400,10 @@
           },
           "period": "60",
           "label": "Target 5xx",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         }
       ],
       "options": {
@@ -410,6 +442,7 @@
       "targets": [
         {
           "refId": "A",
+          "id": "a",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -425,10 +458,14 @@
           },
           "period": "60",
           "label": "p50",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         },
         {
           "refId": "B",
+          "id": "b",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -444,10 +481,14 @@
           },
           "period": "60",
           "label": "p95",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         },
         {
           "refId": "C",
+          "id": "c",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
@@ -463,7 +504,10 @@
           },
           "period": "60",
           "label": "p99",
-          "matchExact": true
+          "hide": false,
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricQueryType": 0
         }
       ],
       "options": {
