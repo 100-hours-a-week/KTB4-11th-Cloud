@@ -17,21 +17,21 @@ scrape_configs:
 
   - job_name: node
     static_configs:
-      - targets: ["__V1_PRIVATE_IP__:9100"]
+      - targets: ["__PRIMARY_DB_PRIVATE_IP__:9100"]
         labels:
-          node_role: v1-app
-      - targets: ["__MIGRATION_DB_PRIVATE_IP__:9100"]
+          node_role: primary
+      - targets: ["__PRIVATE_REPLICA_DB_PRIVATE_IP__:9100"]
         labels:
-          node_role: migration-db
+          node_role: private-replica
 
-  # 기존 exporter의 다중 대상 수집으로 V1도 수집한다.
-  # 역할 전환 후에도 노드 이름은 유지하고 read_only 지표로 현재 상태를 확인한다.
-  - job_name: mysql-v1
+  # The old v1-app-server MySQL target is retired. Scrape the active Primary and
+  # private GTID replica; read_only identifies their current roles.
+  - job_name: mysql-primary
     metrics_path: /probe
     static_configs:
-      - targets: ["__V1_PRIVATE_IP__:3306"]
+      - targets: ["__PRIMARY_DB_PRIVATE_IP__:3306"]
         labels:
-          db_node: v1
+          db_node: primary
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -40,12 +40,12 @@ scrape_configs:
       - target_label: __address__
         replacement: mysqld-exporter:9104
 
-  - job_name: mysql-migration
+  - job_name: mysql-private-replica
     static_configs:
       - targets: ["mysqld-exporter:9104"]
         labels:
-          db_node: migration-db
-          db_role: migration-replica
+          db_node: private-replica
+          db_role: private-replica
 
   # Cloud Map MULTIVALUE A records; each Fargate task is scraped separately.
   - job_name: proxysql-fargate

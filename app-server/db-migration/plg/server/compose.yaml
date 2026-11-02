@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
     command:
       - --config.my-cnf=/.my.cnf
-      - --mysqld.address=${MIGRATION_DB_PRIVATE_IP:?run install.sh first}:3306
+      - --mysqld.address=${PRIVATE_REPLICA_DB_PRIVATE_IP:?run install.sh first}:3306
       - --mysqld.username=pmm
       - --tls.insecure-skip-verify
       - --web.listen-address=:9104
@@ -122,9 +122,9 @@ services:
   # replica, so the current primary writes after a switchover without changes.
   # The heartbeat account has no SUPER, so switchover's read_only freeze also
   # stops these writes before the data checksum comparison.
-  heartbeat-v1: &heartbeat
+  heartbeat-primary: &heartbeat
     image: percona/percona-toolkit:3.7.2
-    container_name: migration-heartbeat-v1
+    container_name: migration-heartbeat-primary
     restart: unless-stopped
     command:
       - pt-heartbeat
@@ -135,7 +135,7 @@ services:
       - --interval=1
       - --database=stockspoon
       - --table=monitoring_heartbeat
-      - h=${V1_PRIVATE_IP:?run install.sh first},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
+      - h=${PRIMARY_DB_PRIVATE_IP:?run install.sh first},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
     volumes:
       - ./heartbeat/.my.cnf:/heartbeat.cnf:ro
     read_only: true
@@ -150,9 +150,9 @@ services:
         max-size: 5m
         max-file: "2"
 
-  heartbeat-migration:
+  heartbeat-private-replica:
     <<: *heartbeat
-    container_name: migration-heartbeat-migration
+    container_name: migration-heartbeat-private-replica
     command:
       - pt-heartbeat
       - --update
@@ -162,7 +162,7 @@ services:
       - --interval=1
       - --database=stockspoon
       - --table=monitoring_heartbeat
-      - h=${MIGRATION_DB_PRIVATE_IP:?run install.sh first},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
+      - h=${PRIVATE_REPLICA_DB_PRIVATE_IP:?run install.sh first},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
 
 volumes:
   loki-data:
