@@ -11,12 +11,11 @@ variable "api_waf_enabled" {
 }
 
 variable "api_waf_mode" {
-  # 현재는 Count: 기준 초과를 기록하며 요청은 차단하지 않는다.
-  # DB 마이그레이션·백엔드 처리 성능 테스트 중에는 "count"를 유지한다.
-  # Count는 기준 초과만 기록하며 차단하지 않는다. 방어 테스트 시 "block"으로 복구한다.
-  # tfvars/TF_VAR 설정은 이 기본값보다 우선하므로 전환 전 plan과 적용 후 output을 확인한다.
+  # Block returns HTTP 429 after a viewer IP exceeds the configured API rate limit.
+  # Use "count" explicitly only for observation-only experiments.
+  # tfvars/TF_VAR settings override this default; inspect the plan and output after apply.
   type    = string
-  default = "count"
+  default = "block"
   validation {
     condition     = contains(["count", "block"], var.api_waf_mode)
     error_message = "api_waf_mode must be count or block."
