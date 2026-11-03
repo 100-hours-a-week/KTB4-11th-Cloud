@@ -159,20 +159,30 @@ SHOW GLOBAL VARIABLES WHERE Variable_name IN (
 | 접수 SQL을 짧은 실험 구간에서 추적 | General query log | 접수 기록; 커밋 성공·실행 순서의 증거와 다름 |
 | 데이터 변경 복제 | Binary log | ROW 변경 이벤트; SELECT 기록용이 아님 |
 
-다음은 관리자 SQL 세션에서 적용하는 예시다. 이번 점검에서는 실행하지 않았다.
-원래 설정을 먼저 기록하고, 측정 목적과 디스크 여유에 맞춰 사용한다.
+Application 쿼리를 관측할 때는 Primary에만 slow query log를 켜면 된다. Replica는 복제 이벤트를
+적용하는 역할이므로 애플리케이션에서 실행된 쿼리 원문을 보려는 목적에는 Primary 로그가 기준이다.
+운영 시작 기준으로 1초를 사용하고, 로그량을 확인해 서비스 SLO에 맞게 조정한다. `log_output=FILE`은
+이미 기본 설정이며, `SET PERSIST`는 즉시 적용하면서 MySQL 데이터 디렉터리의 설정에도 저장한다.
 
 ```sql
--- 200 ms는 실험 시작용 예시이며 서비스 SLO에서 결정한 값은 아니다.
-SET GLOBAL log_output = 'FILE';
-SET GLOBAL slow_query_log_file = '/var/lib/mysql/slow.log';
-SET GLOBAL long_query_time = 0.2;
-SET GLOBAL slow_query_log = ON;
+-- Primary에서만 실행한다.
+SET PERSIST long_query_time = 1;
+SET PERSIST slow_query_log = ON;
+
+SHOW GLOBAL VARIABLES WHERE Variable_name IN (
+  'log_output', 'slow_query_log', 'slow_query_log_file', 'long_query_time'
+);
+SHOW GLOBAL STATUS LIKE 'Slow_queries';
 ```
 
-`long_query_time` 변경은 새 세션의 기본값에 적용된다. 기존 백엔드 커넥션 풀의 세션 값은
-계속 남을 수 있으므로 적용 시점을 구분한다. 시험이 끝나면 원래 값으로 복원한다.
-GLOBAL 변경은 재시작 시 유지되지 않으므로, 상시 사용을 결정한 설정은 별도로 영속화한다.
+`long_query_time`의 전역 값은 새 세션의 기본값이다. 이미 연결된 ProxySQL 백엔드 세션에는 기존
+세션 값(현재 10초)이 남으므로, 1초 기준을 기존 연결에도 적용하려면 안전한 시점에 백엔드 연결을
+재생성해야 한다. MySQL 공식 문서는 1초 미만 기준은 로그가 빠르게 커질 수 있어 주의하도록 안내한다.
+slow log에는 SQL 원문과 값이 포함될 수 있으므로 Grafana/Loki 접근 권한을 제한한다.
+
+Primary Alloy 에이전트는 `/var/lib/mysql/*slow.log` 파일을 Loki의 `job="mysql-slow"`로 수집한다.
+Grafana 대시보드의 `느린 SQL 원문` 패널에서 `$node`를 선택해 조회한다. `Slow queries /s` 패널은
+Exporter의 카운터를 보여주며, SQL 원문은 Loki 로그 패널에 표시된다.
 
 새 이관 DB에서 slow 로그를 확인하는 예시:
 

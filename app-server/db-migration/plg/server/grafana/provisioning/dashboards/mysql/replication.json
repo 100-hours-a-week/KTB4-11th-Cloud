@@ -9,7 +9,7 @@
   ],
   "timezone": "Asia/Seoul",
   "schemaVersion": 41,
-  "version": 2,
+  "version": 3,
   "editable": true,
   "graphTooltip": 1,
   "refresh": "10s",
@@ -24,6 +24,16 @@
         "type": "datasource",
         "label": "Prometheus",
         "query": "prometheus",
+        "refresh": 1,
+        "hide": 2,
+        "current": {},
+        "options": []
+      },
+      {
+        "name": "DS_LOKI",
+        "type": "datasource",
+        "label": "Loki",
+        "query": "loki",
         "refresh": 1,
         "hide": 2,
         "current": {},
@@ -1317,6 +1327,44 @@
           "mode": "multi",
           "sort": "desc"
         }
+      }
+    },
+    {
+      "id": 22,
+      "type": "logs",
+      "title": "느린 SQL 원문",
+      "description": "Primary·Replica의 MySQL slow query log 원문이다. 각 DB에서 slow_query_log가 켜져 있고 long_query_time을 초과한 쿼리만 표시된다.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 24,
+        "h": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "editorMode": "code",
+          "expr": "{host=~\"$node\", job=\"mysql-slow\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
       }
     },
     {

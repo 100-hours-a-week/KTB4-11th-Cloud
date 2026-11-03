@@ -35,7 +35,7 @@ loki.source.file "mysql_general" {
 
 local.file_match "mysql_slow" {
   path_targets = [{
-    "__path__" = "/var/lib/mysql/slow.log",
+    "__path__" = "/var/lib/mysql/*slow.log",
     "host"     = sys.env("HOST_ROLE"),
     "job"      = "mysql-slow",
   }]
