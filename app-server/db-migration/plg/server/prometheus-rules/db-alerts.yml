@@ -1,5 +1,5 @@
 # DB 노드 이름(db_node)은 switchover 후에도 유지되고, 역할은 read_only 값으로 판단한다.
-# Alertmanager는 없으므로 상태는 Prometheus /alerts와 Grafana Alerting 목록에서 확인한다.
+# Alertmanager는 Prometheus에 연결되어 Discord로 firing/resolved 알림을 전달한다.
 groups:
   - name: stockspoon-db-recording
     rules:
@@ -14,6 +14,15 @@ groups:
             - mysql_heartbeat_stored_timestamp_seconds{job=~"mysql-(primary|private-replica)"}
           )
 
+      # Map the DB's stable db_node label onto node-exporter's node_role label.
+      # This keeps Primary-only host alerts following the writable node after switchover.
+      - record: mysql:current_primary_node
+        expr: |
+          label_replace(
+            mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == bool 0,
+            "node_role", "$1", "db_node", "(.*)"
+          )
+
   - name: stockspoon-mysql
     rules:
       - alert: MySQLDown
@@ -24,6 +33,44 @@ groups:
         annotations:
           summary: "{{ $labels.db_node }} MySQL 수집 실패"
           description: "exporter가 {{ $labels.db_node }}({{ $labels.instance }})에 1분 이상 접속하지 못했다."
+
+      - alert: MySQLExporterScrapeFailed
+        expr: up{job=~"mysql-(primary|private-replica)"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.db_node }} MySQL exporter scrape 실패"
+          description: "Prometheus가 {{ $labels.job }}의 mysqld-exporter HTTP 지표 엔드포인트를 1분 이상 수집하지 못했다. MySQLDown과 달리 exporter 또는 수집 경로 장애를 의미한다."
+
+      - alert: MySQLScrapeTargetMissing
+        expr: |
+          absent(up{job="mysql-primary"})
+          or absent(up{job="mysql-private-replica"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} MySQL scrape target 없음"
+          description: "Prometheus 설정 또는 service discovery에서 {{ $labels.job }} 대상이 2분 이상 사라졌다."
+
+      - alert: MySQLUpMetricMissing
+        expr: |
+          (
+            absent(mysql_up{job="mysql-primary"})
+            and on (job) (up{job="mysql-primary"} == 1)
+          )
+          or
+          (
+            absent(mysql_up{job="mysql-private-replica"})
+            and on (job) (up{job="mysql-private-replica"} == 1)
+          )
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} MySQL 상태 지표 없음"
+          description: "exporter scrape는 성공하지만 mysql_up 시계열이 2분 이상 없다. exporter 수집 설정이나 반환 지표를 확인한다."
 
       - alert: MySQLWritableNodeCountNotOne
         expr: (count(mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == 0) or vector(0)) != 1
@@ -44,6 +91,30 @@ groups:
         annotations:
           summary: "{{ $labels.db_node }} 복제 스레드 중지"
           description: "I/O 또는 SQL 복제 스레드가 1분 이상 멈췄다. last_io_errno/last_sql_errno 패널을 확인한다."
+
+      - alert: MySQLNativeReplicaLagHigh
+        expr: |
+          mysql_slave_status_seconds_behind_source{job="mysql-private-replica"} > 30
+          and on (job, instance)
+          mysql_global_variables_read_only{job="mysql-private-replica"} == 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.db_node }} native 복제 지연 {{ $value }}초"
+          description: "Seconds_Behind_Source가 30초를 2분 이상 초과했다. heartbeat 지연과 I/O·SQL thread 상태도 함께 확인한다."
+
+      - alert: MySQLNativeReplicaLagCritical
+        expr: |
+          mysql_slave_status_seconds_behind_source{job="mysql-private-replica"} > 60
+          and on (job, instance)
+          mysql_global_variables_read_only{job="mysql-private-replica"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.db_node }} native 복제 지연 {{ $value }}초"
+          description: "Seconds_Behind_Source가 60초를 1분 이상 초과했다. replica 승격이나 switchover를 보류하고 원인을 확인한다."
 
       - alert: MySQLReadOnlyNodeWithoutReplication
         expr: |
@@ -177,3 +248,180 @@ groups:
         annotations:
           summary: "{{ $labels.node_role }}와 모니터링 호스트 시계 차이 {{ $value | humanizeDuration }}"
           description: "모니터링 호스트에는 node exporter가 없으므로 이 차이로 모니터링 호스트 시계 이상을 함께 감지한다. heartbeat ts가 이 호스트 시계로 기록된다."
+
+  - name: stockspoon-db-primary-resources
+    rules:
+      - alert: PrimaryNodeExporterScrapeFailed
+        expr: |
+          (up{job="node",node_role=~"primary|private-replica"} == 0)
+          and on (node_role) mysql:current_primary_node
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Primary node-exporter scrape 실패"
+          description: "Primary 호스트의 CPU·메모리·파일시스템 지표 endpoint를 1분 이상 수집하지 못했다."
+
+      - alert: PrimaryNodeTargetMissing
+        expr: |
+          (
+            absent(up{job="node",node_role="primary"})
+            or absent(up{job="node",node_role="private-replica"})
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Primary node scrape target 없음"
+          description: "Prometheus 설정에서 Primary node-exporter 대상이 2분 이상 사라졌다."
+
+      - alert: PrimaryCPUUtilizationHigh
+        expr: |
+          (
+            100 * (
+              1 - avg by (instance, node_role) (
+                rate(node_cpu_seconds_total{job="node",node_role=~"primary|private-replica",mode="idle"}[5m])
+              )
+            )
+            > 80
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Primary CPU 사용률 {{ $value | printf \"%.1f\" }}%"
+          description: "Primary CPU 사용률이 80%를 10분 이상 초과했다. slow query, 동시 쿼리, CPU iowait 및 MySQL 부하를 확인한다."
+
+      - alert: PrimaryCPUUtilizationCritical
+        expr: |
+          (
+            100 * (
+              1 - avg by (instance, node_role) (
+                rate(node_cpu_seconds_total{job="node",node_role=~"primary|private-replica",mode="idle"}[5m])
+              )
+            )
+            > 90
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Primary CPU 사용률 {{ $value | printf \"%.1f\" }}%"
+          description: "Primary CPU 사용률이 90%를 5분 이상 초과했다. 쿼리 부하와 실행 계획을 확인하고 서비스 용량을 점검한다."
+
+      - alert: PrimaryMemoryAvailableLow
+        expr: |
+          (
+            100 * node_memory_MemAvailable_bytes{job="node",node_role=~"primary|private-replica"}
+            / node_memory_MemTotal_bytes{job="node",node_role=~"primary|private-replica"}
+            < 20
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Primary 가용 메모리 {{ $value | printf \"%.1f\" }}%"
+          description: "Linux MemAvailable이 전체 메모리의 20% 미만으로 10분 이상 유지됐다. MySQL buffer pool, 컨테이너 메모리, swap/OOM 여부를 확인한다."
+
+      - alert: PrimaryMemoryAvailableCritical
+        expr: |
+          (
+            100 * node_memory_MemAvailable_bytes{job="node",node_role=~"primary|private-replica"}
+            / node_memory_MemTotal_bytes{job="node",node_role=~"primary|private-replica"}
+            < 10
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Primary 가용 메모리 {{ $value | printf \"%.1f\" }}%"
+          description: "Linux MemAvailable이 전체 메모리의 10% 미만으로 5분 이상 유지됐다. OOM 및 MySQL 프로세스 종료 위험을 확인한다."
+
+      - alert: PrimaryRootDiskUsageHigh
+        expr: |
+          (
+            100 * (
+              1 - node_filesystem_avail_bytes{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+              / node_filesystem_size_bytes{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+            )
+            > 80
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Primary 루트 디스크 사용률 {{ $value | printf \"%.1f\" }}%"
+          description: "루트 파일시스템 사용률이 80%를 10분 이상 초과했다. MySQL 데이터, binlog, Docker 로그와 증가 추세를 확인한다."
+
+      - alert: PrimaryRootDiskUsageCritical
+        expr: |
+          (
+            100 * (
+              1 - node_filesystem_avail_bytes{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+              / node_filesystem_size_bytes{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+            )
+            > 90
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Primary 루트 디스크 사용률 {{ $value | printf \"%.1f\" }}%"
+          description: "루트 파일시스템 사용률이 90%를 5분 이상 초과했다. 디스크 부족으로 MySQL 쓰기/기동이 실패하기 전에 용량을 확보하거나 확장한다."
+
+      - alert: PrimaryRootInodeUsageHigh
+        expr: |
+          (
+            100 * (
+              1 - node_filesystem_files_free{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+              / node_filesystem_files{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+            )
+            > 80
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Primary 루트 inode 사용률 {{ $value | printf \"%.1f\" }}%"
+          description: "루트 파일시스템 inode 사용률이 80%를 10분 이상 초과했다. 작은 파일이 과도하게 생성되는 경로를 찾는다."
+
+      - alert: PrimaryRootInodeUsageCritical
+        expr: |
+          (
+            100 * (
+              1 - node_filesystem_files_free{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+              / node_filesystem_files{
+                job="node",node_role=~"primary|private-replica",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"
+              }
+            )
+            > 90
+          )
+          and on (node_role) mysql:current_primary_node
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Primary 루트 inode 사용률 {{ $value | printf \"%.1f\" }}%"
+          description: "루트 파일시스템 inode 사용률이 90%를 5분 이상 초과했다. 파일 생성 실패 위험이 있으므로 원인 경로를 확인한다."
