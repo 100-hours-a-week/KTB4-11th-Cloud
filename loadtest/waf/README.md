@@ -77,6 +77,12 @@ export NORMAL_ACCOUNT_ID='<테스트 계좌 ID>'
 
 요청별 출발지 IP와 URI가 필요하면 CloudWatch Logs의 `aws-waf-logs-stockspoon-api-rate-limit` 로그 그룹을 `us-east-1`에서 확인합니다. 현재 Grafana IAM 권한은 ECS 성능 로그 그룹만 Logs Insights 조회를 허용하므로, WAF 상세 로그는 AWS 콘솔에서 조회합니다. Grafana 대시보드는 저장소에서 파일로 관리되며, 이 파일을 실제 모니터링 서버에 배포해야 화면에 나타납니다.
 
+### k6 요청 단위 보조 지표
+
+- `response_body_bytes`: k6가 응답 본문으로 받은 바이트 크기입니다. `scenario_type`과 정규화한 `uri`로 구분하며 응답 원문은 저장하지 않습니다. 네트워크 wire bytes 전체를 뜻하지는 않습니다.
+- `response_content_length_bytes`: 응답에 `Content-Length` 헤더가 있을 때만 기록합니다. 압축·전송 방식에 따라 실제 전송량과 다를 수 있으며 헤더가 없으면 표본도 없습니다.
+- `first_http_429_by_vu`: 각 VU가 처음 받은 HTTP 429의 UTC 시각을 k6 로그에 기록합니다. 가장 이른 시각을 찾은 뒤 WAF 로그의 출발지 IP·규칙·action과 대조합니다. 이 시각은 부하기가 429를 처음 관측한 시각이지 AWS 내부 감지 지연 자체가 아닙니다.
+
 ## 해석 범위
 
 이 실험은 단일 viewer IP 기준 `/api/` rate rule을 확인합니다. 여러 IP에 분산된 요청이나 SSE 장기 연결 한도는 이 스크립트의 검증 범위가 아닙니다. AWS WAF 적용, CloudFront 배포, 실제 부하 실행은 이 문서 작성 과정에서 수행하지 않았습니다.

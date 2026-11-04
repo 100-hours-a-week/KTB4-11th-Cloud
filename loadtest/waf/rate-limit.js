@@ -50,6 +50,9 @@ const flood429 = new Counter('flood_429_responses');
 const floodOther = new Counter('flood_other_responses');
 const floodUnexpected = new Rate('flood_unexpected_response_ratio');
 const floodLatency = new Trend('flood_request_duration', true);
+const responseBodyBytes = new Trend('response_body_bytes');
+const responseContentLengthBytes = new Trend('response_content_length_bytes');
+const first429LoggedByScenario = {};
 
 export const options = {
   scenarios: mode === 'smoke' ? {
@@ -69,8 +72,26 @@ export const options = {
 function request(path, scenario) {
   const r = http.get(`${base}${path}`, {
     headers: { Cookie: cookie }, redirects: 0, timeout: '30s',
+    responseType: 'binary',
     tags: { scenario_type: scenario, name: path.split('?')[0] },
   });
+  const uri = path.split('?')[0].replace(/\/\d+(?=\/|$)/g, '/{id}');
+  const metricTags = { scenario_type: scenario, uri };
+  responseBodyBytes.add(r.body && typeof r.body.byteLength === 'number' ? r.body.byteLength : 0, metricTags);
+  const contentLength = r.headers['Content-Length'];
+  if (Array.isArray(contentLength) && contentLength.length > 0 && /^\d+$/.test(contentLength[0])) {
+    responseContentLengthBytes.add(Number(contentLength[0]), metricTags);
+  }
+  if (r.status === 429 && !first429LoggedByScenario[scenario]) {
+    first429LoggedByScenario[scenario] = true;
+    console.log(`K6_EVENT ${JSON.stringify({
+      kind: 'first_http_429_by_vu',
+      scenario_type: scenario,
+      at_utc: new Date().toISOString(),
+      vu: __VU,
+      uri,
+    })}`);
+  }
   if (r.status === 429) blocked.add(1);
   return r;
 }
