@@ -24,7 +24,7 @@ data "aws_iam_policy_document" "backend_producer_sqs" {
 
 resource "aws_iam_policy" "backend_producer_sqs" {
   name        = "${local.name_prefix}-backend-producer-sqs"
-  description = "Allows the V2 ${var.environment} Backend API to publish AI, report and order requests"
+  description = "Allows the V2 ${var.environment} Backend API to publish report and order requests"
   policy      = data.aws_iam_policy_document.backend_producer_sqs.json
 
   tags = {
@@ -91,7 +91,7 @@ data "aws_iam_policy_document" "ai_sqs" {
 
 resource "aws_iam_policy" "ai_sqs" {
   name        = "${local.name_prefix}-ai-sqs"
-  description = "Allows the V2 ${var.environment} AI service to publish orders and consume AI and report requests"
+  description = "Allows the V2 ${var.environment} AI service to publish orders and consume report requests"
   policy      = data.aws_iam_policy_document.ai_sqs.json
 
   tags = {
