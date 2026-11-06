@@ -1,5 +1,12 @@
 data "aws_iam_policy_document" "backend_producer_sqs" {
   statement {
+    sid       = "SendAIRequests"
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.ai_request.arn]
+  }
+
+  statement {
     sid       = "SendReportRequests"
     effect    = "Allow"
     actions   = ["sqs:SendMessage"]
@@ -50,6 +57,18 @@ resource "aws_iam_policy" "order_consumer_sqs" {
 }
 
 data "aws_iam_policy_document" "ai_sqs" {
+  statement {
+    sid    = "ConsumeAIRequests"
+    effect = "Allow"
+    actions = [
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:ChangeMessageVisibility",
+      "sqs:GetQueueAttributes",
+    ]
+    resources = [aws_sqs_queue.ai_request.arn]
+  }
+
   statement {
     sid       = "SendOrders"
     effect    = "Allow"

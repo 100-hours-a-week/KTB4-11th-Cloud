@@ -39,7 +39,7 @@ output "order_dlq_arn" {
 }
 
 output "backend_producer_sqs_policy_arn" {
-  description = "ARN of the managed IAM policy for Backend report and order publishing"
+  description = "ARN of the managed IAM policy for Backend AI, report and order publishing"
   value       = aws_iam_policy.backend_producer_sqs.arn
 }
 
@@ -76,4 +76,29 @@ output "sqs_discord_webhook_secret_name" {
 output "sqs_discord_notifier_lambda_name" {
   description = "Name of the Lambda that sends SQS alarm notifications to Discord"
   value       = aws_lambda_function.sqs_discord_notifier.function_name
+}
+
+output "ai_request_queue_url" {
+  description = "URL of the BE to AI request queue"
+  value       = aws_sqs_queue.ai_request.url
+}
+
+output "ai_request_queue_arn" {
+  description = "ARN of the BE to AI request queue"
+  value       = aws_sqs_queue.ai_request.arn
+}
+
+output "ai_request_dlq_url" {
+  description = "URL of the BE to AI dead-letter queue"
+  value       = aws_sqs_queue.ai_request_dlq.url
+}
+
+output "ai_request_dlq_arn" {
+  description = "ARN of the BE to AI dead-letter queue"
+  value       = aws_sqs_queue.ai_request_dlq.arn
+}
+
+output "ai_request_dlq_alarm_name" {
+  description = "Name of the CloudWatch alarm for AI battle setup DLQ messages"
+  value       = aws_cloudwatch_metric_alarm.ai_request_dlq_not_empty.alarm_name
 }
