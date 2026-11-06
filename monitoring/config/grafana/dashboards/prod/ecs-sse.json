@@ -39,7 +39,7 @@
         "name": "service",
         "label": "ECS 서비스",
         "type": "custom",
-        "query": "stockspoon-v2-prod-market-http,stockspoon-v2-prod-backend,stockspoon-v2-prod-backend-collector,stockspoon-v2-prod-frontend",
+        "query": "stockspoon-v2-prod-market-http,stockspoon-v2-prod-backend,stockspoon-v2-prod-frontend",
         "multi": false,
         "includeAll": false,
         "options": [
@@ -51,11 +51,6 @@
           {
             "text": "stockspoon-v2-prod-backend",
             "value": "stockspoon-v2-prod-backend",
-            "selected": false
-          },
-          {
-            "text": "stockspoon-v2-prod-backend-collector",
-            "value": "stockspoon-v2-prod-backend-collector",
             "selected": false
           },
           {

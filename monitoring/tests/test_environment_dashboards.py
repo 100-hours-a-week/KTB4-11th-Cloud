@@ -36,6 +36,11 @@ class EnvironmentDashboardTest(unittest.TestCase):
                         if variable['type'] == 'query':
                             self.assertIn('environment="' + environment + '"', variable['query'])
 
+    def test_production_dashboards_exclude_retired_backend_collector(self):
+        for path in (ROOT / 'config/grafana/dashboards/prod').glob('*.json'):
+            with self.subTest(dashboard=path.name):
+                self.assertNotIn('backend-collector', path.read_text())
+
     def test_dashboard_uids_remain_unique_and_production_bookmarks_are_preserved(self):
         dashboards = [json.loads(p.read_text()) for p in (ROOT / 'config/grafana/dashboards').rglob('*.json')]
         uids = [d['uid'] for d in dashboards]
