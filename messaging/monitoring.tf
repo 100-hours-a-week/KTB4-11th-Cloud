@@ -142,3 +142,25 @@ resource "aws_cloudwatch_metric_alarm" "order_dlq_not_empty" {
 
   depends_on = [aws_lambda_permission.sqs_cloudwatch_alarms]
 }
+
+resource "aws_cloudwatch_metric_alarm" "ai_request_dlq_not_empty" {
+  alarm_name          = "${local.sqs_alarm_prefix}-ai-request-dlq-not-empty"
+  alarm_description   = "The V2 ${var.environment} AI battle setup DLQ contains at least one visible message."
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_lambda_function.sqs_discord_notifier.arn]
+  ok_actions          = [aws_lambda_function.sqs_discord_notifier.arn]
+
+  dimensions = {
+    QueueName = aws_sqs_queue.ai_request_dlq.name
+  }
+
+  depends_on = [aws_lambda_permission.sqs_cloudwatch_alarms]
+}
