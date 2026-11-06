@@ -114,10 +114,9 @@ output "telemetry_application_environments" {
   description = "Non-secret OTLP settings for application CD (existing task definitions are owned by CD)"
   value = var.plg_tempo_enabled ? {
     for service, enabled in {
-      backend             = true
-      frontend            = var.frontend_enabled
-      "market-http"       = local.ai_market_enabled
-      "backend-collector" = var.backend_collector_enabled
+      backend       = true
+      frontend      = var.frontend_enabled
+      "market-http" = local.ai_market_enabled
       } : service => concat(
       local.telemetry_otlp_environment,
       [{ name = "OTEL_SERVICE_NAME", value = service }],

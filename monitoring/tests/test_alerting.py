@@ -46,13 +46,24 @@ class AlertingTest(unittest.TestCase):
             return 'prod-' + labels['component'] if labels.get('component') else 'prod'
         return 'dev-' + (labels['component'] if labels.get('component') in alerting.DEV_COMPONENTS else labels['host_role'])
 
+    def test_retired_collector_alerts_are_deleted_and_not_recreated(self):
+        expected = {'stockspoon-prod-backend-collector-' + suffix
+                    for suffix in ['cpu', 'memory', 'tasks', 'logs']}
+        with self.stack() as (_, provisioning):
+            alerting.render(provisioning, URLS['prod'])
+            document = json.loads((provisioning / 'prod-services-rules.json').read_text())
+            self.assertEqual({r['uid'] for r in document['deleteRules']}, expected)
+            self.assertTrue(all(r['orgId'] == 1 for r in document['deleteRules']))
+            self.assertTrue(expected.isdisjoint(r['uid'] for r in self.rules(provisioning)))
+            self.assertNotIn('backend-collector', json.dumps(document['groups']))
+
     def test_each_rule_uses_only_its_own_receiver(self):
         with self.stack() as (_, provisioning):
             for _ in range(2):
                 alerting.render(provisioning, URLS['prod'], URLS['dev-app'], URLS['dev-ai'], PROD_URLS, DEV_URLS)
                 rules = self.rules(provisioning)
-                self.assertEqual(len(rules), 46)
-                self.assertEqual(len({r['uid'] for r in rules}), 46)
+                self.assertEqual(len(rules), 42)
+                self.assertEqual(len({r['uid'] for r in rules}), 42)
                 for rule in rules:
                     self.assertFalse(rule['isPaused'])
                     self.assertEqual(rule['notification_settings']['receiver'], alerting.RECEIVERS[self.route(rule)])
@@ -187,16 +198,16 @@ class AlertingTest(unittest.TestCase):
                 self.assertIn(alerting.PROD_PARAMETERS[component], run.call_args.args[0])
                 self.assertIn('--with-decryption', run.call_args.args[0])
 
-    def test_backend_logs_notify_separately_in_the_same_be_channel(self):
+    def test_backend_logs_notify_in_the_be_channel(self):
         with self.stack() as (_, provisioning):
             alerting.render(provisioning, None, production_webhooks={'be': PROD_URLS['be']})
             rules = [rule for rule in self.rules(provisioning)
                      if rule['labels'].get('component') == 'be'
                      and rule['labels']['environment'] == 'prod'
                      and rule['data'][0]['datasourceUid'] == 'loki']
-            self.assertEqual(len(rules), 2)
-            self.assertEqual({r['labels']['service_name'] for r in rules}, {'backend', 'backend-collector'})
-            self.assertEqual(len({r['title'] for r in rules}), 2)
+            self.assertEqual(len(rules), 1)
+            self.assertEqual({r['labels']['service_name'] for r in rules}, {'backend'})
+            self.assertEqual(len({r['title'] for r in rules}), 1)
             for rule in rules:
                 service = rule['labels']['service_name']
                 self.assertIn('service_name="' + service + '"', rule['data'][0]['model']['expr'])
