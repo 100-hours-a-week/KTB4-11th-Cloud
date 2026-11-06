@@ -135,6 +135,11 @@ resource "aws_iam_role_policy_attachment" "dev_app_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy_attachment" "dev_app_sqs_producer" {
+  role       = aws_iam_role.dev_app.name
+  policy_arn = "arn:aws:iam::250832562715:policy/stockspoon-v2-dev-backend-producer-sqs"
+}
+
 resource "aws_iam_role_policy" "dev_app_cloudwatch" {
   name   = "${var.dev_app_name_prefix}-cloudwatch-policy"
   role   = aws_iam_role.dev_app.id
