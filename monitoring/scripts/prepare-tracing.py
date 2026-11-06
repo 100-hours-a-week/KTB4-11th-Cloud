@@ -12,7 +12,7 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVICES = {"backend": "backend", "backend-collector": "backend", "market-http": "market-http"}
+SERVICES = {"backend": "backend", "market-http": "market-http"}
 READ_ONLY = {
     "taskDefinitionArn", "revision", "status", "requiresAttributes", "compatibilities",
     "registeredAt", "registeredBy", "deregisteredAt",
@@ -156,7 +156,6 @@ def main():
         path.write_text("\n".join(lines) + "\n")
         path.chmod(0o700)
         subprocess.run(["bash", "-n", str(path)], check=True)
-    write_json(destination / "collector-image.tfvars.json", {"backend_collector_instrumented_image": prepared["backend-collector"]["image"]})
     write_json(destination / "manifest.json", {service: {key: value for key, value in item.items() if key not in {"task", "original"}} for service, item in prepared.items()})
     print(f"Prepared {len(prepared)} images and deployment inputs in {destination}. Nothing built, pushed or deployed.")
 
