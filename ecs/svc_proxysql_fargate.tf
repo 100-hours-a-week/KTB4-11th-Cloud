@@ -103,9 +103,11 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
     [
       for container in local.proxysql_container_definitions : merge(
         container,
+        {
+          cpu    = container.name == "proxysql" ? local.proxysql_fargate_task_cpu - 96 : container.cpu
+          memory = container.name == "proxysql" ? local.proxysql_fargate_task_memory - 256 : container.memory
+        },
         container.name == "proxysql" ? {
-          cpu    = local.proxysql_fargate_task_cpu - 96
-          memory = local.proxysql_fargate_task_memory - 256
           healthCheck = {
             command     = ["CMD-SHELL", local.proxysql_healthcheck_command]
             interval    = 10
