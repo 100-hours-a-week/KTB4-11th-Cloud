@@ -264,28 +264,8 @@ resource "aws_service_discovery_private_dns_namespace" "proxysql" {
 
 resource "aws_iam_role" "proxysql_task" {
   name               = "${var.name_prefix}-proxysql-task-role"
-  description        = "Task role for ECS Exec into the ProxySQL service task"
+  description        = "Task role for the legacy EC2 ProxySQL task"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
-}
-
-# ECS Exec opens its control/data channels through ssmmessages.
-resource "aws_iam_role_policy" "proxysql_task_exec" {
-  name = "${var.name_prefix}-proxysql-task-exec"
-  role = aws_iam_role.proxysql_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ssmmessages:CreateControlChannel",
-        "ssmmessages:CreateDataChannel",
-        "ssmmessages:OpenControlChannel",
-        "ssmmessages:OpenDataChannel",
-      ]
-      Resource = "*"
-    }]
-  })
 }
 
 resource "aws_security_group" "proxysql_task" {
@@ -304,7 +284,7 @@ resource "aws_vpc_security_group_egress_rule" "proxysql_task_https" {
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
-  description       = "Allow ECS Exec SSM message channels through the existing NAT route"
+  description       = "Allow SSM control traffic for the FIS sidecar through the existing NAT route"
 }
 
 resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_migration_mysql" {
