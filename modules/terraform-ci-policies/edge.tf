@@ -1,6 +1,20 @@
 # Separate policy keeps the existing application policy below IAM's 6144-character limit.
 data "aws_iam_policy_document" "terraform_ci_write_edge" {
   statement {
+    sid    = "ManageProfileImageBucket"
+    effect = "Allow"
+    actions = [
+      "s3:CreateBucket",
+      "s3:PutBucketPolicy",
+      "s3:PutBucketOwnershipControls",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketTagging",
+      "s3:PutEncryptionConfiguration",
+    ]
+    resources = [var.resource_arns.profile_images]
+  }
+
+  statement {
     sid    = "ManageFrontendAssetBucket"
     effect = "Allow"
     actions = [

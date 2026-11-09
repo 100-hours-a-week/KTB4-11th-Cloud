@@ -184,6 +184,9 @@ locals {
   stock_logo_bucket_name = "stockspoon-stock-logos-${data.aws_caller_identity.github_actions_terraform.account_id}"
   stock_logo_bucket_arn  = "arn:${data.aws_partition.github_actions_terraform.partition}:s3:::${local.stock_logo_bucket_name}"
 
+  profile_image_bucket_name = "stockspoon-profile-images-${data.aws_caller_identity.github_actions_terraform.account_id}"
+  profile_image_bucket_arn  = "arn:${data.aws_partition.github_actions_terraform.partition}:s3:::${local.profile_image_bucket_name}"
+
   github_actions_terraform_account_iam_arns = concat(
     [
       for user in [
@@ -415,6 +418,7 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     resources = concat([
       local.alb_access_log_bucket_arn,
       local.stock_logo_bucket_arn,
+      local.profile_image_bucket_arn,
       local.frontend_assets_bucket_arn,
       ], [
       for kind in ["loki", "tempo"] :
@@ -535,6 +539,7 @@ module "terraform_ci_policies" {
     backend_datasource_url_parameter = local.backend_datasource_url_parameter_arn
     alb_logs                         = local.alb_access_log_bucket_arn
     stock_logos                      = local.stock_logo_bucket_arn
+    profile_images                   = local.profile_image_bucket_arn
     frontend_assets                  = local.frontend_assets_bucket_arn
     cloudfront_distributions         = "arn:aws:cloudfront::${data.aws_caller_identity.github_actions_terraform.account_id}:distribution/*"
     lambda                           = local.github_actions_terraform_lambda_arns

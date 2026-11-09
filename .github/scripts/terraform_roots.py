@@ -17,7 +17,8 @@ ROOT_DEPENDENCIES = {
     "test-infra": set(),
     "test-infra/sse-k6": {"test-infra", "shared-infra", "ecs"},
     "fis/market-http/terraform": {"ecs"},
-    "storage": set(),
+    # The app-server root owns Terraform CI permissions required to create this bucket.
+    "storage": {"app-server"},
     "ecr": set(),
     "ai-server/dashboard": set(),
     # 이름으로 참조하는 버킷·이미지 저장소도 기존 배포 의존성에 포함한다.
