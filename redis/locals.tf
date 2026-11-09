@@ -62,6 +62,7 @@ locals {
   rate_limit_access_string = join(" ", [
     "on",
     "~ratelimit:*",
+    "-@all",
     "+auth",
     "+hello",
     "+ping",
