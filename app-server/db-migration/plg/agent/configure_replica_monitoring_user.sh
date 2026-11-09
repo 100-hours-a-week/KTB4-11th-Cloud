@@ -29,7 +29,7 @@ done
 
 mysql_root() {
   docker exec -i "$MYSQL_CONTAINER" sh -lc \
-    'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root "$@"' \
+    'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=SOCKET --socket=/var/run/mysqld/mysqld.sock --connect-timeout=5 --user=root "$@"' \
     sh "$@"
 }
 

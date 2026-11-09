@@ -20,7 +20,8 @@ POLL_SECONDS = 10
 
 SOURCE_PREFLIGHT = r"""#!/usr/bin/env bash
 set -Eeuo pipefail
-MYSQL_CONTAINER=migration-mysql
+MYSQL_CONTAINER="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 == "mysql:8.4.11" {print $1; exit}')"
+[[ -n "$MYSQL_CONTAINER" ]] || { echo 'No running MySQL 8.4.11 container found on the Primary' >&2; exit 1; }
 mysql_root() {
   docker exec "$MYSQL_CONTAINER" sh -c \
     'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root "$@"' \
@@ -61,7 +62,8 @@ set -Eeuo pipefail
 AWS_REGION=ap-northeast-2
 TARGET_HOST=@@TARGET_IP@@
 PARAMETER=/stockspoon/v1/db-private-replica/replication-password
-MYSQL_CONTAINER=migration-mysql
+MYSQL_CONTAINER="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 == "mysql:8.4.11" {print $1; exit}')"
+[[ -n "$MYSQL_CONTAINER" ]] || { echo 'No running MySQL 8.4.11 container found on the Primary' >&2; exit 1; }
 ROOT_PASSWORD_FILE=/opt/stockspoon-db-migration/mysql/secrets/mysql-root-password
 [[ "$TARGET_HOST" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 [[ -s "$ROOT_PASSWORD_FILE" ]]
@@ -92,7 +94,8 @@ set -Eeuo pipefail
 AWS_REGION=ap-northeast-2
 TARGET_HOST=@@TARGET_IP@@
 PARAMETER=/stockspoon/v1/db-private-replica/replication-password
-MYSQL_CONTAINER=migration-mysql
+MYSQL_CONTAINER="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 == "mysql:8.4.11" {print $1; exit}')"
+[[ -n "$MYSQL_CONTAINER" ]] || { echo 'No running MySQL 8.4.11 container found on the Primary' >&2; exit 1; }
 ROOT_PASSWORD_FILE=/opt/stockspoon-db-migration/mysql/secrets/mysql-root-password
 [[ "$TARGET_HOST" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 [[ -s "$ROOT_PASSWORD_FILE" ]]
@@ -123,7 +126,8 @@ SOURCE_MONITOR_PREPARE = r"""#!/usr/bin/env bash
 set -Eeuo pipefail
 AWS_REGION=ap-northeast-2
 PARAMETER=/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD
-MYSQL_CONTAINER=migration-mysql
+MYSQL_CONTAINER="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 == "mysql:8.4.11" {print $1; exit}')"
+[[ -n "$MYSQL_CONTAINER" ]] || { echo 'No running MySQL 8.4.11 container found on the Primary' >&2; exit 1; }
 ROOT_PASSWORD_FILE=/opt/stockspoon-db-migration/mysql/secrets/mysql-root-password
 [[ -s "$ROOT_PASSWORD_FILE" ]]
 monitor_password=''
@@ -148,7 +152,8 @@ echo 'PRIMARY_PROXYSQL_MONITOR_READY'
 SOURCE_DROP_SEED = r"""#!/usr/bin/env bash
 set -Eeuo pipefail
 TARGET_HOST=@@TARGET_IP@@
-MYSQL_CONTAINER=migration-mysql
+MYSQL_CONTAINER="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 == "mysql:8.4.11" {print $1; exit}')"
+[[ -n "$MYSQL_CONTAINER" ]] || { echo 'No running MySQL 8.4.11 container found on the Primary' >&2; exit 1; }
 ROOT_PASSWORD_FILE=/opt/stockspoon-db-migration/mysql/secrets/mysql-root-password
 [[ "$TARGET_HOST" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 [[ -s "$ROOT_PASSWORD_FILE" ]]
@@ -158,6 +163,89 @@ SET SESSION sql_log_bin=0;
 DROP USER IF EXISTS 'db_private_seed'@'$TARGET_HOST';
 SQL
 echo 'TEMPORARY_SEED_ACCOUNT_REMOVED'
+"""
+
+MONITORING_TARGET_UPDATE = r"""#!/usr/bin/env bash
+set -Eeuo pipefail
+NEW_REPLICA_IP=@@TARGET_IP@@
+PLG_DIRECTORY=/opt/stockspoon-plg
+ENV_FILE="$PLG_DIRECTORY/.env"
+PROMETHEUS_CONFIG="$PLG_DIRECTORY/prometheus.yml"
+[[ -s "$ENV_FILE" && -s "$PROMETHEUS_CONFIG" ]]
+OLD_REPLICA_IP="$(awk -F= '$1 == "PRIVATE_REPLICA_DB_PRIVATE_IP" {print $2; exit}' "$ENV_FILE")"
+[[ -n "$OLD_REPLICA_IP" ]]
+PRIMARY_IP="$(awk -F= '$1 == "PRIMARY_DB_PRIVATE_IP" {print $2; exit}' "$ENV_FILE")"
+[[ -n "$PRIMARY_IP" ]]
+
+python3 - "$ENV_FILE" "$NEW_REPLICA_IP" <<'PY'
+from pathlib import Path
+import os
+import sys
+
+path = Path(sys.argv[1])
+replica_ip = sys.argv[2]
+lines = path.read_text().splitlines()
+found = False
+updated = []
+for line in lines:
+    if line.startswith("PRIVATE_REPLICA_DB_PRIVATE_IP="):
+        updated.append(f"PRIVATE_REPLICA_DB_PRIVATE_IP={replica_ip}")
+        found = True
+    else:
+        updated.append(line)
+if not found:
+    updated.append(f"PRIVATE_REPLICA_DB_PRIVATE_IP={replica_ip}")
+path.write_text("\n".join(updated) + "\n")
+os.chmod(path, 0o600)
+PY
+
+if [[ -s "$PLG_DIRECTORY/prometheus.yml.tmpl" ]]; then
+  sed \
+    -e "s/__PRIMARY_DB_PRIVATE_IP__/$PRIMARY_IP/g" \
+    -e "s/__PRIVATE_REPLICA_DB_PRIVATE_IP__/$NEW_REPLICA_IP/g" \
+    "$PLG_DIRECTORY/prometheus.yml.tmpl" > "$PROMETHEUS_CONFIG.tmp"
+else
+  OLD_REPLICA_IP_PATTERN="${OLD_REPLICA_IP//./\\.}"
+  sed "s/$OLD_REPLICA_IP_PATTERN/$NEW_REPLICA_IP/g" "$PROMETHEUS_CONFIG" > "$PROMETHEUS_CONFIG.tmp"
+fi
+mv "$PROMETHEUS_CONFIG.tmp" "$PROMETHEUS_CONFIG"
+
+cd "$PLG_DIRECTORY"
+if [[ -s https/public.env ]]; then
+  COMPOSE=(docker compose --env-file .env --env-file https/public.env -f compose.yaml -f compose.https.yaml)
+else
+  COMPOSE=(docker compose --env-file .env -f compose.yaml)
+fi
+"${COMPOSE[@]}" config --quiet
+"${COMPOSE[@]}" up -d --no-deps --force-recreate mysqld-exporter heartbeat-private-replica prometheus
+
+mysql_up=0
+for attempt in $(seq 1 60); do
+  mysql_up="$(curl --fail --silent --get http://127.0.0.1:9090/api/v1/query \
+    --data-urlencode 'query=mysql_up{job="mysql-private-replica"}' \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin).get("data",{}).get("result",[]); print(r[0]["value"][1] if r else "0")')"
+  [[ "$mysql_up" == '1' ]] && break
+  sleep 2
+done
+[[ "$mysql_up" == '1' ]] || {
+  echo 'Monitoring config was updated, but mysql-private-replica still cannot authenticate or scrape the DB' >&2
+  exit 1
+}
+for metric in mysql_slave_status_replica_io_running mysql_slave_status_replica_sql_running; do
+  value=0
+  for attempt in $(seq 1 30); do
+    value="$(curl --fail --silent --get http://127.0.0.1:9090/api/v1/query \
+      --data-urlencode "query=$metric{job=\"mysql-private-replica\"}" \
+      | python3 -c 'import json,sys; r=json.load(sys.stdin).get("data",{}).get("result",[]); print(r[0]["value"][1] if r else "0")')"
+    [[ "$value" == '1' ]] && break
+    sleep 2
+  done
+  [[ "$value" == '1' ]] || {
+    echo "Monitoring target is up, but $metric is not healthy" >&2
+    exit 1
+  }
+done
+echo 'MONITORING_PRIVATE_REPLICA_TARGET_READY'
 """
 
 
@@ -182,16 +270,21 @@ def run_aws_json(arguments: list[str]) -> dict:
     raise RuntimeError("AWS CLI retry loop ended unexpectedly")
 
 
-def instance_environment() -> tuple[str, str, str, str]:
+def instance_environment() -> tuple[str, str, str, str, str, str]:
     source_id = os.environ["DB_PRIMARY_INSTANCE_ID"]
     source_ip = os.environ["DB_PRIMARY_PRIVATE_IP"]
     target_id = os.environ["DB_PRIVATE_REPLICA_INSTANCE_ID"]
     target_ip = os.environ["DB_PRIVATE_REPLICA_PRIVATE_IP"]
+    monitor_id = os.environ["DB_MIGRATION_PMM_INSTANCE_ID"]
+    monitor_ip = os.environ["DB_MIGRATION_PMM_PRIVATE_IP"]
     IPv4Address(source_ip)
     IPv4Address(target_ip)
+    IPv4Address(monitor_ip)
+    if not monitor_id.startswith("i-"):
+        raise RuntimeError("Monitoring instance ID must be an EC2 instance ID")
     if source_id == target_id:
         raise RuntimeError("Primary and private replica resolve to the same EC2 instance")
-    return source_id, source_ip, target_id, target_ip
+    return source_id, source_ip, target_id, target_ip, monitor_id, monitor_ip
 
 
 def wait_for_ssm(instance_id: str) -> None:
@@ -319,11 +412,31 @@ def remove_temporary_seed_account(source_id: str, target_ip: str) -> None:
     )
 
 
+def install_replica_monitoring_agent(instance_id: str, monitor_ip: str) -> None:
+    script = Path(__file__).parents[1] / "db-migration" / "plg" / "deploy_agent_via_ssm.sh"
+    environment = os.environ.copy()
+    environment["AWS_REGION"] = REGION
+    subprocess.run(
+        [
+            "bash",
+            str(script),
+            instance_id,
+            "private-replica",
+            monitor_ip,
+            "stockspoon-private-db-replica",
+        ],
+        check=True,
+        text=True,
+        env=environment,
+    )
+
+
 def main() -> None:
-    source_id, source_ip, target_id, target_ip = instance_environment()
+    source_id, source_ip, target_id, target_ip, monitor_id, monitor_ip = instance_environment()
     print(f"Checking private replica {target_id} against Primary {source_id}", flush=True)
     wait_for_ssm(source_id)
     wait_for_ssm(target_id)
+    wait_for_ssm(monitor_id)
     wait_for_replica_user_data(target_id)
 
     install_replica_helper(target_id)
@@ -337,7 +450,7 @@ def main() -> None:
             timeout=300,
         )
         if "GTID_REPLICA_THREADS_RUNNING" in status:
-            print("Private GTID replica is already connected; binlog replay continues asynchronously", flush=True)
+            print("Private GTID replica replication threads are healthy", flush=True)
         elif "NEEDS_BASELINE_SEED" in status or "BASELINE_SEEDED_NEEDS_GTID_CONFIGURATION" in status:
             # A fresh replica streams an InnoDB snapshot and the source GTID set,
             # then uses auto-position for all changes committed after that snapshot.
@@ -394,7 +507,14 @@ def main() -> None:
 
     if seed_account_preparation_attempted:
         remove_temporary_seed_account(source_id, target_ip)
-    print("Private GTID replica configured; available source binlogs are applying asynchronously", flush=True)
+    install_replica_monitoring_agent(target_id, monitor_ip)
+    run_ssm(
+        monitor_id,
+        with_target_host(MONITORING_TARGET_UPDATE, target_ip),
+        "refresh monitoring targets for the current private replica IP",
+        timeout=300,
+    )
+    print("Private GTID replica is seeded, replication is configured, and monitoring is ready", flush=True)
 
 
 if __name__ == "__main__":
