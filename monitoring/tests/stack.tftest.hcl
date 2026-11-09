@@ -100,6 +100,24 @@ mock_provider "aws" {
   }
 }
 
+# The CloudFront viewer certificate is requested through the us-east-1 alias.
+# Keep this mock separate so offline tests never try to resolve real AWS creds.
+mock_provider "aws" {
+  alias = "us_east_1"
+
+  mock_resource "aws_acm_certificate" {
+    defaults = {
+      arn = "arn:aws:acm:us-east-1:123456789012:certificate/abcdef01-2345-6789-abcd-ef0123456789"
+      domain_validation_options = [{
+        domain_name           = "monitoring.stock-spoon.com"
+        resource_record_name  = "_validation.monitoring.stock-spoon.com."
+        resource_record_type  = "CNAME"
+        resource_record_value = "_validation.acm-validations.aws."
+      }]
+    }
+  }
+}
+
 override_data {
   target = data.terraform_remote_state.development
   values = {
