@@ -46,10 +46,96 @@ resource "aws_acm_certificate_validation" "grafana" {
   validation_record_fqdns = [for record in aws_route53_record.grafana_certificate : record.fqdn]
 }
 
+# CloudFront viewer certificates must be in us-east-1. ACM's DNS validation
+# record for this hostname is reusable across regions in the same account.
+resource "aws_acm_certificate" "grafana_cloudfront" {
+  count             = local.grafana_public_enabled ? 1 : 0
+  provider          = aws.us_east_1
+  domain_name       = var.grafana_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_acm_certificate_validation" "grafana_cloudfront" {
+  count                   = local.grafana_public_enabled ? 1 : 0
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.grafana_cloudfront[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.grafana_certificate : record.fqdn]
+}
+
+data "aws_cloudfront_cache_policy" "grafana_disabled" {
+  count = local.grafana_public_enabled ? 1 : 0
+  name  = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_origin_request_policy" "grafana_all_viewer" {
+  count = local.grafana_public_enabled ? 1 : 0
+  name  = "Managed-AllViewer"
+}
+
 resource "aws_lb_listener_certificate" "grafana" {
   count           = local.grafana_public_enabled ? 1 : 0
   listener_arn    = data.terraform_remote_state.app_edge[0].outputs.https_listener_arn
   certificate_arn = aws_acm_certificate_validation.grafana[0].certificate_arn
+}
+
+# Keep the public Grafana hostname available after the ALB ingress is limited
+# to CloudFront. The ALB listener still selects this target by the viewer Host.
+# The application API rate-limit WebACL is intentionally not attached here;
+# Grafana itself uses /api/* routes which would share that rate bucket.
+resource "aws_cloudfront_distribution" "grafana" {
+  count               = local.grafana_public_enabled ? 1 : 0
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "StockSpoon production Grafana through CloudFront"
+  aliases             = [var.grafana_domain_name]
+  price_class         = "PriceClass_All"
+  http_version        = "http2and3"
+  wait_for_deployment = true
+
+  origin {
+    domain_name = data.terraform_remote_state.app_edge[0].outputs.alb_dns_name
+    origin_id   = "grafana-alb"
+
+    custom_origin_config {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "https-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_read_timeout      = 60
+      origin_keepalive_timeout = 5
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id         = "grafana-alb"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD"]
+    cache_policy_id          = data.aws_cloudfront_cache_policy.grafana_disabled[0].id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.grafana_all_viewer[0].id
+    compress                 = true
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate_validation.grafana_cloudfront[0].certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  depends_on = [
+    aws_lb_listener_certificate.grafana,
+    aws_lb_listener_rule.grafana,
+  ]
 }
 
 resource "aws_lb_target_group" "grafana" {
@@ -125,9 +211,22 @@ resource "aws_route53_record" "grafana" {
   name    = var.grafana_domain_name
   type    = "A"
   alias {
-    name                   = data.terraform_remote_state.app_edge[0].outputs.alb_dns_name
-    zone_id                = data.terraform_remote_state.app_edge[0].outputs.alb_zone_id
+    name                   = aws_cloudfront_distribution.grafana[0].domain_name
+    zone_id                = aws_cloudfront_distribution.grafana[0].hosted_zone_id
     evaluate_target_health = false
   }
-  depends_on = [aws_lb_listener_rule.grafana]
+  depends_on = [aws_lb_listener_rule.grafana, aws_cloudfront_distribution.grafana]
+}
+
+resource "aws_route53_record" "grafana_ipv6" {
+  count   = local.grafana_public_enabled ? 1 : 0
+  zone_id = data.aws_route53_zone.grafana[0].zone_id
+  name    = var.grafana_domain_name
+  type    = "AAAA"
+  alias {
+    name                   = aws_cloudfront_distribution.grafana[0].domain_name
+    zone_id                = aws_cloudfront_distribution.grafana[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+  depends_on = [aws_lb_listener_rule.grafana, aws_cloudfront_distribution.grafana]
 }
