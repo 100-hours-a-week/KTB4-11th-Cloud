@@ -456,6 +456,7 @@ def main() -> None:
             "NEEDS_BASELINE_SEED" in status
             or "BASELINE_SEEDED_NEEDS_GTID_CONFIGURATION" in status
             or "BASELINE_ATTEMPT_SAFE_TO_RETRY" in status
+            or "BASELINE_ATTEMPT_NEEDS_GTID_VALIDATION" in status
         ):
             # A fresh replica streams an InnoDB snapshot and the source GTID set,
             # then uses auto-position for all changes committed after that snapshot.

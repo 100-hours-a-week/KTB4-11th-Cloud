@@ -6,6 +6,7 @@ MYSQL_CONTAINER="stockspoon-private-db-replica"
 ROOT_PASSWORD_FILE="/opt/stockspoon-db-private-replica/secrets/mysql-root-password"
 SEED_MARKER="/opt/stockspoon-db-private-replica/seed-complete"
 SEED_ATTEMPT_MARKER="/opt/stockspoon-db-private-replica/seed-started"
+SEED_DUMP_COMPLETE_MARKER="/opt/stockspoon-db-private-replica/seed-dump-complete"
 SEED_OPTION_FILE=""
 REPLICATION_PASSWORD_PARAMETER="/stockspoon/v1/db-private-replica/replication-password"
 MONITOR_PASSWORD_PARAMETER="/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD"
@@ -63,36 +64,149 @@ application_schemas() {
 }
 
 target_gtid_executed() {
-  mysql_root --batch --skip-column-names --execute='SELECT @@GLOBAL.gtid_executed'
+  mysql_root --batch --skip-column-names \
+    --execute="SELECT REPLACE(REPLACE(@@GLOBAL.gtid_executed, CHAR(10), ''), CHAR(13), '')"
+}
+
+target_gtid_purged() {
+  mysql_root --batch --skip-column-names \
+    --execute="SELECT REPLACE(REPLACE(@@GLOBAL.gtid_purged, CHAR(10), ''), CHAR(13), '')"
 }
 
 expected_marker_contents() {
   printf '%s\n%s' "$SOURCE_INSTANCE_ID" "$SOURCE_HOST"
 }
 
-verify_incomplete_seed_retry_safe() {
-  local marker_contents
+verify_incomplete_seed_attempt_source() {
+  local marker_source marker_host marker_format
   [[ -s "$SEED_ATTEMPT_MARKER" ]] || {
     echo 'The incomplete baseline marker is missing or empty; refusing automatic retry' >&2
     return 1
   }
-  marker_contents="$(cat "$SEED_ATTEMPT_MARKER")"
-  [[ "$marker_contents" == "$(expected_marker_contents)" ]] || {
+  marker_source="$(sed -n '1p' "$SEED_ATTEMPT_MARKER")"
+  marker_host="$(sed -n '2p' "$SEED_ATTEMPT_MARKER")"
+  marker_format="$(sed -n '3p' "$SEED_ATTEMPT_MARKER")"
+  [[ "$marker_source" == "$SOURCE_INSTANCE_ID" && "$marker_host" == "$SOURCE_HOST" ]] || {
     echo 'The incomplete baseline attempt belongs to a different Primary; refusing automatic retry' >&2
     return 1
   }
-  [[ -z "$(replica_status)" ]] || {
-    echo 'A replication channel exists after an incomplete baseline attempt; refusing automatic retry' >&2
+  [[ -z "$marker_format" || "$marker_format" == 'format=2' ]] || {
+    echo 'The incomplete baseline marker has an unsupported format; refusing automatic recovery' >&2
     return 1
   }
-  [[ -z "$(application_schemas)" ]] || {
-    echo 'Application schemas exist after an incomplete baseline attempt; manual inspection is required' >&2
+}
+
+application_object_manifest() {
+  mysql_root --batch --skip-column-names --execute="
+    SELECT CONCAT('TABLE:', table_name, ':', table_type)
+    FROM information_schema.tables
+    WHERE table_schema='stockspoon'
+    UNION ALL
+    SELECT CONCAT('ROUTINE:', routine_name, ':', routine_type)
+    FROM information_schema.routines
+    WHERE routine_schema='stockspoon'
+    UNION ALL
+    SELECT CONCAT('EVENT:', event_name)
+    FROM information_schema.events
+    WHERE event_schema='stockspoon'
+    UNION ALL
+    SELECT CONCAT('TRIGGER:', trigger_name, ':', event_object_table, ':', action_timing, ':', event_manipulation)
+    FROM information_schema.triggers
+    WHERE trigger_schema='stockspoon'
+    ORDER BY 1"
+}
+
+source_application_object_manifest() {
+  docker exec "$MYSQL_CONTAINER" mysql \
+    --defaults-extra-file="$SEED_OPTION_FILE" \
+    --protocol=TCP --host="$SOURCE_HOST" --port=3306 --connect-timeout=10 \
+    --ssl-mode=REQUIRED --batch --skip-column-names \
+    --execute="
+      SELECT CONCAT('TABLE:', table_name, ':', table_type)
+      FROM information_schema.tables
+      WHERE table_schema='stockspoon'
+      UNION ALL
+      SELECT CONCAT('ROUTINE:', routine_name, ':', routine_type)
+      FROM information_schema.routines
+      WHERE routine_schema='stockspoon'
+      UNION ALL
+      SELECT CONCAT('EVENT:', event_name)
+      FROM information_schema.events
+      WHERE event_schema='stockspoon'
+      UNION ALL
+      SELECT CONCAT('TRIGGER:', trigger_name, ':', event_object_table, ':', action_timing, ':', event_manipulation)
+      FROM information_schema.triggers
+      WHERE trigger_schema='stockspoon'
+      ORDER BY 1"
+}
+
+incomplete_seed_attempt_status() {
+  local channel_status schemas executed purged marker_format dump_marker_contents
+  verify_incomplete_seed_attempt_source || return 1
+  channel_status="$(replica_status)" || return 1
+  [[ -z "$channel_status" ]] || {
+    echo 'A replication channel exists after an incomplete baseline attempt; refusing automatic recovery' >&2
     return 1
   }
-  [[ -z "$(target_gtid_executed)" ]] || {
-    echo 'GTID history exists after an incomplete baseline attempt; manual inspection is required' >&2
+  schemas="$(application_schemas)" || return 1
+  executed="$(target_gtid_executed)" || return 1
+  if [[ -z "$schemas" && -z "$executed" ]]; then
+    printf '%s\n' 'BASELINE_ATTEMPT_SAFE_TO_RETRY'
+    return 0
+  fi
+  [[ "$schemas" == 'stockspoon' && -n "$executed" ]] || {
+    echo 'Incomplete baseline has an unexpected schema or GTID state; manual inspection is required' >&2
     return 1
   }
+  marker_format="$(sed -n '3p' "$SEED_ATTEMPT_MARKER")"
+  if [[ -s "$SEED_DUMP_COMPLETE_MARKER" ]]; then
+    dump_marker_contents="$(cat "$SEED_DUMP_COMPLETE_MARKER")"
+    [[ "$dump_marker_contents" == "$(expected_marker_contents)" ]] || {
+      echo 'The completed dump marker belongs to a different Primary; refusing automatic recovery' >&2
+      return 1
+    }
+  elif [[ -z "$marker_format" ]]; then
+    # Legacy attempts have no dump-complete marker. Allow verification only
+    # when the imported GTID_PURGED exactly matches the replica's GTID history.
+    purged="$(target_gtid_purged)" || return 1
+    [[ -n "$purged" && "$purged" == "$executed" ]] || {
+      echo 'Legacy incomplete baseline has no complete GTID snapshot; manual inspection is required' >&2
+      return 1
+    }
+  else
+    echo 'The baseline dump was not recorded as complete; refusing automatic recovery' >&2
+    return 1
+  fi
+  printf '%s\n' 'BASELINE_ATTEMPT_NEEDS_GTID_VALIDATION'
+}
+
+verify_incomplete_seed_baseline() {
+  local channel_status schemas executed purged source_manifest target_manifest
+  verify_incomplete_seed_attempt_source || return 1
+  channel_status="$(replica_status)" || return 1
+  [[ -z "$channel_status" ]] || {
+    echo 'A replication channel exists after an incomplete baseline attempt; refusing adoption' >&2
+    return 1
+  }
+  schemas="$(application_schemas)" || return 1
+  [[ "$schemas" == 'stockspoon' ]] || {
+    echo 'Incomplete baseline does not contain exactly the stockspoon schema; refusing adoption' >&2
+    return 1
+  }
+  executed="$(target_gtid_executed)" || return 1
+  purged="$(target_gtid_purged)" || return 1
+  [[ -n "$executed" && "$purged" == "$executed" ]] || {
+    echo 'Incomplete baseline does not have a complete imported GTID snapshot; refusing adoption' >&2
+    return 1
+  }
+  source_manifest="$(source_application_object_manifest)" || return 1
+  target_manifest="$(application_object_manifest)" || return 1
+  [[ -n "$source_manifest" && "$source_manifest" == "$target_manifest" ]] || {
+    echo 'Primary and Replica schema objects do not match; refusing baseline adoption' >&2
+    return 1
+  }
+  verify_seed_gtid_history || return 1
+  ensure_read_only || return 1
 }
 
 verify_seed_marker() {
@@ -211,15 +325,13 @@ source_gtid_sets() {
     --defaults-extra-file="$SEED_OPTION_FILE" \
     --protocol=TCP --host="$SOURCE_HOST" --port=3306 --connect-timeout=10 \
     --ssl-mode=REQUIRED --batch --skip-column-names \
-    --execute='SELECT CONCAT("EXECUTED:", @@GLOBAL.gtid_executed); SELECT CONCAT("PURGED:", @@GLOBAL.gtid_purged)')"
-  [[ "$gtid_output" == *$'\n'* ]] || {
+    --execute="SELECT REPLACE(REPLACE(@@GLOBAL.gtid_executed, CHAR(10), ''), CHAR(13), ''), REPLACE(REPLACE(@@GLOBAL.gtid_purged, CHAR(10), ''), CHAR(13), '')")"
+  [[ "$gtid_output" == *$'\t'* ]] || {
     echo 'Could not read both GTID sets from the Primary' >&2
     return 1
   }
-  SOURCE_GTID_EXECUTED="${gtid_output%%$'\n'*}"
-  SOURCE_GTID_PURGED="${gtid_output#*$'\n'}"
-  SOURCE_GTID_EXECUTED="${SOURCE_GTID_EXECUTED#EXECUTED:}"
-  SOURCE_GTID_PURGED="${SOURCE_GTID_PURGED#PURGED:}"
+  SOURCE_GTID_EXECUTED="${gtid_output%%$'\t'*}"
+  SOURCE_GTID_PURGED="${gtid_output#*$'\t'}"
   [[ -n "$SOURCE_GTID_EXECUTED" ]] || {
     echo 'The Primary has an empty gtid_executed set; refusing baseline replication' >&2
     return 1
@@ -228,16 +340,16 @@ source_gtid_sets() {
 
 verify_seed_gtid_history() {
   local source_executed_sql source_purged_sql target_executed target_executed_sql checks
-  source_gtid_sets
+  source_gtid_sets || return 1
   source_executed_sql="$(sql_escape "$SOURCE_GTID_EXECUTED")"
   source_purged_sql="$(sql_escape "$SOURCE_GTID_PURGED")"
-  target_executed="$(target_gtid_executed)"
+  target_executed="$(target_gtid_executed)" || return 1
   [[ -n "$target_executed" ]] || {
     echo 'Private MySQL has no GTID history after baseline import' >&2
     return 1
   }
   target_executed_sql="$(sql_escape "$target_executed")"
-  checks="$(mysql_root --batch --skip-column-names --execute="SELECT GTID_SUBSET('$source_purged_sql', '$target_executed_sql'), GTID_SUBSET('$target_executed_sql', '$source_executed_sql')")"
+  checks="$(mysql_root --batch --skip-column-names --execute="SELECT GTID_SUBSET('$source_purged_sql', '$target_executed_sql'), GTID_SUBSET('$target_executed_sql', '$source_executed_sql')")" || return 1
   [[ "$checks" == $'1\t1' ]] || {
     echo 'Baseline GTID history is not safe for auto-position; the Primary may have purged transactions since the snapshot' >&2
     return 1
@@ -259,12 +371,24 @@ seed_baseline() {
     verify_seeded_data
     verify_seed_gtid_history
     rm -f "$SEED_ATTEMPT_MARKER"
+    rm -f "$SEED_DUMP_COMPLETE_MARKER"
     printf '%s\n' 'BASELINE_ALREADY_SEEDED_AND_GTID_HISTORY_VALID'
     return 0
   fi
 
   if [[ -e "$SEED_ATTEMPT_MARKER" ]]; then
-    verify_incomplete_seed_retry_safe || return 1
+    local attempt_status
+    attempt_status="$(incomplete_seed_attempt_status)" || return 1
+    if [[ "$attempt_status" == 'BASELINE_ATTEMPT_NEEDS_GTID_VALIDATION' ]]; then
+      verify_incomplete_seed_baseline || return 1
+      marker_tmp="${SEED_MARKER}.tmp.$$"
+      expected_marker_contents > "$marker_tmp"
+      chmod 0600 "$marker_tmp"
+      mv "$marker_tmp" "$SEED_MARKER"
+      rm -f "$SEED_ATTEMPT_MARKER" "$SEED_DUMP_COMPLETE_MARKER"
+      printf '%s\n' 'BASELINE_RECOVERED_WITHOUT_REIMPORT'
+      return 0
+    fi
     echo 'Previous baseline attempt left an empty target; retrying the seed safely' >&2
   fi
 
@@ -274,8 +398,9 @@ seed_baseline() {
     return 1
   }
   current_gtids="$(target_gtid_executed)"
-  printf '%s\n%s\n' "$SOURCE_INSTANCE_ID" "$SOURCE_HOST" > "$SEED_ATTEMPT_MARKER"
+  printf '%s\n%s\nformat=2\n' "$SOURCE_INSTANCE_ID" "$SOURCE_HOST" > "$SEED_ATTEMPT_MARKER"
   chmod 0600 "$SEED_ATTEMPT_MARKER"
+  rm -f "$SEED_DUMP_COMPLETE_MARKER"
   if [[ -n "$current_gtids" ]]; then
     # A brand-new MySQL Docker data directory can have local initialization
     # transactions. It is empty and has no channel, so clear only this replica's
@@ -301,13 +426,17 @@ seed_baseline() {
     echo 'Baseline import did not produce exactly the stockspoon application schema' >&2
     return 1
   }
+  marker_tmp="${SEED_DUMP_COMPLETE_MARKER}.tmp.$$"
+  expected_marker_contents > "$marker_tmp"
+  chmod 0600 "$marker_tmp"
+  mv "$marker_tmp" "$SEED_DUMP_COMPLETE_MARKER"
   verify_seed_gtid_history
 
   marker_tmp="${SEED_MARKER}.tmp.$$"
   expected_marker_contents > "$marker_tmp"
   chmod 0600 "$marker_tmp"
   mv "$marker_tmp" "$SEED_MARKER"
-  rm -f "$SEED_ATTEMPT_MARKER"
+  rm -f "$SEED_ATTEMPT_MARKER" "$SEED_DUMP_COMPLETE_MARKER"
   printf '%s\n' 'BASELINE_SEEDED_AND_GTID_HISTORY_VALID'
 }
 
@@ -320,8 +449,7 @@ if [[ "$MODE" == "status" ]]; then
       exit 0
     fi
     if [[ -e "$SEED_ATTEMPT_MARKER" ]]; then
-      verify_incomplete_seed_retry_safe
-      printf '%s\n' 'BASELINE_ATTEMPT_SAFE_TO_RETRY'
+      incomplete_seed_attempt_status
       exit 0
     fi
     non_system_schemas="$(application_schemas)"
