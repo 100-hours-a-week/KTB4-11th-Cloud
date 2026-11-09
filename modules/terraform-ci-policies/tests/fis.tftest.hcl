@@ -24,6 +24,7 @@ variables {
     ecr_private                      = ["arn:aws:ecr:ap-northeast-2:250832562715:repository/test"]
     ses                              = ["arn:aws:ses:ap-northeast-2:250832562715:identity/test"]
     iam_resources                    = ["arn:aws:iam::250832562715:role/test"]
+    terraform_read_policy            = "arn:aws:iam::250832562715:policy/test-terraform-read"
     iam_accounts                     = ["arn:aws:iam::250832562715:user/test"]
     pass_roles                       = ["arn:aws:iam::250832562715:role/test"]
     hosted_zone                      = "arn:aws:route53:::hostedzone/test"
