@@ -22,13 +22,13 @@ run "observe_all_api_paths" {
     condition = alltrue([for r in aws_wafv2_web_acl.api.rule :
       length(r.action[0].count) == 1 && length(r.action[0].block) == 0 &&
       r.statement[0].rate_based_statement[0].aggregate_key_type == "IP" &&
-      r.statement[0].rate_based_statement[0].limit == 500 &&
+      r.statement[0].rate_based_statement[0].limit == 1200 &&
       r.statement[0].rate_based_statement[0].evaluation_window_sec == 300 &&
       r.statement[0].rate_based_statement[0].scope_down_statement[0].byte_match_statement[0].search_string == "/api/" &&
       r.statement[0].rate_based_statement[0].scope_down_statement[0].byte_match_statement[0].positional_constraint == "STARTS_WITH"
       if r.name == "api-per-source-ip"
     ])
-    error_message = "Default must count 500 requests per 300s per IP across /api/ paths."
+    error_message = "Default must count 1200 requests per 300s per IP across /api/ paths."
   }
   assert {
     condition = alltrue([for r in aws_wafv2_web_acl.api.rule :

@@ -23,8 +23,11 @@ variable "api_waf_mode" {
 }
 
 variable "api_waf_request_limit" {
-  type    = number
-  default = 500
+  type = number
+  # 2026-11-07 same-IP mixed test observed about 950 requests per 300s
+  # (3 RPS attack + normal cohort); 1200 leaves roughly 26% headroom while
+  # retaining a coarse per-IP ceiling above the authenticated BE user limit.
+  default = 1200
 }
 
 variable "api_waf_evaluation_window_sec" {
