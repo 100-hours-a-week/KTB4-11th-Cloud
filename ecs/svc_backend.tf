@@ -2,8 +2,12 @@
 # DB 접속은 ProxySQL ECS task를 경유한다.
 
 locals {
-  backend_image       = "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_image_tag}"
-  backend_valkey_role = "backend"
+  backend_image                  = "${data.terraform_remote_state.app.outputs.public_ecr_v2_backend_repository_uri}:${var.backend_image_tag}"
+  backend_valkey_role            = "backend"
+  backend_rate_limit_valkey_role = "rate-limit"
+  # The redis root must publish the new user before this optional attachment is created.
+  backend_rate_limit_valkey_policy_arn = try(local.valkey_policies[local.backend_rate_limit_valkey_role], null)
+  backend_rate_limit_valkey_username   = try(local.valkey_users[local.backend_rate_limit_valkey_role], null)
 
   # Keep Backend on the stable Fargate ProxySQL Cloud Map endpoint in every Terraform run.
   backend_datasource_url = "jdbc:mysql://${local.backend_proxysql_dns_name}:${var.proxysql_port}/${var.backend_mysql_database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
@@ -35,6 +39,10 @@ locals {
       # REST 담당은 별도 내부 ECS 서비스로 운영한다.
       { name = "KIWOOM_COLLECTOR_ENABLED", value = "false" },
     ],
+    local.backend_rate_limit_valkey_username == null ? [] : [{
+      name  = "RATE_LIMIT_REDIS_USERNAME"
+      value = local.backend_rate_limit_valkey_username
+    }],
     # SSM에는 빈 값을 저장할 수 없음
     var.backend_kakao_client_secret_enabled ? [] : [{ name = "KAKAO_CLIENT_SECRET", value = "" }],
     local.telemetry_otlp_environment,
@@ -108,6 +116,13 @@ resource "aws_iam_role" "backend_task" {
 resource "aws_iam_role_policy_attachment" "backend_valkey" {
   role       = aws_iam_role.backend_task.name
   policy_arn = local.valkey_policies[local.backend_valkey_role]
+}
+
+# Separate Valkey identity for the restricted ratelimit:* counter namespace.
+resource "aws_iam_role_policy_attachment" "backend_valkey_rate_limit" {
+  count      = local.backend_rate_limit_valkey_policy_arn == null ? 0 : 1
+  role       = aws_iam_role.backend_task.name
+  policy_arn = local.backend_rate_limit_valkey_policy_arn
 }
 
 # Lets the BE publish orders to the order queue managed by the messaging root.
@@ -357,6 +372,7 @@ resource "aws_ecs_service" "backend" {
     aws_lb_listener_rule.backend_canary,
     aws_ecs_cluster_capacity_providers.main,
     aws_iam_role_policy_attachment.backend_valkey,
+    aws_iam_role_policy_attachment.backend_valkey_rate_limit,
     aws_iam_role_policy.backend_profile_image_s3,
   ]
 }

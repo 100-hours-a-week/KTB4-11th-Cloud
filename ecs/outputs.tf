@@ -18,6 +18,11 @@ output "backend_task_role_arn" {
   value       = aws_iam_role.backend_task.arn
 }
 
+output "backend_rate_limit_valkey_user_name" {
+  description = "IAM-enabled Valkey user name for Backend's restricted rate-limit connection, when provisioned"
+  value       = try(data.terraform_remote_state.redis.outputs.valkey_user_names["rate-limit"], null)
+}
+
 output "backend_log_group_name" {
   description = "CloudWatch Logs group for backend containers"
   value       = aws_cloudwatch_log_group.backend.name
