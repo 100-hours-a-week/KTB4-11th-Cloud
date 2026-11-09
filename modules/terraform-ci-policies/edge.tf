@@ -96,6 +96,12 @@ data "aws_iam_policy_document" "terraform_ci_write_api_waf" {
     ]
     resources = ["arn:aws:wafv2:us-east-1:${split(":", var.resource_arns.cloudfront_distributions)[4]}:global/webacl/stockspoon-api-rate-limit/*"]
   }
+  # CloudFront WAF ACL 업데이트 시 연결된 관리형 규칙 그룹도 권한 검사 대상이다.
+  statement {
+    sid       = "UpdateApiAclWithManagedRuleSets"
+    actions   = ["wafv2:UpdateWebACL"]
+    resources = ["arn:aws:wafv2:us-east-1:${split(":", var.resource_arns.cloudfront_distributions)[4]}:global/managedruleset/*/*"]
+  }
   statement {
     sid = "ManageApiWafLogGroup"
     actions = [

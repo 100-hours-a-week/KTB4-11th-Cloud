@@ -125,6 +125,8 @@ locals {
     "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v1-github-actions-terraform-write-${category}"
   ])
 
+  github_actions_terraform_read_policy_arn = "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:policy/stockspoon-v1-github-actions-terraform-read"
+
   github_actions_terraform_pass_role_arns = [
     for role_arn in local.github_actions_terraform_iam_resource_arns : role_arn
     if startswith(role_arn, "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:role/") && !contains(local.github_actions_terraform_fis_role_arns, role_arn)
@@ -458,6 +460,8 @@ resource "aws_iam_policy" "github_actions_terraform_read" {
   depends_on = [
     aws_iam_role_policy_attachment.github_actions_terraform_apply_state_access,
     aws_iam_role_policy_attachment.github_actions_terraform_plan_state_access,
+    # 읽기 정책의 구버전을 지우기 전에 해당 권한을 먼저 역할에 연결한다.
+    aws_iam_policy.terraform_ci_write["identity"],
   ]
 }
 
@@ -549,6 +553,7 @@ module "terraform_ci_policies" {
     ecr_private                      = local.github_actions_terraform_ecr_repository_arns
     ses                              = local.github_actions_terraform_ses_identity_arns
     iam_resources                    = local.github_actions_terraform_iam_resource_arns
+    terraform_read_policy            = local.github_actions_terraform_read_policy_arn
     iam_accounts                     = local.github_actions_terraform_account_iam_arns
     pass_roles                       = local.github_actions_terraform_pass_role_arns
     hosted_zone                      = "arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"

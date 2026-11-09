@@ -15,6 +15,7 @@ variable "resource_arns" {
     ecr_private                      = list(string)
     ses                              = list(string)
     iam_resources                    = list(string)
+    terraform_read_policy            = string
     iam_accounts                     = list(string)
     pass_roles                       = list(string)
     hosted_zone                      = string

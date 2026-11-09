@@ -55,6 +55,14 @@ data "aws_iam_policy_document" "terraform_ci_write_identity" {
     resources = var.resource_arns.iam_accounts
   }
 
+  # 읽기 정책 내용은 수정하지 않고 오래된 비기본 버전만 정리한다.
+  statement {
+    sid       = "PruneTerraformReadPolicyVersions"
+    effect    = "Allow"
+    actions   = ["iam:DeletePolicyVersion"]
+    resources = [var.resource_arns.terraform_read_policy]
+  }
+
   statement {
     sid       = "PassStockspoonRolesToTerraformManagedServices"
     effect    = "Allow"

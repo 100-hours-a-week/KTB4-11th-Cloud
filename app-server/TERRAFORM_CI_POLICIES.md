@@ -19,6 +19,8 @@
 
 CI 역할은 자기 자신의 권한을 수정할 수 없으므로 이 변경은 로컬에서 먼저 적용해야 한다. `pattie_for_terraform`의 현재 정책 시뮬레이션에서는 `iam:CreatePolicy`, `iam:AttachRolePolicy`, `iam:DeleteRolePolicy`가 거부됐다. 이 권한이 없는 프로필로 apply를 반복하지 않는다. 운영 전환은 사용자가 지정한 관리자 프로필 `stockspoon`으로 수행했다.
 
+읽기 정책 ARN에는 Terraform이 IAM 관리형 정책의 5개 버전 한도를 유지하도록 `iam:DeletePolicyVersion`만 허용한다. 정책 문서 생성이나 기본 버전 변경 권한은 포함하지 않는다.
+
 관리자는 아래 작업을 필요한 대상에 한정해 허용해야 한다.
 
 - 새 `stockspoon-v1-github-actions-terraform-write-*` 정책: CreatePolicy, CreatePolicyVersion, SetDefaultPolicyVersion, DeletePolicyVersion 등 정책 수명주기 권한
