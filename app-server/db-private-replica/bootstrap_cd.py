@@ -372,14 +372,36 @@ def install_replica_helper(instance_id: str) -> None:
     helper_path = Path(__file__).with_name("bootstrap_replica.sh")
     compressed = gzip.compress(helper_path.read_bytes(), compresslevel=9, mtime=0)
     encoded = base64.b64encode(compressed).decode("ascii")
+    stage_path = "/tmp/stockspoon-private-db-replica-helper.gz.b64"
+    remote_path = "/usr/local/sbin/bootstrap-private-db-replica"
+    chunk_size = 2000
+    chunks = [encoded[index : index + chunk_size] for index in range(0, len(encoded), chunk_size)]
+
+    run_ssm(
+        instance_id,
+        f"sudo install -o root -g root -m 0600 /dev/null {stage_path}",
+        "prepare replica helper transfer",
+        timeout=300,
+    )
+    for index, chunk in enumerate(chunks, start=1):
+        command = f"printf '%s' '{chunk}' | sudo tee -a {stage_path} >/dev/null"
+        if len(command) >= 7000:
+            raise RuntimeError("Replica helper transfer chunk exceeds the SSM Run Command parameter size limit")
+        run_ssm(
+            instance_id,
+            command,
+            f"transfer replica helper chunk {index}/{len(chunks)}",
+            timeout=300,
+        )
+
     command = f"""set -Eeuo pipefail
-printf '%s' '{encoded}' | base64 --decode | gzip --decompress | sudo tee /usr/local/sbin/bootstrap-private-db-replica >/dev/null
-sudo chown root:root /usr/local/sbin/bootstrap-private-db-replica
-sudo chmod 0750 /usr/local/sbin/bootstrap-private-db-replica
+sudo bash -c 'set -Eeuo pipefail; base64 --decode {stage_path} | gzip --decompress > {remote_path}.tmp'
+sudo chown root:root {remote_path}.tmp
+sudo chmod 0750 {remote_path}.tmp
+sudo mv {remote_path}.tmp {remote_path}
+sudo rm -f {stage_path}
 echo 'REPLICA_HELPER_INSTALLED'
 """
-    if len(command) >= 7000:
-        raise RuntimeError("Compressed replica helper exceeds the SSM Run Command parameter size limit")
     run_ssm(instance_id, command, "install replica helper", timeout=300)
 
 
