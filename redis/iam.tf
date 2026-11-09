@@ -1,6 +1,9 @@
 # 사용자마다 Connect Policy를 분리해, 연결된 Role이 자기 사용자로만 접속하게 합니다.
 data "aws_iam_policy_document" "app_connect" {
-  for_each = local.app_users
+  # Iterate only over stable service names. The user map also contains ACL
+  # strings, so iterating over it can defer every policy document when one
+  # service's access string changes.
+  for_each = toset(local.app_services)
 
   statement {
     sid     = local.is_dev ? "ConnectToDevelopmentValkey" : "ConnectToProductionValkey"
