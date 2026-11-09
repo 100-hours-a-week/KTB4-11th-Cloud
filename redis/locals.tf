@@ -68,6 +68,7 @@ locals {
     "+client|setinfo",
     "+client|setname",
     "+client|id",
+    "+cluster|nodes",
     "+cluster|slots",
     "+cluster|shards",
     "+incr",
