@@ -220,12 +220,21 @@ fi
 "${COMPOSE[@]}" config --quiet
 "${COMPOSE[@]}" up -d --no-deps --force-recreate mysqld-exporter heartbeat-private-replica prometheus
 
+prometheus_query_value() {
+  local query="$1" response
+  response="$(curl --fail --silent --get http://127.0.0.1:9090/api/v1/query \
+    --data-urlencode "query=$query")" || return 1
+  [[ -n "$response" ]] || return 1
+  python3 -c 'import json,sys; r=json.load(sys.stdin).get("data",{}).get("result",[]); print(r[0]["value"][1] if r else "0")' \
+    <<< "$response" 2>/dev/null
+}
+
 mysql_up=0
 for attempt in $(seq 1 60); do
-  mysql_up="$(curl --fail --silent --get http://127.0.0.1:9090/api/v1/query \
-    --data-urlencode 'query=mysql_up{job="mysql-private-replica"}' \
-    | python3 -c 'import json,sys; r=json.load(sys.stdin).get("data",{}).get("result",[]); print(r[0]["value"][1] if r else "0")')"
-  [[ "$mysql_up" == '1' ]] && break
+  if mysql_up="$(prometheus_query_value 'mysql_up{job="mysql-private-replica"}')"; then
+    [[ "$mysql_up" == '1' ]] && break
+  fi
+  mysql_up=0
   sleep 2
 done
 [[ "$mysql_up" == '1' ]] || {
@@ -235,10 +244,11 @@ done
 for metric in mysql_slave_status_replica_io_running mysql_slave_status_replica_sql_running; do
   value=0
   for attempt in $(seq 1 30); do
-    value="$(curl --fail --silent --get http://127.0.0.1:9090/api/v1/query \
-      --data-urlencode "query=$metric{job=\"mysql-private-replica\"}" \
-      | python3 -c 'import json,sys; r=json.load(sys.stdin).get("data",{}).get("result",[]); print(r[0]["value"][1] if r else "0")')"
-    [[ "$value" == '1' ]] && break
+    if value="$(prometheus_query_value "$metric{job=\"mysql-private-replica\"}")"; then
+      [[ "$value" == '1' ]] && break
+    else
+      value=0
+    fi
     sleep 2
   done
   [[ "$value" == '1' ]] || {
