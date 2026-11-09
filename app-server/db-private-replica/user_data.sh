@@ -61,6 +61,6 @@ chmod 0600 "$MYSQL_DIRECTORY/docker-compose.yaml"
 cd "$MYSQL_DIRECTORY"
 docker compose up -d --wait --wait-timeout 300
 docker exec stockspoon-private-db-replica sh -lc \
-  'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=2 --user=root --batch --skip-column-names --execute="SELECT VERSION(), @@server_id, @@gtid_mode"'
+  'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=SOCKET --socket=/var/run/mysqld/mysqld.sock --connect-timeout=2 --user=root --batch --skip-column-names --execute="SELECT VERSION(), @@server_id, @@gtid_mode"'
 
 printf '%s\n' 'Private DB replica bootstrap completed' > "$MYSQL_DIRECTORY/bootstrap-complete"

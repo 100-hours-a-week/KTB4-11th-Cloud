@@ -193,6 +193,8 @@ resource "aws_instance" "db_private_replica" {
   associate_public_ip_address = false
   vpc_security_group_ids      = [aws_security_group.db_private_replica.id]
   iam_instance_profile        = aws_iam_instance_profile.db_private_replica.name
+  # User data runs only on first boot; rebuild this disposable replica when its bootstrap changes.
+  user_data_replace_on_change = true
 
   user_data = templatefile("${path.module}/db-private-replica/user_data.sh", {
     aws_region              = var.aws_region

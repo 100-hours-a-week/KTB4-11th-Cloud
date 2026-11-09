@@ -29,7 +29,7 @@ SOURCE_INSTANCE_ID="$3"
 
 mysql_root() {
   docker exec "$MYSQL_CONTAINER" sh -c \
-    'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root "$@"' \
+    'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=SOCKET --socket=/var/run/mysqld/mysqld.sock --connect-timeout=5 --user=root "$@"' \
     mysql "$@"
 }
 
@@ -266,7 +266,7 @@ seed_baseline() {
     --ssl-mode=REQUIRED --single-transaction --quick --set-gtid-purged=ON \
     --databases stockspoon --routines --events --triggers --hex-blob --no-tablespaces \
     | docker exec -i "$MYSQL_CONTAINER" sh -c \
-      'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root'
+      'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=SOCKET --socket=/var/run/mysqld/mysqld.sock --connect-timeout=5 --user=root'
   ensure_read_only
 
   [[ "$(application_schemas)" == 'stockspoon' ]] || {
