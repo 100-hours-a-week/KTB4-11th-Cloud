@@ -1,14 +1,16 @@
 # 사용자마다 Connect Policy를 분리해, 연결된 Role이 자기 사용자로만 접속하게 합니다.
 data "aws_iam_policy_document" "app_connect" {
-  for_each = local.app_users
+  # 서비스 이름을 기준으로 반복하고 관리 리소스와 같은 ARN을 조합합니다.
+  # ACL 값 변경 때문에 모든 정책 문서 계산이 apply까지 미뤄지는 것을 막습니다.
+  for_each = toset(local.app_services)
 
   statement {
     sid     = local.is_dev ? "ConnectToDevelopmentValkey" : "ConnectToProductionValkey"
     effect  = "Allow"
     actions = ["elasticache:Connect"]
     resources = [
-      aws_elasticache_serverless_cache.valkey.arn,
-      aws_elasticache_user.app[each.key].arn,
+      "${local.elasticache_arn_prefix}:serverlesscache:${local.name_prefix}",
+      "${local.elasticache_arn_prefix}:user:${local.app_users[each.key].user_id}",
     ]
   }
 }
