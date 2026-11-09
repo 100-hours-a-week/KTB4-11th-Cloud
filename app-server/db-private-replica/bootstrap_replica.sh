@@ -70,6 +70,31 @@ expected_marker_contents() {
   printf '%s\n%s' "$SOURCE_INSTANCE_ID" "$SOURCE_HOST"
 }
 
+verify_incomplete_seed_retry_safe() {
+  local marker_contents
+  [[ -s "$SEED_ATTEMPT_MARKER" ]] || {
+    echo 'The incomplete baseline marker is missing or empty; refusing automatic retry' >&2
+    return 1
+  }
+  marker_contents="$(cat "$SEED_ATTEMPT_MARKER")"
+  [[ "$marker_contents" == "$(expected_marker_contents)" ]] || {
+    echo 'The incomplete baseline attempt belongs to a different Primary; refusing automatic retry' >&2
+    return 1
+  }
+  [[ -z "$(replica_status)" ]] || {
+    echo 'A replication channel exists after an incomplete baseline attempt; refusing automatic retry' >&2
+    return 1
+  }
+  [[ -z "$(application_schemas)" ]] || {
+    echo 'Application schemas exist after an incomplete baseline attempt; manual inspection is required' >&2
+    return 1
+  }
+  [[ -z "$(target_gtid_executed)" ]] || {
+    echo 'GTID history exists after an incomplete baseline attempt; manual inspection is required' >&2
+    return 1
+  }
+}
+
 verify_seed_marker() {
   [[ -s "$SEED_MARKER" ]] || {
     echo 'Private MySQL has no completed baseline marker; refusing replication setup' >&2
@@ -238,10 +263,10 @@ seed_baseline() {
     return 0
   fi
 
-  [[ ! -e "$SEED_ATTEMPT_MARKER" ]] || {
-    echo 'A previous baseline attempt did not finish; refusing to reset or overwrite the target' >&2
-    return 1
-  }
+  if [[ -e "$SEED_ATTEMPT_MARKER" ]]; then
+    verify_incomplete_seed_retry_safe || return 1
+    echo 'Previous baseline attempt left an empty target; retrying the seed safely' >&2
+  fi
 
   schemas="$(application_schemas)"
   [[ -z "$schemas" ]] || {
@@ -265,7 +290,7 @@ seed_baseline() {
   mysql_root --execute='SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF'
   docker exec "$MYSQL_CONTAINER" mysqldump \
     --defaults-extra-file="$SEED_OPTION_FILE" \
-    --protocol=TCP --host="$SOURCE_HOST" --port=3306 --connect-timeout=10 \
+    --protocol=TCP --host="$SOURCE_HOST" --port=3306 \
     --ssl-mode=REQUIRED --single-transaction --quick --set-gtid-purged=ON \
     --databases stockspoon --routines --events --triggers --hex-blob --no-tablespaces \
     | docker exec -i "$MYSQL_CONTAINER" sh -c \
@@ -294,10 +319,11 @@ if [[ "$MODE" == "status" ]]; then
       printf '%s\n' 'BASELINE_SEEDED_NEEDS_GTID_CONFIGURATION'
       exit 0
     fi
-    [[ ! -e "$SEED_ATTEMPT_MARKER" ]] || {
-      echo 'A previous baseline attempt did not finish; refusing to reset or overwrite the target' >&2
-      exit 1
-    }
+    if [[ -e "$SEED_ATTEMPT_MARKER" ]]; then
+      verify_incomplete_seed_retry_safe
+      printf '%s\n' 'BASELINE_ATTEMPT_SAFE_TO_RETRY'
+      exit 0
+    fi
     non_system_schemas="$(application_schemas)"
     [[ -z "$non_system_schemas" ]] || {
       echo 'Private MySQL has unmarked application data; refusing to overwrite or merge it' >&2
