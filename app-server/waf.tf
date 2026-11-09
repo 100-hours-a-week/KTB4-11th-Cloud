@@ -1,7 +1,7 @@
 variable "api_waf_enabled" {
   # 활성 여부와 별개로 실제 차단은 api_waf_mode로 제어한다.
   # Count에서도 요청당 WAF 요금과 요청별 로그가 발생한다.
-  description = "Attach experimental per-IP API rate rules to the public CloudFront entry point."
+  description = "Attach managed WAF protections and a per-IP API rate rule to CloudFront."
   type        = bool
   default     = true
   validation {
@@ -11,8 +11,8 @@ variable "api_waf_enabled" {
 }
 
 variable "api_waf_mode" {
-  # Block returns HTTP 429 after a viewer IP exceeds the configured API rate limit.
-  # Use "count" explicitly only for observation-only experiments.
+  # This mode controls only api-per-source-ip. Managed SQLi and Linux rules
+  # keep their AWS-managed blocking actions in either mode.
   # tfvars/TF_VAR settings override this default; inspect the plan and output after apply.
   type    = string
   default = "block"
@@ -46,7 +46,7 @@ module "api_waf" {
 }
 
 output "api_waf" {
-  description = "Experimental API policy, CloudFront ACL and us-east-1 logs. Count does not prevent flooding."
+  description = "CloudFront WAF policy, managed rule modes, API rate limit, and us-east-1 logs."
   value = var.api_waf_enabled ? {
     web_acl_arn           = module.api_waf[0].web_acl_arn
     log_group_name        = module.api_waf[0].log_group_name
