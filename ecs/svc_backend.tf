@@ -122,6 +122,34 @@ resource "aws_iam_role_policy_attachment" "backend_order_consumer_sqs" {
   policy_arn = data.terraform_remote_state.messaging_prod.outputs.order_consumer_sqs_policy_arn
 }
 
+data "aws_iam_policy_document" "backend_profile_image_s3" {
+  statement {
+    sid       = "GetProfileImageBucketLocation"
+    effect    = "Allow"
+    actions   = ["s3:GetBucketLocation"]
+    resources = [local.profile_image_bucket_arn]
+  }
+
+  statement {
+    sid    = "ManageProfileImageObjects"
+    effect = "Allow"
+    actions = [
+      "s3:DeleteObject",
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+    resources = [
+      "${local.profile_image_bucket_arn}/${local.profile_image_key_prefix}*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "backend_profile_image_s3" {
+  name   = "${var.name_prefix}-profile-image-s3"
+  role   = aws_iam_role.backend_task.id
+  policy = data.aws_iam_policy_document.backend_profile_image_s3.json
+}
+
 # ---------------------------------------------------------------------------
 # Security Group
 # ---------------------------------------------------------------------------
@@ -329,5 +357,6 @@ resource "aws_ecs_service" "backend" {
     aws_lb_listener_rule.backend_canary,
     aws_ecs_cluster_capacity_providers.main,
     aws_iam_role_policy_attachment.backend_valkey,
+    aws_iam_role_policy.backend_profile_image_s3,
   ]
 }
