@@ -9,6 +9,8 @@ SEED_ATTEMPT_MARKER="/opt/stockspoon-db-private-replica/seed-started"
 SEED_OPTION_FILE=""
 REPLICATION_PASSWORD_PARAMETER="/stockspoon/v1/db-private-replica/replication-password"
 MONITOR_PASSWORD_PARAMETER="/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD"
+APP_USER_PARAMETER="/stockspoon/v2/prod/backend/MYSQL_USER"
+APP_PASSWORD_PARAMETER="/stockspoon/v2/prod/backend/MYSQL_PASSWORD"
 REPLICATION_USER="db_private_replica"
 SEED_USER="db_private_seed"
 MONITOR_USER="proxysql_monitor"
@@ -327,23 +329,41 @@ verify_seeded_data
 
 replication_password="$(ssm_value "$REPLICATION_PASSWORD_PARAMETER")"
 monitor_password="$(ssm_value "$MONITOR_PASSWORD_PARAMETER")"
+app_user="$(ssm_value "$APP_USER_PARAMETER")"
+app_password="$(ssm_value "$APP_PASSWORD_PARAMETER")"
 [[ "$replication_password" =~ ^[A-Fa-f0-9]{16,32}$ ]] || {
   echo 'The MySQL replication password must be a 16-32 character hexadecimal SSM secret' >&2
   exit 1
 }
 [[ -n "$monitor_password" ]] || { echo 'ProxySQL monitor password is empty' >&2; exit 1; }
+[[ "$app_user" =~ ^[A-Za-z0-9_]{1,32}$ ]] || { echo 'Backend MySQL username is invalid' >&2; exit 1; }
+[[ -n "$app_password" ]] || { echo 'Backend MySQL password is empty' >&2; exit 1; }
 replication_password_sql="$(sql_escape "$replication_password")"
 monitor_password_sql="$(sql_escape "$monitor_password")"
+app_user_sql="$(sql_escape "$app_user")"
+app_password_sql="$(sql_escape "$app_password")"
 
-# The monitor account is local to this replica because the Primary account is
-# intentionally created with sql_log_bin=0. Keep it out of the GTID stream.
+heartbeat_table_count="$(mysql_root --batch --skip-column-names \
+  --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='stockspoon' AND table_name='monitoring_heartbeat'")"
+[[ "$heartbeat_table_count" == '1' ]] || {
+  echo 'stockspoon.monitoring_heartbeat is missing from the seeded baseline' >&2
+  exit 1
+}
+
+# The dump contains app tables but not mysql.user. Recreate the existing app
+# and monitoring accounts locally without adding account GTIDs to the stream.
 mysql_root --execute='SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF'
 trap 'restore_read_only || true' EXIT
 mysql_root <<SQL
 SET SESSION sql_log_bin=0;
+CREATE USER IF NOT EXISTS '$app_user_sql'@'%' IDENTIFIED BY '$app_password_sql';
+ALTER USER '$app_user_sql'@'%' IDENTIFIED BY '$app_password_sql';
+GRANT ALL PRIVILEGES ON stockspoon.* TO '$app_user_sql'@'%';
+
 CREATE USER IF NOT EXISTS '$MONITOR_USER'@'%' IDENTIFIED BY '$monitor_password_sql';
 ALTER USER '$MONITOR_USER'@'%' IDENTIFIED BY '$monitor_password_sql';
 GRANT REPLICATION CLIENT ON *.* TO '$MONITOR_USER'@'%';
+
 SQL
 restore_read_only
 

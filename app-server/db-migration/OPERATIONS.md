@@ -9,12 +9,38 @@
 | 부하기 | i-0b766e6efa26389c9 | 10.0.1.116 | 13.209.83.189 | cloud-init 완료, k6 설치 |
 | PMM | i-00dce75378431daf7 | 10.0.1.85 | 3.35.13.60 | cloud-init 완료, PMM healthy, 로그인 화면 HTTP 200 |
 
-## 현재 DB 모니터링 대상 — 2026-11-02 변경 목표
+## 2026-11-09 Private Replica 복구 확인
+
+기존 Replica `i-09169188e83886d23` (`10.0.11.144`)는 terminated 상태다. 새 인스턴스
+`i-0307694b57bd1dc3c` (`10.0.11.176`)는 MySQL을 새로 초기화해 시스템 스키마만 있고,
+`gtid_executed`가 비어 있으며 `SHOW REPLICA STATUS`도 비어 있었다. GTID 채널만 연결해서는
+Primary의 데이터가 복사되지 않는다. Primary에는 이미 purge된 GTID가 있으므로 새 Replica는
+먼저 일관된 baseline을 받아야 한다.
+
+복제 bootstrap의 기존 source 컨테이너 이름 `migration-mysql`은 현재 중지돼 있고, 운영 중인
+MySQL 8.4.11 컨테이너는 `migration-mysql-seed-20261019`다. 수정 코드는 Primary에서 실행 중인
+MySQL 8.4.11 컨테이너를 찾아 사용한다.
+
+Fargate ProxySQL task definition과 PMM 설정은 종료된 `10.0.11.144`를 계속 사용하고 있었다.
+따라서 새 Replica가 ProxySQL reader와 Prometheus에 연결되지 않았고, Prometheus exporter의
+target `up=1`만으로 DB 연결을 확인할 수 없다. `mysql_up=0`은 exporter가 MySQL에 연결하지
+못한다는 뜻이다. 새 Replica가 baseline을 받고 GTID 복제 I/O·SQL thread가 정상 동작한 뒤
+ProxySQL reader로 등록한다. 현재 ProxySQL 앱 계정의 기본 hostgroup은 writer(10)이며 SELECT
+read routing rule은 없으므로, Replica 등록만으로 Backend 읽기 트래픽이 이동하지 않는다.
+
+복구 코드는 `app-server` apply에서 Replica를 초기화한 뒤 Primary의 `stockspoon` baseline을
+스트리밍하고 GTID 자동 위치 복제를 설정한다. 이후 Replica의 Backend·ProxySQL·모니터링 계정을
+구성하고, node exporter/Alloy를 설치하며, PMM의 Replica 주소를 새 private IP로 갱신한다.
+`ecs` root는 이 절차가 성공한 뒤 새 Replica IP를 읽어 Fargate ProxySQL task를 갱신한다.
+Terraform Plan/Apply는 작업자가 확인하고 실행한다.
+
+## 과거 DB 모니터링 목표 — 2026-11-02 기록 (2026-11-09 상태로 대체)
 
 기존 V1 app-server의 MySQL 컨테이너는 더 이상 DB 대상이 아니다. 모니터링 호스트
 `i-00dce75378431daf7` (`10.0.1.85`, `3.35.13.60`)에서 현재 Primary
-`i-081a5f4798f592f49` (`10.0.1.217`)와 Private Replica
-`i-09169188e83886d23` (`10.0.11.144`)를 함께 수집한다. 두 DB의 MySQL 지표와 복제 알림,
+`i-081a5f4798f592f49` (`10.0.1.217`)와 당시 Private Replica
+`i-09169188e83886d23` (`10.0.11.144`)를 함께 수집한다. 이 Replica는 2026-11-09에 종료되어
+현재 주소는 사용하지 않는다. 두 DB의 MySQL 지표와 복제 알림,
 Replica 호스트 지표·컨테이너 로그를 수집하도록 변경한다. Terraform Apply와 모니터링 호스트 배포 전 상태다.
 V1 app-server EC2는 현재 stopped다.
 모니터링 호스트와 Replica는 같은 VPC라 DB 수집·로그 전송은 VPC 내부 경로를 사용하고 NAT를 거치지 않는다.
@@ -159,20 +185,30 @@ SHOW GLOBAL VARIABLES WHERE Variable_name IN (
 | 접수 SQL을 짧은 실험 구간에서 추적 | General query log | 접수 기록; 커밋 성공·실행 순서의 증거와 다름 |
 | 데이터 변경 복제 | Binary log | ROW 변경 이벤트; SELECT 기록용이 아님 |
 
-다음은 관리자 SQL 세션에서 적용하는 예시다. 이번 점검에서는 실행하지 않았다.
-원래 설정을 먼저 기록하고, 측정 목적과 디스크 여유에 맞춰 사용한다.
+Application 쿼리를 관측할 때는 Primary에만 slow query log를 켜면 된다. Replica는 복제 이벤트를
+적용하는 역할이므로 애플리케이션에서 실행된 쿼리 원문을 보려는 목적에는 Primary 로그가 기준이다.
+운영 시작 기준으로 1초를 사용하고, 로그량을 확인해 서비스 SLO에 맞게 조정한다. `log_output=FILE`은
+이미 기본 설정이며, `SET PERSIST`는 즉시 적용하면서 MySQL 데이터 디렉터리의 설정에도 저장한다.
 
 ```sql
--- 200 ms는 실험 시작용 예시이며 서비스 SLO에서 결정한 값은 아니다.
-SET GLOBAL log_output = 'FILE';
-SET GLOBAL slow_query_log_file = '/var/lib/mysql/slow.log';
-SET GLOBAL long_query_time = 0.2;
-SET GLOBAL slow_query_log = ON;
+-- Primary에서만 실행한다.
+SET PERSIST long_query_time = 1;
+SET PERSIST slow_query_log = ON;
+
+SHOW GLOBAL VARIABLES WHERE Variable_name IN (
+  'log_output', 'slow_query_log', 'slow_query_log_file', 'long_query_time'
+);
+SHOW GLOBAL STATUS LIKE 'Slow_queries';
 ```
 
-`long_query_time` 변경은 새 세션의 기본값에 적용된다. 기존 백엔드 커넥션 풀의 세션 값은
-계속 남을 수 있으므로 적용 시점을 구분한다. 시험이 끝나면 원래 값으로 복원한다.
-GLOBAL 변경은 재시작 시 유지되지 않으므로, 상시 사용을 결정한 설정은 별도로 영속화한다.
+`long_query_time`의 전역 값은 새 세션의 기본값이다. 이미 연결된 ProxySQL 백엔드 세션에는 기존
+세션 값(현재 10초)이 남으므로, 1초 기준을 기존 연결에도 적용하려면 안전한 시점에 백엔드 연결을
+재생성해야 한다. MySQL 공식 문서는 1초 미만 기준은 로그가 빠르게 커질 수 있어 주의하도록 안내한다.
+slow log에는 SQL 원문과 값이 포함될 수 있으므로 Grafana/Loki 접근 권한을 제한한다.
+
+Primary Alloy 에이전트는 `/var/lib/mysql/*slow.log` 파일을 Loki의 `job="mysql-slow"`로 수집한다.
+Grafana 대시보드의 `느린 SQL 원문` 패널에서 `$node`를 선택해 조회한다. `Slow queries /s` 패널은
+Exporter의 카운터를 보여주며, SQL 원문은 Loki 로그 패널에 표시된다.
 
 새 이관 DB에서 slow 로그를 확인하는 예시:
 
@@ -404,8 +440,8 @@ scp -i "$REHEARSAL_KEY" -r app-server/db-migration/plg/server ubuntu@<모니터�
 
 Terraform으로 새 Replica SG와 IAM 규칙을 적용한 뒤 먼저 heartbeat 비밀번호를 SSM에 동기화하고,
 8-3의 DB agent를 설치한 다음 모니터링 호스트에서 실행한다.
-현재 Primary는 `10.0.1.217`, Private Replica는
-`10.0.11.144`이다. 설치 과정은 SSM에서 기존 `pmm` 계정 비밀번호를 읽어
+현재 Primary는 `10.0.1.217`이다. Private Replica 주소는 매번 `db_private_replica_host.private_ip`
+Terraform 출력에서 확인한다. 설치 과정은 SSM에서 기존 `pmm` 계정 비밀번호를 읽어
 mysqld exporter에 전달하며 비밀번호를 출력하지 않는다. 기존 heartbeat 비밀번호도
 모니터링 호스트의 root 전용 파일에서 SSM SecureString으로 동기화한다. 복제본 role에는
 두 SecureString의 `GetParameter`만 추가하며 secret 값은 명령 인자나 로그에 넣지 않는다.
@@ -422,7 +458,7 @@ sudo aws ssm put-parameter --region ap-northeast-2 \
 ```
 
 ```bash
-sudo bash /tmp/server/install.sh 10.0.1.217 10.0.11.144
+sudo bash /tmp/server/install.sh 10.0.1.217 <PRIVATE_REPLICA_DB_PRIVATE_IP>
 sudo docker compose --env-file /opt/stockspoon-plg/.env \
   -f /opt/stockspoon-plg/compose.yaml ps
 ```
@@ -570,7 +606,7 @@ Prometheus 설정은 중지된 V1 app-server를 감시 대상에서 제외하고
 | 노드 | Prometheus job | 현재 역할 | 재배포 후 확인 |
 | --- | --- | --- | --- |
 | Primary, `10.0.1.217:3306` | `mysql-primary` | Primary | `mysql_up=1`, `read_only=0` |
-| Private Replica, `10.0.11.144:3306` | `mysql-private-replica` | Replica | `mysql_up=1`, `read_only=1`, 복제 I/O·SQL 스레드 1, native lag 확인 |
+| Private Replica, Terraform 출력의 현재 private IP | `mysql-private-replica` | Replica | `mysql_up=1`, `read_only=1`, 복제 I/O·SQL 스레드 1, native lag 0 |
 
 새 Replica SG는 모니터링 SG에서 MySQL `3306/tcp`와 node exporter `9100/tcp`를 받고,
 Replica Alloy는 모니터링 Loki `3100/tcp`로 로그를 보낸다. 이 규칙은 `app-server` Terraform
@@ -580,9 +616,14 @@ root에서 관리한다. Apply 전 Plan에서 Replica EC2 교체·중지/시작�
 애플리케이션 DB 접속 및 hostgroup 등록은 기존 Fargate ProxySQL 구성을 그대로 사용한다. Fargate
 ProxySQL의 Cloud Map scrape 설정도 유지한다.
 
-배포 순서는 `app-server` Terraform Apply → heartbeat secret SSM 동기화 → 8-3의 Primary/Replica
-agent 설치 → 8-2의 PLG 재설치다.
-Plan에서 EC2 교체·중지/시작이 없는지 확인한다. PLG 스크립트는 Prometheus와 Grafana를 재생성해
+배포 순서는 `app-server` Terraform Apply → `terraform_data.db_private_replica_bootstrap`이
+baseline·GTID 복제·Replica agent·PMM target을 설정 → `ecs` Terraform Apply다. PMM target은
+새 private IP로 자동 갱신한다.
+Plan에서 Private Replica가 교체되는지와 해당 DB에 보존할 사용자 데이터가 있는지 확인한다.
+초기화 중 `super_read_only`를 켜면 MySQL 공식 이미지가 root 비밀번호를 설정하지 못하므로,
+`read_only`만 둔 채 baseline·계정 구성을 끝낸 뒤 `super_read_only`를 활성화한다. 로컬 root
+health check와 bootstrap SQL은 MySQL socket으로 실행한다. PLG target 갱신은 Prometheus와
+exporter/heartbeat 컨테이너를 재생성해
 새 scrape target, 알림 규칙, 대시보드를 읽는다. DB 컨테이너는 재시작하지 않는다.
 
 이전 2026-10-24 배포 기록: replica exporter는 HTTP 수집 자체는 성공했지만 DB 인증이 거절되어 `mysql_up=0`이었다.
@@ -681,7 +722,8 @@ writer 주기 때문에 정상 상태에서도 0~1초 값이 나온다. `ts`는 
 
 **ProxySQL.** Cloud Map `proxysql-fargate.stockspoon-v2.internal`의 A 레코드를 `dns_sd_configs`로
 수집해 Fargate task가 바뀌거나 늘어도 task별로 수집한다. ProxySQL은 hostgroup 10(writer)에 현재
-Primary `10.0.1.217`, hostgroup 20(reader)에 Private Replica `10.0.11.144`를 등록한다.
+Primary `10.0.1.217`, hostgroup 20(reader)에 Terraform output
+`db_private_replica_host.private_ip`의 현재 Private Replica 주소를 등록한다.
 
 **알림.** 변경 후 `prometheus-rules/db-alerts.yml`은 현재 Primary·Private Replica 대상으로
 기록 규칙 1개와 알림 16개를 평가한다. MySQL 수집 실패,
@@ -745,8 +787,10 @@ Primary에서 직접 스트리밍한다. dump에는 source 시점의 GTID 집합
 Source는 `stockspoon` 외 application schema가 없어야 하고 모든 기본 테이블이 InnoDB여야 한다.
 baseline은 중간 파일 없이 MySQL 클라이언트 pipeline으로 전달된다. 복제본 시작 전 GTID 이력을
 검증하고, Primary가 snapshot 이후 필요한 변경 binlog를 purge한 경우에는 복제를 시작하지 않는다.
-현재 Primary binlog 보관 기간은 7일이며, 복제 IO/SQL thread가 정상으로 시작된 뒤 backlog는
-비동기로 적용된다. 이 단계는 lag 0까지 기다리지 않는다.
+현재 Primary binlog 보관 기간은 7일이다. `bootstrap`은 복제 IO/SQL thread와 오류 상태를 확인한
+뒤 성공한다. 이후 `ecs` root가 ProxySQL reader를 등록할 때 backlog가 남아 있을 수 있지만,
+현재는 SELECT read routing rule이 없어 앱 쿼리가 Replica로 분산되지 않는다. 복제 상태가 안정된 뒤
+`Seconds_Behind_Source=0`을 별도로 확인한다.
 
 새 복제본의 초기 GTID 이력이 있으면, application schema와 복제 채널이 없는 target에서만
 target 자체의 초기화 GTID/binlog를 지운 뒤 baseline을 적재한다. Primary의 binlog·GTID 상태는
@@ -757,8 +801,9 @@ Primary에는 복제 대상 Private IP에만 한정된 TLS `db_private_replica` 
 복제본은 계정 생성을 binlog에 기록하지 않고 로컬 ProxySQL monitor 계정을 준비한 뒤
 `read_only=ON`, `super_read_only=ON`으로 운영하며 이 설정은 재시작 후에도 유지한다.
 
-bootstrap이 복제 thread를 검증한 뒤 `ecs` root를 적용하면, Fargate ProxySQL이 현재 Public Primary를
-writer hostgroup 10, Private replica를 read-only monitor 기반 reader hostgroup 20에 등록한다.
+bootstrap은 복제 I/O·SQL thread가 정상인지 확인한 뒤 성공한다. 그 뒤 `ecs` root를 적용하면,
+Fargate ProxySQL이 현재 Public Primary를 writer hostgroup 10, Private replica를 read-only monitor
+기반 reader hostgroup 20에 등록한다.
 앱 계정의 기본 hostgroup은 10이므로 등록만으로 SELECT가 replica로 분산되지는 않는다. 읽기 분산은
 앱의 트랜잭션·read-after-write 동작을 확인한 뒤 별도 query rule을 설계해야 한다. ProxySQL 서비스가
 정상화된 다음 Terraform resource `aws_ec2_instance_state.retired_v1_app`가 기존 public V1 App

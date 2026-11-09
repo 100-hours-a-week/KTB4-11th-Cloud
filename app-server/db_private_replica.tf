@@ -150,6 +150,8 @@ resource "aws_iam_role_policy" "db_private_replica_parameters" {
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v1/db-migration/mysql-monitoring",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v1/db-migration/mysql-heartbeat",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD",
+        "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/MYSQL_USER",
+        "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/MYSQL_PASSWORD",
       ]
     }]
   })
@@ -288,6 +290,8 @@ resource "terraform_data" "db_private_replica_bootstrap" {
     aws_instance.db_migration[0].private_ip,
     aws_instance.db_private_replica.id,
     aws_instance.db_private_replica.private_ip,
+    aws_instance.db_migration_support["pmm"].id,
+    aws_instance.db_migration_support["pmm"].private_ip,
     filesha256("${path.module}/db-private-replica/bootstrap_replica.sh"),
     filesha256("${path.module}/db-private-replica/bootstrap_cd.py"),
   ]
@@ -302,6 +306,8 @@ resource "terraform_data" "db_private_replica_bootstrap" {
       DB_PRIMARY_PRIVATE_IP          = aws_instance.db_migration[0].private_ip
       DB_PRIVATE_REPLICA_INSTANCE_ID = aws_instance.db_private_replica.id
       DB_PRIVATE_REPLICA_PRIVATE_IP  = aws_instance.db_private_replica.private_ip
+      DB_MIGRATION_PMM_PRIVATE_IP    = aws_instance.db_migration_support["pmm"].private_ip
+      DB_MIGRATION_PMM_INSTANCE_ID   = aws_instance.db_migration_support["pmm"].id
     }
   }
 

@@ -5,14 +5,14 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLG_DIRECTORY="/opt/stockspoon-plg"
 AWS_REGION="${AWS_REGION:-ap-northeast-2}"
 PRIMARY_DB_PRIVATE_IP="${1:-10.0.1.217}"
-PRIVATE_REPLICA_DB_PRIVATE_IP="${2:-10.0.11.144}"
+PRIVATE_REPLICA_DB_PRIVATE_IP="${2:-}"
 
 is_ipv4() {
   [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 }
 
 if ! is_ipv4 "$PRIMARY_DB_PRIVATE_IP" || ! is_ipv4 "$PRIVATE_REPLICA_DB_PRIVATE_IP"; then
-  printf '%s\n' 'Usage: sudo bash install.sh [PRIMARY_DB_PRIVATE_IP] [PRIVATE_REPLICA_DB_PRIVATE_IP]' >&2
+  printf '%s\n' 'Usage: sudo bash install.sh [PRIMARY_DB_PRIVATE_IP] <PRIVATE_REPLICA_DB_PRIVATE_IP>' >&2
   exit 2
 fi
 
