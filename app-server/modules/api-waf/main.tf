@@ -27,7 +27,7 @@ variable "evaluation_window_sec" {
 }
 
 variable "mode" {
-  description = "Count observes threshold breaches; block enforces them only after validation."
+  description = "Action for the api-per-source-ip rate rule only; managed SQLi and Linux groups retain their AWS actions."
   type        = string
   default     = "count"
   validation {
@@ -36,19 +36,164 @@ variable "mode" {
   }
 }
 
+locals {
+  # Count all currently published rules individually so they emit per-rule metrics.
+  # The enclosing Count override is a safety fallback: a newly added AWS rule
+  # remains observational until its name and impact are reviewed.
+  managed_rule_groups = [
+    {
+      name               = "managed-crs"
+      managed_group_name = "AWSManagedRulesCommonRuleSet"
+      metric_name        = "stockspoon-managed-crs"
+      priority           = 0
+      count_only         = true
+      count_rule_names = [
+        "NoUserAgent_HEADER",
+        "UserAgent_BadBots_HEADER",
+        "SizeRestrictions_QUERYSTRING",
+        "SizeRestrictions_Cookie_HEADER",
+        "SizeRestrictions_BODY",
+        "SizeRestrictions_URIPATH",
+        "EC2MetaDataSSRF_BODY",
+        "EC2MetaDataSSRF_COOKIE",
+        "EC2MetaDataSSRF_URIPATH",
+        "EC2MetaDataSSRF_QUERYARGUMENTS",
+        "GenericLFI_QUERYARGUMENTS",
+        "GenericLFI_URIPATH",
+        "GenericLFI_BODY",
+        "RestrictedExtensions_URIPATH",
+        "RestrictedExtensions_QUERYARGUMENTS",
+        "GenericRFI_QUERYARGUMENTS",
+        "GenericRFI_BODY",
+        "GenericRFI_URIPATH",
+        "CrossSiteScripting_COOKIE",
+        "CrossSiteScripting_QUERYARGUMENTS",
+        "CrossSiteScripting_BODY",
+        "CrossSiteScripting_URIPATH",
+      ]
+    },
+    {
+      name               = "managed-known-bad-inputs"
+      managed_group_name = "AWSManagedRulesKnownBadInputsRuleSet"
+      metric_name        = "stockspoon-managed-known-bad-inputs"
+      priority           = 1
+      count_only         = true
+      count_rule_names = [
+        "JavaDeserializationRCE_BODY",
+        "JavaDeserializationRCE_URIPATH",
+        "JavaDeserializationRCE_QUERYSTRING",
+        "JavaDeserializationRCE_HEADER",
+        "Host_localhost_HEADER",
+        "PROPFIND_METHOD",
+        "ExploitablePaths_URIPATH",
+        "Log4JRCE_QUERYSTRING",
+        "Log4JRCE_BODY",
+        "Log4JRCE_URIPATH",
+        "Log4JRCE_HEADER",
+        "ReactJSRCE_BODY",
+      ]
+    },
+    {
+      name               = "managed-admin-protection"
+      managed_group_name = "AWSManagedRulesAdminProtectionRuleSet"
+      metric_name        = "stockspoon-managed-admin-protection"
+      priority           = 2
+      count_only         = true
+      count_rule_names   = ["AdminProtection_URIPATH"]
+    },
+    {
+      name               = "managed-anonymous-ip-list"
+      managed_group_name = "AWSManagedRulesAnonymousIpList"
+      metric_name        = "stockspoon-managed-anonymous-ip-list"
+      priority           = 3
+      count_only         = true
+      count_rule_names   = ["AnonymousIPList", "HostingProviderIPList"]
+    },
+    {
+      name               = "managed-amazon-ip-reputation"
+      managed_group_name = "AWSManagedRulesAmazonIpReputationList"
+      metric_name        = "stockspoon-managed-amazon-ip-reputation"
+      priority           = 4
+      count_only         = true
+      count_rule_names   = ["AWSManagedIPReputationList", "AWSManagedReconnaissanceList", "AWSManagedIPDDoSList"]
+    },
+    {
+      name               = "managed-sqli"
+      managed_group_name = "AWSManagedRulesSQLiRuleSet"
+      metric_name        = "stockspoon-managed-sqli"
+      priority           = 5
+      count_only         = false
+      count_rule_names   = []
+    },
+    {
+      name               = "managed-linux"
+      managed_group_name = "AWSManagedRulesLinuxRuleSet"
+      metric_name        = "stockspoon-managed-linux"
+      priority           = 6
+      count_only         = false
+      count_rule_names   = []
+    },
+  ]
+}
+
 # WAFv2 descriptions allow only letters, digits, spaces and + = : # @ / - , .
 resource "aws_wafv2_web_acl" "api" {
   name        = "stockspoon-api-rate-limit"
-  description = "Experimental API flood protection - limits are hypotheses, not measured user traffic."
+  description = "CloudFront managed protections and API rate limit"
   scope       = "CLOUDFRONT"
 
   default_action {
     allow {}
   }
 
+  # Count-only managed groups run before any terminating rule. SQLi and Linux
+  # retain AWS's default blocking actions, but are ordered after the Count groups.
+  dynamic "rule" {
+    for_each = local.managed_rule_groups
+
+    content {
+      name     = rule.value.name
+      priority = rule.value.priority
+
+      override_action {
+        dynamic "count" {
+          for_each = rule.value.count_only ? [1] : []
+          content {}
+        }
+        dynamic "none" {
+          for_each = rule.value.count_only ? [] : [1]
+          content {}
+        }
+      }
+
+      statement {
+        managed_rule_group_statement {
+          name        = rule.value.managed_group_name
+          vendor_name = "AWS"
+
+          dynamic "rule_action_override" {
+            for_each = rule.value.count_rule_names
+            content {
+              name = rule_action_override.value
+              action_to_use {
+                count {}
+              }
+            }
+          }
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = rule.value.metric_name
+        sampled_requests_enabled   = false
+      }
+    }
+  }
+
   rule {
     name     = "api-per-source-ip"
-    priority = 0
+    priority = 7
     action {
       dynamic "count" {
         for_each = var.mode == "count" ? [1] : []
