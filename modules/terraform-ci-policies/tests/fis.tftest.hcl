@@ -14,6 +14,7 @@ variables {
     backend_datasource_url_parameter = "arn:aws:ssm:ap-northeast-2:250832562715:parameter/test-url"
     alb_logs                         = "arn:aws:s3:::test-logs"
     stock_logos                      = "arn:aws:s3:::test-logos"
+    profile_images                   = "arn:aws:s3:::test-profile-images"
     frontend_assets                  = "arn:aws:s3:::test-assets"
     cloudfront_distributions         = "arn:aws:cloudfront::250832562715:distribution/*"
     lambda                           = ["arn:aws:lambda:ap-northeast-2:250832562715:function:test"]
