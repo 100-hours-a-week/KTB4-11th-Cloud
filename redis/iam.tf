@@ -33,6 +33,13 @@ resource "aws_iam_role_policy_attachment" "backend_connect" {
   policy_arn = aws_iam_policy.app_connect["backend"].arn
 }
 
+# Development Backend may open a second, restricted connection for rate-limit counters.
+resource "aws_iam_role_policy_attachment" "backend_rate_limit_connect" {
+  count      = local.backend_iam_role_name == null ? 0 : 1
+  role       = local.backend_iam_role_name
+  policy_arn = aws_iam_policy.app_connect["rate-limit"].arn
+}
+
 resource "aws_iam_role_policy_attachment" "ai_connect" {
   count      = local.ai_iam_role_name == null ? 0 : 1
   role       = local.ai_iam_role_name

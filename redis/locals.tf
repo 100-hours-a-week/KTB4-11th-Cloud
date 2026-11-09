@@ -20,12 +20,13 @@ locals {
   # prod: ECS 서비스마다 사용자와 Connect Policy를 분리해 서비스별로 자기 사용자로만 접속하게 합니다.
   #       ai는 V1 AI 운영 EC2(market-collector·market-streamer 등)용 사용자이며,
   #       SG ingress와 Role 연결은 ai-server/infra root가 이 root의 Output을 참조해 관리합니다.
-  app_services = local.is_dev ? ["backend"] : ["backend", "socket", "market-data", "match-engine", "ai"]
+  # rate-limit is a dedicated, key-scoped identity used by Backend's per-user counters.
+  app_services = local.is_dev ? ["backend", "rate-limit"] : ["backend", "rate-limit", "socket", "market-data", "match-engine", "ai"]
 
   app_users = {
     for service in local.app_services : service => {
       user_id       = "${local.name_prefix}-${service}"
-      access_string = local.is_dev ? local.dev_access_string : local.prod_access_string
+      access_string = service == "rate-limit" ? local.rate_limit_access_string : (local.is_dev ? local.dev_access_string : local.prod_access_string)
     }
   }
 
@@ -53,6 +54,30 @@ locals {
   ])
 
   prod_access_string = local.dev_access_string
+
+  # The request limiter uses a separate user so the existing Backend and market
+  # integrations keep their current permissions. Keep this user's key and command
+  # scope narrow; connection and cluster-topology commands are for Lettuce IAM/TLS
+  # cluster connections, and scripts atomically increment + expire limiter keys.
+  rate_limit_access_string = join(" ", [
+    "on",
+    "~ratelimit:*",
+    "+auth",
+    "+hello",
+    "+ping",
+    "+client|setinfo",
+    "+client|setname",
+    "+client|id",
+    "+cluster|slots",
+    "+cluster|shards",
+    "+incr",
+    "+expire",
+    "+pexpire",
+    "+pttl",
+    "+eval",
+    "+evalsha",
+    "+script|load",
+  ])
 
   common_tags = {
     Project     = var.project_name
