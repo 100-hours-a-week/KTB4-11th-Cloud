@@ -1,5 +1,5 @@
 locals {
-  name_prefix           = "${var.project_name}-v2-${var.environment}-valkey"
+  name_prefix            = "${var.project_name}-v2-${var.environment}-valkey"
   elasticache_arn_prefix = "arn:${data.aws_partition.current.partition}:elasticache:${var.aws_region}:${data.aws_caller_identity.current.account_id}"
 
   is_dev = var.environment == "dev"
