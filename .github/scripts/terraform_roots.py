@@ -35,7 +35,7 @@ ROOT_DEPENDENCIES = {
         "ai-server/dev-infra", "ai-server/infra",
     },
     "ecs": {
-        "shared-infra", "app-server", "ecr", "redis@prod",
+        "shared-infra", "app-server", "ecr", "redis@prod", "storage",
         "messaging@prod", "ai-server/infra", "monitoring",
     },
 }
