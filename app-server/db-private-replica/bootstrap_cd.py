@@ -452,7 +452,11 @@ def main() -> None:
         )
         if "GTID_REPLICA_THREADS_RUNNING" in status:
             print("Private GTID replica replication threads are healthy", flush=True)
-        elif "NEEDS_BASELINE_SEED" in status or "BASELINE_SEEDED_NEEDS_GTID_CONFIGURATION" in status:
+        elif (
+            "NEEDS_BASELINE_SEED" in status
+            or "BASELINE_SEEDED_NEEDS_GTID_CONFIGURATION" in status
+            or "BASELINE_ATTEMPT_SAFE_TO_RETRY" in status
+        ):
             # A fresh replica streams an InnoDB snapshot and the source GTID set,
             # then uses auto-position for all changes committed after that snapshot.
             run_ssm(source_id, SOURCE_PREFLIGHT, "verify Primary schema and GTID readiness", timeout=300)
