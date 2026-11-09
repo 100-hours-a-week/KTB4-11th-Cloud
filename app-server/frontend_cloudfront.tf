@@ -107,7 +107,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   dynamic "ordered_cache_behavior" {
-    for_each = ["/api", "/api/*", "/market", "/market/*", "/.well-known/acme-challenge/*"]
+    for_each = ["/api", "/api/*", "/market", "/market/*"]
     content {
       path_pattern             = ordered_cache_behavior.value
       target_origin_id         = "application"
