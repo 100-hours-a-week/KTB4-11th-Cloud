@@ -23,7 +23,8 @@ set -Eeuo pipefail
 MYSQL_CONTAINER="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 == "mysql:8.4.11" {print $1; exit}')"
 [[ -n "$MYSQL_CONTAINER" ]] || { echo 'No running MySQL 8.4.11 container found on the Primary' >&2; exit 1; }
 mysql_root() {
-  docker exec "$MYSQL_CONTAINER" sh -c \
+  # Keep stdin attached so SQL supplied through a heredoc reaches mysql.
+  docker exec -i "$MYSQL_CONTAINER" sh -c \
     'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root "$@"' \
     mysql "$@"
 }
@@ -79,7 +80,7 @@ done
   echo 'Replication password must be a 16-32 character hexadecimal SSM secret' >&2
   exit 1
 }
-docker exec "$MYSQL_CONTAINER" sh -c \
+docker exec -i "$MYSQL_CONTAINER" sh -c \
   'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root' <<SQL
 SET SESSION sql_log_bin=0;
 CREATE USER IF NOT EXISTS 'db_private_replica'@'$TARGET_HOST' IDENTIFIED BY '$replication_password' REQUIRE SSL;
@@ -111,7 +112,7 @@ done
   echo 'Seed password must be a 16-32 character hexadecimal SSM secret' >&2
   exit 1
 }
-docker exec "$MYSQL_CONTAINER" sh -c \
+docker exec -i "$MYSQL_CONTAINER" sh -c \
   'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root' <<SQL
 SET SESSION sql_log_bin=0;
 CREATE USER IF NOT EXISTS 'db_private_seed'@'$TARGET_HOST' IDENTIFIED BY '$seed_password' REQUIRE SSL;
@@ -139,7 +140,7 @@ for attempt in $(seq 1 12); do
   sleep 5
 done
 monitor_password_sql="$(printf '%s' "$monitor_password" | sed -e 's/\\/\\\\/g' -e "s/'/''/g")"
-docker exec "$MYSQL_CONTAINER" sh -c \
+docker exec -i "$MYSQL_CONTAINER" sh -c \
   'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root' <<SQL
 SET SESSION sql_log_bin=0;
 CREATE USER IF NOT EXISTS 'proxysql_monitor'@'%' IDENTIFIED BY '$monitor_password_sql';
@@ -157,7 +158,7 @@ MYSQL_CONTAINER="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 == "mysq
 ROOT_PASSWORD_FILE=/opt/stockspoon-db-migration/mysql/secrets/mysql-root-password
 [[ "$TARGET_HOST" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 [[ -s "$ROOT_PASSWORD_FILE" ]]
-docker exec "$MYSQL_CONTAINER" sh -c \
+docker exec -i "$MYSQL_CONTAINER" sh -c \
   'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=5 --user=root' <<SQL
 SET SESSION sql_log_bin=0;
 DROP USER IF EXISTS 'db_private_seed'@'$TARGET_HOST';

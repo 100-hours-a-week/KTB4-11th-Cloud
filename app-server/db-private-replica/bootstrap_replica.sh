@@ -30,7 +30,8 @@ SOURCE_INSTANCE_ID="$3"
 [[ -s "$ROOT_PASSWORD_FILE" ]] || { echo 'MySQL root password file is missing' >&2; exit 1; }
 
 mysql_root() {
-  docker exec "$MYSQL_CONTAINER" sh -c \
+  # Keep stdin attached so SQL supplied through a heredoc reaches mysql.
+  docker exec -i "$MYSQL_CONTAINER" sh -c \
     'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=SOCKET --socket=/var/run/mysqld/mysqld.sock --connect-timeout=5 --user=root "$@"' \
     mysql "$@"
 }
