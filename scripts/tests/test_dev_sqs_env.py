@@ -1,4 +1,4 @@
-"""Validate the actual Compose environment, including safe order-consumer defaults."""
+"""Validate the actual Compose environment, including enabled order-consumer defaults."""
 import json
 import os
 from pathlib import Path
@@ -33,18 +33,26 @@ class DevSqsEnvironmentTest(unittest.TestCase):
                 text=True, capture_output=True)
         return json.loads(result.stdout)['services']['backend']['environment']
 
-    def test_missing_sqs_environment_publishes_ai_without_consuming_orders(self):
+    def test_missing_sqs_environment_defaults_order_consumer_to_true(self):
         env = self.render(remove_sqs=True)
         self.assertEqual(env['AI_REQUEST_QUEUE_ENABLED'], 'true')
         self.assertTrue(env['AI_REQUEST_QUEUE_URL'].endswith('/stockspoon-v2-dev-ai-request'))
-        self.assertEqual(env['ORDER_QUEUE_CONSUMER_ENABLED'], 'false')
+        self.assertEqual(env['ORDER_QUEUE_CONSUMER_ENABLED'], 'true')
         self.assertEqual(env['AWS_REGION'], 'ap-northeast-2')
 
-    def test_example_enables_order_publishing_but_keeps_backlog_untouched(self):
+    def test_example_defaults_order_consumer_to_true(self):
         env = self.render()
         self.assertEqual(env['ORDER_QUEUE_ENABLED'], 'true')
-        self.assertEqual(env['ORDER_QUEUE_CONSUMER_ENABLED'], 'false')
+        self.assertEqual(env['ORDER_QUEUE_CONSUMER_ENABLED'], 'true')
         self.assertTrue(env['ORDER_QUEUE_URL'].endswith('/stockspoon-v2-dev-order.fifo'))
+
+    def test_empty_order_consumer_setting_defaults_to_true(self):
+        env = self.render({'ORDER_QUEUE_CONSUMER_ENABLED': ''})
+        self.assertEqual(env['ORDER_QUEUE_CONSUMER_ENABLED'], 'true')
+
+    def test_explicit_false_can_pause_order_consumption(self):
+        env = self.render({'ORDER_QUEUE_CONSUMER_ENABLED': 'false'})
+        self.assertEqual(env['ORDER_QUEUE_CONSUMER_ENABLED'], 'false')
 
     def test_explicit_operator_settings_are_forwarded(self):
         env = self.render({'AI_REQUEST_QUEUE_ENABLED': 'false',
