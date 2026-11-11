@@ -140,6 +140,13 @@ resource "aws_iam_role_policy_attachment" "dev_app_sqs_producer" {
   policy_arn = "arn:aws:iam::250832562715:policy/stockspoon-v2-dev-backend-producer-sqs"
 }
 
+# Permission alone does not enable consumption; keep the development consumer
+# disabled until the existing order backlog has been reviewed.
+resource "aws_iam_role_policy_attachment" "dev_app_order_consumer_sqs" {
+  role       = aws_iam_role.dev_app.name
+  policy_arn = "arn:aws:iam::250832562715:policy/stockspoon-v2-dev-order-consumer-sqs"
+}
+
 resource "aws_iam_role_policy" "dev_app_cloudwatch" {
   name   = "${var.dev_app_name_prefix}-cloudwatch-policy"
   role   = aws_iam_role.dev_app.id

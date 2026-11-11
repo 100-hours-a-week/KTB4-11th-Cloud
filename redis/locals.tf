@@ -1,5 +1,6 @@
 locals {
-  name_prefix = "${var.project_name}-v2-${var.environment}-valkey"
+  name_prefix            = "${var.project_name}-v2-${var.environment}-valkey"
+  elasticache_arn_prefix = "arn:${data.aws_partition.current.partition}:elasticache:${var.aws_region}:${data.aws_caller_identity.current.account_id}"
 
   is_dev = var.environment == "dev"
   # 리소스 설명에 쓰는 환경 이름입니다. dev 값은 기존 리소스 설명과 같아야 교체되지 않습니다.
@@ -62,12 +63,14 @@ locals {
   rate_limit_access_string = join(" ", [
     "on",
     "~ratelimit:*",
+    "-@all",
     "+auth",
     "+hello",
     "+ping",
     "+client|setinfo",
     "+client|setname",
     "+client|id",
+    "+cluster|nodes",
     "+cluster|slots",
     "+cluster|shards",
     "+incr",

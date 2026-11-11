@@ -53,12 +53,23 @@ def _flatten_value(
     if unknown_mask is True:
         return {path: {"value": _UNKNOWN, "unknown": True}}
 
+    if value is _MISSING and (
+        isinstance(sensitive_mask, dict) or isinstance(unknown_mask, dict)
+    ):
+        value = {}
+
     if isinstance(value, dict):
-        if not value:
+        keys = set(value)
+        if isinstance(sensitive_mask, dict):
+            keys.update(sensitive_mask)
+        if isinstance(unknown_mask, dict):
+            keys.update(unknown_mask)
+        if not keys:
             return {path: {"value": value}}
 
         flattened: dict[str, dict[str, object]] = {}
-        for key, child_value in value.items():
+        for key in sorted(keys):
+            child_value = value.get(key, _MISSING)
             child_path = _child_path(path, str(key))
             flattened.update(
                 _flatten_value(
@@ -95,10 +106,19 @@ def _flatten_attributes(
     unknown_mask: object,
 ) -> dict[str, dict[str, object]]:
     if not isinstance(value, dict):
-        return _flatten_value(value, sensitive_mask, unknown_mask, "(value)")
+        if isinstance(sensitive_mask, dict) or isinstance(unknown_mask, dict):
+            value = {}
+        else:
+            return _flatten_value(value, sensitive_mask, unknown_mask, "(value)")
 
     flattened: dict[str, dict[str, object]] = {}
-    for key, child_value in value.items():
+    keys = set(value)
+    if isinstance(sensitive_mask, dict):
+        keys.update(sensitive_mask)
+    if isinstance(unknown_mask, dict):
+        keys.update(unknown_mask)
+    for key in sorted(keys):
+        child_value = value.get(key, _MISSING)
         path = _child_path("", str(key))
         flattened.update(
             _flatten_value(
