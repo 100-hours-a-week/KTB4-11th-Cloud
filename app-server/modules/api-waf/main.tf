@@ -8,9 +8,9 @@ terraform {
 }
 
 variable "request_limit" {
-  description = "Coarse per-IP ceiling. Default 1200/300s is based on the 2026-11-07 same-IP mixed run (~950 requests/300s) plus about 26% headroom; authenticated users are limited in the backend."
+  description = "Per-source-IP /api/ rate-rule limit; default 7000 requests within a 300-second Count window."
   type        = number
-  default     = 1200
+  default     = 7000
   validation {
     condition     = var.request_limit >= 10 && var.request_limit <= 2000000000 && floor(var.request_limit) == var.request_limit
     error_message = "request_limit must be an integer between 10 and 2000000000."

@@ -13,9 +13,9 @@ variable "api_waf_enabled" {
 variable "api_waf_mode" {
   # This mode controls only api-per-source-ip. Managed SQLi and Linux rules
   # keep their AWS-managed blocking actions in either mode.
-  # tfvars/TF_VAR settings override this default; inspect the plan and output after apply.
+  # tfvars/TF_VAR settings override this default; verify the deployed ACL separately.
   type    = string
-  default = "block"
+  default = "count"
   validation {
     condition     = contains(["count", "block"], var.api_waf_mode)
     error_message = "api_waf_mode must be count or block."
@@ -23,11 +23,9 @@ variable "api_waf_mode" {
 }
 
 variable "api_waf_request_limit" {
-  type = number
-  # 2026-11-07 same-IP mixed test observed about 950 requests per 300s
-  # (3 RPS attack + normal cohort); 1200 leaves roughly 26% headroom while
-  # retaining a coarse per-IP ceiling above the authenticated BE user limit.
-  default = 1200
+  description = "Per-source-IP /api/ rate-rule limit; default 7000 requests within a 300-second Count window."
+  type        = number
+  default     = 7000
 }
 
 variable "api_waf_evaluation_window_sec" {
