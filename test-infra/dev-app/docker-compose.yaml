@@ -95,6 +95,8 @@ services:
       ORDER_QUEUE_ENABLED: ${ORDER_QUEUE_ENABLED:-false}
       ORDER_QUEUE_CONSUMER_ENABLED: ${ORDER_QUEUE_CONSUMER_ENABLED:-true}
       ORDER_QUEUE_URL: ${ORDER_QUEUE_URL:-https://sqs.ap-northeast-2.amazonaws.com/250832562715/stockspoon-v2-dev-order.fifo}
+      REPORT_QUEUE_ENABLED: ${REPORT_QUEUE_ENABLED:-false}
+      REPORT_QUEUE_URL: ${REPORT_QUEUE_URL:-https://sqs.ap-northeast-2.amazonaws.com/250832562715/stockspoon-v2-dev-report-request}
     depends_on:
       db:
         condition: service_healthy
