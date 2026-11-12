@@ -20,6 +20,16 @@ resource "aws_s3_bucket" "profile_images" {
   }
 }
 
+resource "aws_s3_bucket_cors_configuration" "profile_images" {
+  bucket = aws_s3_bucket.profile_images.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT"]
+    allowed_origins = ["https://stock-spoon.com"]
+  }
+}
+
 resource "aws_s3_bucket_ownership_controls" "profile_images" {
   bucket = aws_s3_bucket.profile_images.id
 
