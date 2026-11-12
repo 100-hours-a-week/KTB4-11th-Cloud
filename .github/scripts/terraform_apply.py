@@ -60,7 +60,15 @@ def main() -> None:
 
                 # Terraform의 진행 상황과 오류를 즉시 job 로그에 전달한다.
                 subprocess.run(
-                    ["terraform", f"-chdir={root_dir(root)}", "apply", "-input=false", "-no-color", str(plan_path)],
+                    [
+                        "terraform",
+                        f"-chdir={root_dir(root)}",
+                        "apply",
+                        "-input=false",
+                        "-lock-timeout=5m",
+                        "-no-color",
+                        str(plan_path),
+                    ],
                     text=True,
                     check=True,
                 )
