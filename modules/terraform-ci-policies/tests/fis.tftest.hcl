@@ -28,6 +28,9 @@ variables {
     iam_accounts                     = ["arn:aws:iam::250832562715:user/test"]
     pass_roles                       = ["arn:aws:iam::250832562715:role/test"]
     hosted_zone                      = "arn:aws:route53:::hostedzone/test"
+    efs_file_systems                 = ["arn:aws:elasticfilesystem:ap-northeast-2:250832562715:file-system/*"]
+    efs_access_points                = ["arn:aws:elasticfilesystem:ap-northeast-2:250832562715:access-point/*"]
+    efs_repman_state_name            = "test-repman-state"
   }
   fis_resource_arns = {
     roles = [
