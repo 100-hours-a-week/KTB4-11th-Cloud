@@ -19,6 +19,9 @@ variable "resource_arns" {
     iam_accounts                     = list(string)
     pass_roles                       = list(string)
     hosted_zone                      = string
+    efs_file_systems                 = list(string)
+    efs_access_points                = list(string)
+    efs_repman_state_name            = string
   })
 }
 
