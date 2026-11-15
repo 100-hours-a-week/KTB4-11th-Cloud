@@ -165,6 +165,24 @@ variable "proxysql_task_memory" {
   default     = 1024
 }
 
+variable "repman_image" {
+  description = "Pinned rootless Signal18 Replication Manager image for the existing MySQL GTID cluster"
+  type        = string
+  default     = "signal18/replication-manager:v3.1.48-rootless"
+}
+
+variable "repman_task_cpu" {
+  description = "Repman Fargate task CPU units"
+  type        = number
+  default     = 512
+}
+
+variable "repman_task_memory" {
+  description = "Repman Fargate task memory in MiB"
+  type        = number
+  default     = 1024
+}
+
 variable "backend_task_cpu" {
   description = "Backend task CPU units (1024 = 1 vCPU)"
   type        = number

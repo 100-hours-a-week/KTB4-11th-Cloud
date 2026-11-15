@@ -60,7 +60,15 @@ sql_escape() {
 }
 
 application_schemas() {
-  mysql_root --batch --skip-column-names --execute="SELECT COALESCE(GROUP_CONCAT(schema_name ORDER BY schema_name SEPARATOR ','), '') FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema','mysql','performance_schema','sys')"
+  mysql_root --batch --skip-column-names --execute="SELECT COALESCE(GROUP_CONCAT(schema_name ORDER BY schema_name SEPARATOR ','), '') FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema','mysql','performance_schema','sys','replication_manager_schema')"
+}
+
+source_baseline_schemas() {
+  docker exec "$MYSQL_CONTAINER" mysql \
+    --defaults-extra-file="$SEED_OPTION_FILE" \
+    --protocol=TCP --host="$SOURCE_HOST" --port=3306 --connect-timeout=10 \
+    --ssl-mode=REQUIRED --batch --skip-column-names \
+    --execute="SELECT COALESCE(GROUP_CONCAT(SCHEMA_NAME ORDER BY SCHEMA_NAME SEPARATOR ','), '') FROM information_schema.schemata WHERE SCHEMA_NAME IN ('replication_manager_schema','stockspoon')"
 }
 
 target_gtid_executed() {
@@ -357,7 +365,8 @@ verify_seed_gtid_history() {
 }
 
 seed_baseline() {
-  local status_text schemas current_gtids marker_tmp
+  local status_text schemas current_gtids marker_tmp source_schemas
+  local -a dump_schemas
   status_text="$(replica_status)"
   [[ -z "$status_text" ]] || {
     echo 'A replication channel already exists; refusing to seed a running replica' >&2
@@ -397,6 +406,15 @@ seed_baseline() {
     echo 'Private MySQL already contains application schemas without a completed baseline marker; refusing to overwrite or merge it' >&2
     return 1
   }
+  source_schemas="$(source_baseline_schemas)"
+  case "$source_schemas" in
+    stockspoon) dump_schemas=(stockspoon) ;;
+    replication_manager_schema,stockspoon) dump_schemas=(replication_manager_schema stockspoon) ;;
+    *)
+      echo "The Primary schema set is unsupported for baseline seeding (found: $source_schemas)" >&2
+      return 1
+      ;;
+  esac
   current_gtids="$(target_gtid_executed)"
   printf '%s\n%s\nformat=2\n' "$SOURCE_INSTANCE_ID" "$SOURCE_HOST" > "$SEED_ATTEMPT_MARKER"
   chmod 0600 "$SEED_ATTEMPT_MARKER"
@@ -417,7 +435,7 @@ seed_baseline() {
     --defaults-extra-file="$SEED_OPTION_FILE" \
     --protocol=TCP --host="$SOURCE_HOST" --port=3306 \
     --ssl-mode=REQUIRED --single-transaction --quick --set-gtid-purged=ON \
-    --databases stockspoon --routines --events --triggers --hex-blob --no-tablespaces \
+    --databases "${dump_schemas[@]}" --routines --events --triggers --hex-blob --no-tablespaces \
     | docker exec -i "$MYSQL_CONTAINER" sh -c \
       'MYSQL_PWD="$(cat /run/secrets/mysql_root_password)" exec mysql --no-defaults --protocol=SOCKET --socket=/var/run/mysqld/mysqld.sock --connect-timeout=5 --user=root'
   ensure_read_only

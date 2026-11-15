@@ -285,7 +285,8 @@ def no_active_query_rules(proxy):
 
 def inventory(db, schema):
     schemas = db.rows("SELECT SCHEMA_NAME AS name FROM information_schema.schemata "
-                      "WHERE SCHEMA_NAME NOT IN ('mysql','sys','information_schema','performance_schema')")
+                      "WHERE SCHEMA_NAME NOT IN ('mysql','sys','information_schema','performance_schema',"
+                      "'replication_manager_schema')")
     require({r["name"] for r in schemas} == {schema}, "Additional application schemas need explicit migration coverage")
     rows = db.rows("SELECT TABLE_NAME AS name, ENGINE AS engine, TABLE_TYPE AS type "
                    "FROM information_schema.tables WHERE TABLE_SCHEMA=%s ORDER BY TABLE_NAME", (schema,))
