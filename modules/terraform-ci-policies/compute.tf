@@ -221,6 +221,7 @@ data "aws_iam_policy_document" "terraform_ci_write_compute" {
       "elasticfilesystem:DeleteMountTarget",
       "elasticfilesystem:DescribeAccessPoints",
       "elasticfilesystem:DescribeFileSystems",
+      "elasticfilesystem:DescribeLifecycleConfiguration",
       "elasticfilesystem:DescribeMountTargetSecurityGroups",
       "elasticfilesystem:DescribeMountTargets",
       "elasticfilesystem:ListTagsForResource",
