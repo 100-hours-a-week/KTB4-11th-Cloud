@@ -6,6 +6,7 @@ data "aws_iam_policy_document" "terraform_ci_write_edge" {
     actions = [
       "s3:CreateBucket",
       "s3:PutBucketPolicy",
+      "s3:PutBucketCORS",
       "s3:PutBucketOwnershipControls",
       "s3:PutBucketPublicAccessBlock",
       "s3:PutBucketTagging",
