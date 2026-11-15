@@ -2,6 +2,8 @@
 
 이 Terraform root는 `app-server` state가 내보내는 `db_migration_host` EC2를 대상으로 수동 실행하는 AWS FIS 실험 템플릿을 만든다. 대상 EC2를 정상 종료 경로로 중지하고 2분 뒤 다시 시작한다. Terraform apply는 템플릿과 권한, 로그 그룹만 관리하며 실험을 자동으로 시작하지 않는다.
 
+초기 DB 구성, Semi-sync·Repman 준비 순서, 실제 AWS 점검 결과는 [MySQL 장애 복구 초기 설정 가이드](INITIAL_SETUP.md)를 참고한다.
+
 ## 실험 대상과 관측 경로
 
 - **장애 대상:** `db_migration_host` EC2 한 대다. ProxySQL Fargate task나 Backend task에는 장애를 주입하지 않는다. 템플릿은 Terraform state의 인스턴스 ID를 사용하므로 MySQL Primary 역할을 자동으로 찾아 바꾸지 않는다. 실행 직전에 해당 인스턴스가 현재 쓰기 Primary인지 확인한다.
@@ -48,13 +50,14 @@ Standby가 없거나 복제 상태 또는 ProxySQL writer 경로가 검증되지
 
 ## 자동 failover를 시험하기 전에 준비할 항목
 
-### 현재 준비 상태 (2026-11-14)
+### 현재 준비 상태 (2026-11-16, AWS 조회 전용 점검)
 
-- 두 MySQL 노드에 Semi-sync 플러그인을 설치·활성화했다. Primary는 `rpl_semi_sync_source_status=ON`, Standby는 `rpl_semi_sync_replica_status=ON`이며, 설정은 MySQL 데이터 볼륨에 영속화했다. Primary는 `read_only=0`, Standby는 `read_only=1`과 `super_read_only=1`을 유지한다.
-- Semi-sync 설정은 `rpl_semi_sync_source_timeout=10000`ms, `rpl_semi_sync_source_wait_for_replica_count=1`, `rpl_semi_sync_source_wait_point=AFTER_SYNC`다. Replica가 없거나 10초 안에 ACK하지 못하면 MySQL이 async로 fallback할 수 있으므로 Semi-sync만으로 모든 상황의 RPO 0을 보장한다고 해석하지 않는다.
-- 두 노드에 Repman용 `replication_manager_schema`, `repman` 모니터링 계정, `repman_repl` 복제 계정을 준비했다. 비밀번호 값은 SSM SecureString에 두고 DB 호스트의 instance profile로 조회한다.
-- ECS Terraform에는 Repman 전용 Fargate service와 ProxySQL 연동 설정이 준비돼 있지만, **이 변경은 아직 apply하지 않았다.** 저장된 plan은 Repman/EFS/네트워크 리소스 생성, 기존 ProxySQL task definition 교체 및 서비스 업데이트를 포함한다. 적용하면 Repman은 DB와 다른 AZ의 private subnet에 별도 Task로 실행되고, ProxySQL은 새 task revision으로 롤링 배포된다. Backend task는 변경 대상이 아니다.
-- 따라서 현재 Repman 자동 승격은 아직 실행되지 않는다. Live ProxySQL은 기존 task revision이며 Admin `6032`는 loopback에만 바인딩돼 있다. Terraform 변경은 6032를 Repman 보안 그룹에만 허용하고 관리자 비밀번호를 SSM secret으로 관리하도록 준비돼 있다.
+- Primary `i-081a5f4798f592f49`와 Replica `i-09246a4ca3a6724e5`는 모두 실행 중이고 같은 AZ(`ap-northeast-2a`)다. MySQL server ID, 읽기 전용 값, GTID 상태, Semi-sync 플러그인과 복제 thread를 SSM 조회로 확인했다.
+- Primary의 Semi-sync source 상태와 Replica의 Semi-sync replica 상태는 모두 `ON`이다. Primary 설정은 timeout 10초, Replica ACK 1개, `AFTER_SYNC`이며 MySQL `SET PERSIST`로 영속화돼 있다. 10초 내 ACK가 없으면 비동기 복제로 돌아갈 수 있으므로 RPO 0 보장으로 해석하지 않는다.
+- 두 DB에 `replication_manager_schema`, `repman`, `repman_repl`이 준비돼 있음을 확인했다. 필요한 비밀 값은 SSM `SecureString`에 있으며 조회 과정에서 비밀 값은 열람하지 않았다.
+- ECS Terraform에는 Repman Fargate service와 ProxySQL 연동 설정이 준비돼 있지만 **실제 apply는 아직 하지 않았다.** 현재 ECS에 Repman service는 없고 ProxySQL service는 기존 task definition revision `6`으로 desired/running 각각 1개다. 따라서 Repman 자동 승격과 새 ProxySQL 설정은 아직 실행 중이 아니다.
+- Repman Terraform은 DB와 다른 AZ의 private subnet을 요구한다. 현재 DB는 `2a`에 있고 VPC에 private subnet `2c`가 있으므로 배치 후보는 존재한다. DB 두 대가 같은 AZ이므로 DB AZ 장애는 복구 범위에 포함되지 않는다.
+- 현재 `api-https-bind=true` 설정만으로 Repman API의 TLS가 활성화되지는 않는다. 인증서를 연결하기 전 API 인증정보를 사용하지 않도록 [초기 설정 가이드](INITIAL_SETUP.md)의 보안 유의사항을 먼저 확인한다.
 
 저장소에는 운영자가 명시적으로 실행하는 계획 전환 및 복귀 코드가 있다: `app-server/db-migration/switchover/switchover.py`와 `app-server/db-migration/switchover/RUNBOOK.md`의 `check`, `capture`, `switch`, `rollback`. 이것은 양쪽 DB에 접속해 Primary 쓰기를 막고 복제 적용·데이터를 확인한 뒤 전환하는 **계획된 switchover** 절차다. RUNBOOK도 실제 MySQL/ProxySQL 통합 검증을 마친 결과가 아니며 `check`와 리허설부터 하도록 명시한다. Primary가 갑자기 사라졌을 때의 장애 감지·후보 선출·승격·ProxySQL 갱신·구 Primary 재편입을 자동 수행하는 crash failover 절차는 아직 없다.
 
@@ -68,7 +71,7 @@ Standby가 없거나 복제 상태 또는 ProxySQL writer 경로가 검증되지
 |---|---|---|
 | 자동 승격 | `failover-mode="automatic"` | Primary 장애 확인 후 사람 승인 없이 승격하는지 |
 | 후보 지연 허용 | `failover-max-slave-delay=30`과 `0` 비교 | 허용 지연을 줄이면 RPO 위험은 낮아지지만 승격 가능한 후보가 없어질 수 있음 |
-| 복제 동기화 조건 | `failover-at-sync=false`와 `true` 비교 | `true`는 Semi-sync의 SYNC 상태를 요구하므로, 현재 코드처럼 async만 쓰는 구성에서는 자동 승격이 막힐 수 있음 |
+| 복제 동기화 조건 | `failover-at-sync=false`와 `true` 비교 | `true`는 Semi-sync SYNC 상태인 Replica를 요구한다. 상태가 조건을 충족하지 않으면 가용성보다 데이터 안전성을 우선해 승격을 보류할 수 있음 |
 | 반복 장애 제한 | `failover-limit=3`, `failover-time-limit=10`부터 평가 | 연속 장애나 네트워크 flap에서 승격 반복을 제한하는 효과 |
 | 오탐 방지 | DB reachability 재확인, 복제 heartbeat, 독립 arbitrator/witness | 네트워크 단절을 Primary 사망으로 오판해 split-brain을 만드는지 |
 | ProxySQL 연동 | writer HG10 / reader HG20, ProxySQL Admin 6032 연결 | 기존 query rule·계정 설정을 보존하면서 backend 역할만 갱신하는지 |
