@@ -122,4 +122,18 @@ data "aws_iam_policy_document" "terraform_ci_write_identity" {
       ]
     }
   }
+
+  # EFS creates this service-linked role when the first mount target is created.
+  statement {
+    sid       = "CreateEfsServiceLinkedRole"
+    effect    = "Allow"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values   = ["elasticfilesystem.amazonaws.com"]
+    }
+  }
 }

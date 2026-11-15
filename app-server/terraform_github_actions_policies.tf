@@ -557,6 +557,9 @@ module "terraform_ci_policies" {
     iam_accounts                     = local.github_actions_terraform_account_iam_arns
     pass_roles                       = local.github_actions_terraform_pass_role_arns
     hosted_zone                      = "arn:aws:route53:::hostedzone/${data.aws_route53_zone.app_alert_email.zone_id}"
+    efs_file_systems                 = ["arn:${data.aws_partition.github_actions_terraform.partition}:elasticfilesystem:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:file-system/*"]
+    efs_access_points                = ["arn:${data.aws_partition.github_actions_terraform.partition}:elasticfilesystem:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:access-point/*"]
+    efs_repman_state_name            = "stockspoon-v2-prod-repman-state"
   }
 }
 
