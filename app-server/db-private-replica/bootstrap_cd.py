@@ -36,7 +36,7 @@ source_flags="$(mysql_root --batch --skip-column-names --execute='SELECT CONCAT_
 application_schemas="$(mysql_root --batch --skip-column-names <<'SQL'
 SELECT COALESCE(GROUP_CONCAT(schema_name ORDER BY schema_name SEPARATOR ','), '')
 FROM information_schema.schemata
-WHERE schema_name NOT IN ('information_schema','mysql','performance_schema','sys');
+WHERE schema_name NOT IN ('information_schema','mysql','performance_schema','sys','replication_manager_schema');
 SQL
 )"
 [[ "$application_schemas" == 'stockspoon' ]] || {
@@ -118,6 +118,7 @@ SET SESSION sql_log_bin=0;
 CREATE USER IF NOT EXISTS 'db_private_seed'@'$TARGET_HOST' IDENTIFIED BY '$seed_password' REQUIRE SSL;
 ALTER USER 'db_private_seed'@'$TARGET_HOST' IDENTIFIED BY '$seed_password' REQUIRE SSL;
 GRANT SELECT, SHOW VIEW, TRIGGER, EVENT ON stockspoon.* TO 'db_private_seed'@'$TARGET_HOST';
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT ON replication_manager_schema.* TO 'db_private_seed'@'$TARGET_HOST';
 GRANT RELOAD, SHOW_ROUTINE ON *.* TO 'db_private_seed'@'$TARGET_HOST';
 SQL
 echo 'SOURCE_BASELINE_SEED_ACCOUNT_READY'

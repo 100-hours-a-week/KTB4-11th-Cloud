@@ -10,6 +10,7 @@ locals {
   proxysql_primary_mysql_sg         = try(data.terraform_remote_state.app.outputs.db_migration_host.security_group_id, "")
   proxysql_private_replica_mysql_sg = try(data.terraform_remote_state.app.outputs.db_private_replica_host.security_group_id, "")
   proxysql_pmm_security_group_id    = try(data.terraform_remote_state.app.outputs.db_migration_support_hosts["pmm"].security_group_id, "")
+  proxysql_admin_password_arn       = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/proxysql/ADMIN_PASSWORD"
   proxysql_monitor_password_arn     = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/PROXYSQL_MONITOR_PASSWORD"
 
   # ProxySQL starts with an empty config database, then this sidecar sets the
@@ -24,11 +25,12 @@ locals {
     : "$PROXYSQL_APP_USER"
     : "$PROXYSQL_APP_PASSWORD"
     : "$PROXYSQL_MONITOR_PASSWORD"
+    : "$PROXYSQL_ADMIN_PASSWORD"
 
-    cat > /tmp/proxysql-admin.cnf <<'ADMIN'
+    cat > /tmp/proxysql-admin.cnf <<ADMIN
     [client]
     user=admin
-    password=admin
+    password=$PROXYSQL_ADMIN_PASSWORD
     protocol=tcp
     host=127.0.0.1
     port=6032
@@ -54,16 +56,37 @@ locals {
     monitor_user_sql=$(sql_escape "$PROXYSQL_MONITOR_USER")
     monitor_password_sql=$(sql_escape "$PROXYSQL_MONITOR_PASSWORD")
 
+    mysql_read_only() {
+      host="$1"
+      MYSQL_PWD="$PROXYSQL_MONITOR_PASSWORD" mysql --no-defaults --protocol=tcp \
+        --host="$host" --port=${var.v1_mysql_port} --user="$PROXYSQL_MONITOR_USER" \
+        --connect-timeout=4 --batch --skip-column-names \
+        --execute='SELECT @@global.read_only' 2>/dev/null || printf 'UNREACHABLE'
+    }
+    primary_read_only=$(mysql_read_only "$PROXYSQL_PRIMARY_HOST")
+    replica_read_only=$(mysql_read_only "$PROXYSQL_PRIVATE_REPLICA_HOST")
+
+    if [ "$primary_read_only" = '0' ] && { [ "$replica_read_only" = '1' ] || [ "$replica_read_only" = 'UNREACHABLE' ]; }; then
+      writer_host="$PROXYSQL_PRIMARY_HOST"
+      reader_host="$PROXYSQL_PRIVATE_REPLICA_HOST"
+    elif [ "$replica_read_only" = '0' ] && { [ "$primary_read_only" = '1' ] || [ "$primary_read_only" = 'UNREACHABLE' ]; }; then
+      writer_host="$PROXYSQL_PRIVATE_REPLICA_HOST"
+      reader_host="$PROXYSQL_PRIMARY_HOST"
+    else
+      echo "ERROR: Could not identify exactly one writable MySQL backend (primary read_only=$primary_read_only replica read_only=$replica_read_only)" >&2
+      exit 1
+    fi
+
     mysql --defaults-extra-file=/tmp/proxysql-admin.cnf <<SQL
     DELETE FROM mysql_servers;
     INSERT INTO mysql_servers (hostgroup_id, hostname, port, comment) VALUES
-      (10, '${local.proxysql_primary_host}', ${var.v1_mysql_port}, 'Current GTID Primary'),
-      (20, '${local.proxysql_private_replica_host}', ${var.v1_mysql_port}, 'Private GTID replica');
+      (10, '$writer_host', ${var.v1_mysql_port}, 'Current read_only=0 writer'),
+      (20, '$reader_host', ${var.v1_mysql_port}, 'Current read_only=1 replica');
 
     DELETE FROM mysql_replication_hostgroups
       WHERE writer_hostgroup = 10 OR reader_hostgroup = 20;
     INSERT INTO mysql_replication_hostgroups (writer_hostgroup, reader_hostgroup, check_type, comment)
-      VALUES (10, 20, 'read_only', 'Current Primary and private replica');
+      VALUES (10, 20, 'read_only', 'Role-neutral MySQL promotion routing');
 
     DELETE FROM mysql_users WHERE username = '$app_user_sql';
     INSERT INTO mysql_users
@@ -88,7 +111,7 @@ locals {
     echo "ProxySQL bootstrap completed for the Primary and private GTID replica"
   EOT
 
-  proxysql_healthcheck_command = "mysql --defaults-extra-file=/tmp/proxysql-admin.cnf -Nse \"SELECT IF((SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id = 10 AND hostname = '${local.proxysql_primary_host}' AND status = 'ONLINE') = 1 AND (SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id = 20 AND hostname = '${local.proxysql_private_replica_host}' AND status = 'ONLINE') = 1 AND (SELECT COUNT(*) FROM runtime_mysql_replication_hostgroups WHERE writer_hostgroup = 10 AND reader_hostgroup = 20) = 1 AND (SELECT COUNT(DISTINCT username) FROM runtime_mysql_users) >= 1, 1, 0)\" | grep -qx '1'"
+  proxysql_healthcheck_command = "mysql --defaults-extra-file=/tmp/proxysql-admin.cnf -Nse \"SELECT IF((SELECT COUNT(*) FROM runtime_mysql_servers WHERE hostgroup_id = 10 AND status = 'ONLINE') = 1 AND (SELECT COUNT(*) FROM runtime_mysql_replication_hostgroups WHERE writer_hostgroup = 10 AND reader_hostgroup = 20) = 1 AND (SELECT COUNT(DISTINCT username) FROM runtime_mysql_users WHERE active = 1) >= 1, 1, 0)\" | grep -qx '1'"
 
   proxysql_network_check_command = join("\n", concat(
     [
@@ -117,12 +140,12 @@ locals {
       essential  = true
       entryPoint = ["/bin/sh", "-ec"]
       command = [<<-EOT
-        cat > /tmp/proxysql.cnf <<'CONFIG'
+        cat > /tmp/proxysql.cnf <<CONFIG
         datadir="/var/lib/proxysql"
         admin_variables =
         {
-          admin_credentials="admin:admin"
-          mysql_ifaces="127.0.0.1:6032"
+            admin_credentials="admin:$PROXYSQL_ADMIN_PASSWORD"
+            mysql_ifaces="0.0.0.0:6032"
         }
         mysql_variables =
         {
@@ -133,10 +156,10 @@ locals {
         mysql_servers=()
         mysql_users=()
       CONFIG
-      cat > /tmp/proxysql-admin.cnf <<'ADMIN'
+        cat > /tmp/proxysql-admin.cnf <<ADMIN
       [client]
       user=admin
-      password=admin
+        password=$PROXYSQL_ADMIN_PASSWORD
       protocol=tcp
       host=127.0.0.1
       port=6032
@@ -161,9 +184,20 @@ locals {
 
       portMappings = [
         {
+          containerPort = 6032
+          protocol      = "tcp"
+        },
+        {
           containerPort = 6033
           protocol      = "tcp"
         }
+      ]
+
+      secrets = [
+        {
+          name      = "PROXYSQL_ADMIN_PASSWORD"
+          valueFrom = local.proxysql_admin_password_arn
+        },
       ]
 
       logConfiguration = {
@@ -187,6 +221,10 @@ locals {
         { name = "PROXYSQL_MONITOR_USER", value = var.proxysql_monitor_username },
       ]
       secrets = [
+        {
+          name      = "PROXYSQL_ADMIN_PASSWORD"
+          valueFrom = local.proxysql_admin_password_arn
+        },
         {
           name      = "PROXYSQL_APP_USER"
           valueFrom = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/MYSQL_USER"

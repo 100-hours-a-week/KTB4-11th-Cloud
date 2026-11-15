@@ -152,6 +152,7 @@ resource "aws_iam_role_policy" "db_private_replica_parameters" {
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/PROXYSQL_MONITOR_PASSWORD",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/MYSQL_USER",
         "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/backend/MYSQL_PASSWORD",
+        "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/repman/MYSQL_PASSWORD",
       ]
     }]
   })
