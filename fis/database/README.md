@@ -55,7 +55,8 @@ Standby가 없거나 복제 상태 또는 ProxySQL writer 경로가 검증되지
 - Primary `i-081a5f4798f592f49`와 Replica `i-09246a4ca3a6724e5`는 모두 실행 중이고 같은 AZ(`ap-northeast-2a`)다. MySQL server ID, 읽기 전용 값, GTID 상태, Semi-sync 플러그인과 복제 thread를 SSM 조회로 확인했다.
 - Primary의 Semi-sync source 상태와 Replica의 Semi-sync replica 상태는 모두 `ON`이다. Primary 설정은 timeout 10초, Replica ACK 1개, `AFTER_SYNC`이며 MySQL `SET PERSIST`로 영속화돼 있다. 10초 내 ACK가 없으면 비동기 복제로 돌아갈 수 있으므로 RPO 0 보장으로 해석하지 않는다.
 - 두 DB에 `replication_manager_schema`, `repman`, `repman_repl`이 준비돼 있음을 확인했다. 필요한 비밀 값은 SSM `SecureString`에 있으며 조회 과정에서 비밀 값은 열람하지 않았다.
-- ECS Terraform에는 Repman Fargate service와 ProxySQL 연동 설정이 준비돼 있지만 **실제 apply는 아직 하지 않았다.** 현재 ECS에 Repman service는 없고 ProxySQL service는 기존 task definition revision `6`으로 desired/running 각각 1개다. 따라서 Repman 자동 승격과 새 ProxySQL 설정은 아직 실행 중이 아니다.
+- PR #333 병합 뒤 GitHub Actions [자동 적용](https://github.com/100-hours-a-week/KTB4-11th-Cloud/actions/runs/43768146827)이 시작됐지만 `aws_efs_file_system.repman` 생성 권한 오류(`elasticfilesystem:TagResource`)로 ECS root 적용은 실패했다. 일부 Repman 보안 그룹·Cloud Map·로그 그룹·IAM 리소스는 남아 있으나 Repman EFS·task definition·service는 없다. ProxySQL service는 기존 task definition revision `6`으로 desired/running 각각 1개다. 재적용 전 부분 생성 리소스와 Terraform state를 대조한다.
+- 같은 실행에서 `app-server` root 적용은 완료됐으며 `terraform_data.db_private_replica_bootstrap` 원격 절차가 다시 실행됐다. DB EC2 교체는 없었다. 이후 읽기 전용 확인에서는 두 DB가 실행 중이고 복제·Semi-sync 상태가 정상으로 확인됐지만, 이 확인은 DB 전체 데이터 비교는 아니다.
 - Repman Terraform은 DB와 다른 AZ의 private subnet을 요구한다. 현재 DB는 `2a`에 있고 VPC에 private subnet `2c`가 있으므로 배치 후보는 존재한다. DB 두 대가 같은 AZ이므로 DB AZ 장애는 복구 범위에 포함되지 않는다.
 - 현재 `api-https-bind=true` 설정만으로 Repman API의 TLS가 활성화되지는 않는다. 인증서를 연결하기 전 API 인증정보를 사용하지 않도록 [초기 설정 가이드](INITIAL_SETUP.md)의 보안 유의사항을 먼저 확인한다.
 

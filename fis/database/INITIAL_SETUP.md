@@ -4,7 +4,7 @@
 
 > 확인 기준일: 2026-11-16 (한국 시간)
 >
-> AWS 상태는 조회 전용으로 확인했다. 이 문서 작업 중 Terraform 적용, ECS 배포, FIS 실험은 하지 않았다. 현재 코드에 준비된 값과 실제 AWS 반영 상태를 구분해서 읽는다.
+> 이 문서 작업 중 내가 Terraform 적용, ECS 배포, FIS 실험을 직접 실행하지는 않았다. 다만 PR #333이 `main`에 병합된 뒤 GitHub Actions 자동 적용이 실행됐고, ECS 단계는 실패해 일부 지원 리소스만 남았다. 현재 코드와 AWS 실제 상태를 구분해서 읽는다.
 
 관련 문서:
 
@@ -43,6 +43,10 @@ Repman은 Backend 요청 경로에 들어가지 않는 제어 서비스다. DB�
 | ProxySQL ECS 서비스 | `ACTIVE`, desired/running 각각 1개, 현재 task definition revision `6`, ECS Exec 비활성화 |
 | Repman ECS 서비스 | 현재 ECS cluster에 없음. Terraform 코드에만 준비됨 |
 | Repman 배치 후보 | private subnet `2a`와 `2c` 확인. DB와 다른 AZ를 고르는 코드 조건에 따라 Repman 후보는 `2c` |
+
+2026-11-16에 [Terraform 자동 적용 실행](https://github.com/100-hours-a-week/KTB4-11th-Cloud/actions/runs/43768146827)이 시작됐다. `app-server` root 적용은 완료됐고 `terraform_data.db_private_replica_bootstrap` 원격 bootstrap 절차도 다시 실행됐다. 이 과정에서 DB EC2를 교체하지는 않았다. 이어진 `ecs` root 적용은 `aws_efs_file_system.repman` 생성 중 적용 역할에 `elasticfilesystem:TagResource` 권한이 없어 실패했다.
+
+실패 전 생성된 Repman 지원 리소스 중 현재 확인된 것은 두 보안 그룹(`sg-02a73bb684e847c76`, `sg-01ff866aa7187eb6f`), Cloud Map 서비스(`srv-vkglsi76osj3ph2n`), CloudWatch 로그 그룹, Repman IAM 역할이다. Repman EFS, task definition, ECS service는 없다. ProxySQL service는 기존 task definition revision `6`으로 계속 실행 중이다. 재적용 전에는 Terraform state와 이 부분 생성된 리소스가 일치하는지 확인해야 한다.
 
 Semi-sync source의 현재 설정은 `rpl_semi_sync_source_timeout=10000`ms, `rpl_semi_sync_source_wait_for_replica_count=1`, `rpl_semi_sync_source_wait_point=AFTER_SYNC`다. 확인 시 source 상태는 `ON`이었다. Replica에서도 `rpl_semi_sync_replica_enabled=ON`, 상태 `ON`을 확인했다. SSM Parameter Store에서는 아래 파라미터의 이름과 `SecureString` 형식만 확인했으며, 비밀 값은 읽거나 기록하지 않았다.
 
