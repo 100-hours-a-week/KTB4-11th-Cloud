@@ -411,6 +411,36 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     }
   }
 
+  # Terraform's EFS resources call these APIs during refresh and planning.
+  statement {
+    sid    = "ReadRepmanEfsResourcesInSeoul"
+    effect = "Allow"
+    actions = [
+      "elasticfilesystem:DescribeAccessPoints",
+      "elasticfilesystem:DescribeFileSystems",
+      "elasticfilesystem:DescribeLifecycleConfiguration",
+      "elasticfilesystem:DescribeMountTargetSecurityGroups",
+      "elasticfilesystem:DescribeMountTargets",
+      "elasticfilesystem:ListTagsForResource",
+    ]
+    resources = [
+      "arn:${data.aws_partition.github_actions_terraform.partition}:elasticfilesystem:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:file-system/*",
+      "arn:${data.aws_partition.github_actions_terraform.partition}:elasticfilesystem:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:access-point/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Name"
+      values   = ["stockspoon-v2-prod-repman-state"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
+  }
+
   statement {
     effect = "Allow"
     actions = [
