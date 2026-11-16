@@ -419,6 +419,10 @@ resource "aws_ecs_service" "repman" {
   }
 
   lifecycle {
+    # ECS assigns the service-linked role when iam_role is omitted. The AWS
+    # provider can otherwise treat the refreshed legacy value as a replacement.
+    ignore_changes = [iam_role]
+
     precondition {
       condition     = length(local.repman_private_subnet_ids) > 0
       error_message = "Repman must run in a private subnet outside both database AZs."
