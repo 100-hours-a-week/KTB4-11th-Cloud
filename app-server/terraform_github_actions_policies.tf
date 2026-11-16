@@ -217,12 +217,11 @@ data "aws_caller_identity" "github_actions_terraform" {}
 data "aws_partition" "github_actions_terraform" {}
 
 data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
-  # DescribeParameters does not support parameter-level resource scoping.
-  # Grant metadata discovery in Seoul; parameter values remain scoped below.
+  # These discovery APIs do not support resource-level scoping; restrict them to Seoul.
   statement {
-    sid       = "DescribeSsmParameterMetadataInSeoul"
+    sid       = "ReadRegionScopedMetadataInSeoul"
     effect    = "Allow"
-    actions   = ["ssm:DescribeParameters"]
+    actions   = ["ssm:DescribeParameters", "kms:ListAliases"]
     resources = ["*"]
 
     condition {
@@ -232,69 +231,35 @@ data "aws_iam_policy_document" "github_actions_terraform_resource_read" {
     }
   }
 
+  # Terraform reads these scoped parameters with the same SSM actions.
   statement {
-    sid       = "ReadBackendRollbackLatch"
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
-    resources = [local.backend_rollback_parameter_arn]
-  }
-
-  statement {
-    sid       = "ReadBackendDatasourceUrl"
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
-    resources = [local.backend_datasource_url_parameter_arn]
-  }
-
-  statement {
-    sid       = "ReadBackendCollectorUrl"
-    effect    = "Allow"
-    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
-    resources = ["arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/v2/prod/backend/KIWOOM_COLLECTOR_URL"]
-  }
-
-  statement {
-    sid     = "ReadMonitoringDiscordWebhookParameters"
+    sid     = "ReadScopedSsmParameters"
     effect  = "Allow"
     actions = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
-    resources = [
-      for name in [
-        "dev/app",
-        "dev/ai",
-        "dev/fe",
-        "dev/be",
-        "prod/market-http",
-        "prod/be",
-        "prod/fe",
-        "prod/alb",
-      ] :
-      "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/monitoring/${name}/discord-webhook"
-    ]
-  }
-
-  # AI roots own SecureString parameters under separate environment prefixes.
-  statement {
-    sid     = "ReadAiSecretParameters"
-    effect  = "Allow"
-    actions = ["ssm:GetParameter", "ssm:GetParameters", "ssm:ListTagsForResource"]
-    resources = [
-      for environment in ["dev", "prod"] :
-      "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/ai/${environment}/*"
-    ]
-  }
-
-  # ListAliases does not support resource-level scoping; restrict it to Seoul.
-  statement {
-    sid       = "ListKmsAliasesInSeoul"
-    effect    = "Allow"
-    actions   = ["kms:ListAliases"]
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = ["ap-northeast-2"]
-    }
+    resources = concat(
+      [
+        local.backend_rollback_parameter_arn,
+        local.backend_datasource_url_parameter_arn,
+        "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/v2/prod/backend/KIWOOM_COLLECTOR_URL",
+      ],
+      [
+        for name in [
+          "dev/app",
+          "dev/ai",
+          "dev/fe",
+          "dev/be",
+          "prod/market-http",
+          "prod/be",
+          "prod/fe",
+          "prod/alb",
+        ] :
+        "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/monitoring/${name}/discord-webhook"
+      ],
+      [
+        for environment in ["dev", "prod"] :
+        "arn:${data.aws_partition.github_actions_terraform.partition}:ssm:ap-northeast-2:${data.aws_caller_identity.github_actions_terraform.account_id}:parameter/stockspoon/ai/${environment}/*"
+      ],
+    )
   }
 
   # The KMS alias data source follows ListAliases with DescribeKey by alias.
@@ -485,6 +450,13 @@ resource "aws_iam_policy" "github_actions_terraform_read" {
   name        = "stockspoon-v1-github-actions-terraform-read"
   description = "Read Terraform-managed AWS resources and the existing Terraform state objects"
   policy      = data.aws_iam_policy_document.github_actions_terraform_resource_read.json
+
+  lifecycle {
+    precondition {
+      condition     = length(jsonencode(jsondecode(data.aws_iam_policy_document.github_actions_terraform_resource_read.json))) <= 6144
+      error_message = "The Terraform read managed policy must not exceed IAM's 6144 non-whitespace character limit."
+    }
+  }
 
   # 신규 state 정책이 먼저 연결되어 migration 중 state 접근 권한이 끊기지 않게 한다.
   depends_on = [
