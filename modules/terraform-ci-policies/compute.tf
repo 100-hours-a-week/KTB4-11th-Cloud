@@ -185,6 +185,39 @@ data "aws_iam_policy_document" "terraform_ci_write_compute" {
     }
   }
 
+  # The AP-ARN grant did not satisfy EFS's CreateAccessPoint tag-on-create check.
+  # Allow the same create-only tag grant on the tagged parent file system as well.
+  statement {
+    sid       = "TagRepmanEfsAccessPointOnFileSystemInSeoul"
+    effect    = "Allow"
+    actions   = ["elasticfilesystem:TagResource"]
+    resources = var.resource_arns.efs_file_systems
+
+    condition {
+      test     = "StringEquals"
+      variable = "elasticfilesystem:CreateAction"
+      values   = ["CreateAccessPoint"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Name"
+      values   = [var.resource_arns.efs_repman_state_name]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Name"
+      values   = [var.resource_arns.efs_repman_state_name]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-northeast-2"]
+    }
+  }
+
   # Repman creates its access point only on the tagged Repman file system.
   statement {
     sid       = "CreateRepmanEfsAccessPointInSeoul"
