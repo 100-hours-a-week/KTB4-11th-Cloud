@@ -53,6 +53,7 @@ Standby가 없거나 복제 상태 또는 ProxySQL writer 경로가 검증되지
 - 두 MySQL 노드에 Semi-sync 플러그인을 설치·활성화했다. Primary는 `rpl_semi_sync_source_status=ON`, Standby는 `rpl_semi_sync_replica_status=ON`이며, 설정은 MySQL 데이터 볼륨에 영속화했다. Primary는 `read_only=0`, Standby는 `read_only=1`과 `super_read_only=1`을 유지한다.
 - Semi-sync 설정은 `rpl_semi_sync_source_timeout=10000`ms, `rpl_semi_sync_source_wait_for_replica_count=1`, `rpl_semi_sync_source_wait_point=AFTER_SYNC`다. Replica가 없거나 10초 안에 ACK하지 못하면 MySQL이 async로 fallback할 수 있으므로 Semi-sync만으로 모든 상황의 RPO 0을 보장한다고 해석하지 않는다.
 - 두 노드에 Repman용 `replication_manager_schema`, `repman` 모니터링 계정, `repman_repl` 복제 계정을 준비했다. 비밀번호 값은 SSM SecureString에 두고 DB 호스트의 instance profile로 조회한다.
+- Repman 자격 증명의 기준 저장소와 변경 절차는 [Repman 자격 증명 운영 가이드](REPMAN_CREDENTIALS.md)를 따른다.
 - ECS Terraform에는 Repman 전용 Fargate service와 ProxySQL 연동 설정이 준비돼 있지만, **이 변경은 아직 apply하지 않았다.** 저장된 plan은 Repman/EFS/네트워크 리소스 생성, 기존 ProxySQL task definition 교체 및 서비스 업데이트를 포함한다. 적용하면 Repman은 DB와 다른 AZ의 private subnet에 별도 Task로 실행되고, ProxySQL은 새 task revision으로 롤링 배포된다. Backend task는 변경 대상이 아니다.
 - 따라서 현재 Repman 자동 승격은 아직 실행되지 않는다. Live ProxySQL은 기존 task revision이며 Admin `6032`는 loopback에만 바인딩돼 있다. Terraform 변경은 6032를 Repman 보안 그룹에만 허용하고 관리자 비밀번호를 SSM secret으로 관리하도록 준비돼 있다.
 

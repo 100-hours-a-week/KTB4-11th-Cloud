@@ -17,10 +17,10 @@ locals {
 
   repman_startup_command = <<-EOT
     set -eu
-    : "$$REPMAN_DATABASE_PASSWORD"
-    : "$$REPMAN_REPLICATION_PASSWORD"
-    : "$$REPMAN_API_PASSWORD"
-    : "$$REPMAN_PROXYSQL_PASSWORD"
+    : "$REPMAN_DATABASE_PASSWORD"
+    : "$REPMAN_REPLICATION_PASSWORD"
+    : "$REPMAN_API_PASSWORD"
+    : "$REPMAN_PROXYSQL_PASSWORD"
 
     umask 077
     mkdir -p /var/lib/replication-manager
@@ -28,18 +28,21 @@ locals {
     [Default]
     monitoring-datadir = "/var/lib/replication-manager"
     monitoring-save-config = false
+    # SSM에서 ECS 작업에 주입한 비밀값을 기준으로 사용한다.
+    # EFS의 오래된 secret_store.json 값이 시작 시 주입한 자격 증명을 덮어쓰지 않게 한다.
+    monitoring-secret-versioning = false
     http-server = true
     api-port = 10005
     api-https-bind = true
-    api-credentials = "admin:$$REPMAN_API_PASSWORD"
+    api-credentials = "admin:$REPMAN_API_PASSWORD"
 
     [stockspoon]
     title = "StockSpoon MySQL primary-replica"
     prov-orchestrator = "onpremise"
     db-servers-hosts = "${local.proxysql_primary_host}:${var.v1_mysql_port},${local.proxysql_private_replica_host}:${var.v1_mysql_port}"
     db-servers-prefered-master = "${local.proxysql_primary_host}:${var.v1_mysql_port}"
-    db-servers-credential = "repman:$$REPMAN_DATABASE_PASSWORD"
-    replication-credential = "repman_repl:$$REPMAN_REPLICATION_PASSWORD"
+    db-servers-credential = "repman:$REPMAN_DATABASE_PASSWORD"
+    replication-credential = "repman_repl:$REPMAN_REPLICATION_PASSWORD"
 
     failover-mode = "automatic"
     failover-at-sync = true
@@ -56,7 +59,7 @@ locals {
     proxysql-port = "${var.proxysql_port}"
     proxysql-admin-port = "6032"
     proxysql-user = "admin"
-    proxysql-password = "$$REPMAN_PROXYSQL_PASSWORD"
+    proxysql-password = "$REPMAN_PROXYSQL_PASSWORD"
     proxysql-writer-hostgroup = 10
     proxysql-reader-hostgroup = 20
     proxysql-bootstrap = true
