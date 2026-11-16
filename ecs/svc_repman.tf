@@ -66,7 +66,8 @@ locals {
     proxysql-bootstrap-variables = false
     CONFIG
 
-    exec /usr/bin/replication-manager-osc monitor \
+    # The Docker image installs its OSC binary at this path.
+    exec /usr/bin/replication-manager monitor \
       --config /tmp/replication-manager.toml --http-server
   EOT
 }
