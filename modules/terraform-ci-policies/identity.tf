@@ -63,6 +63,14 @@ data "aws_iam_policy_document" "terraform_ci_write_identity" {
     resources = [var.resource_arns.terraform_read_policy]
   }
 
+  # Terraform updates this exact managed policy by creating a new version.
+  statement {
+    sid       = "UpdateTerraformReadPolicyVersion"
+    effect    = "Allow"
+    actions   = ["iam:CreatePolicyVersion"]
+    resources = [var.resource_arns.terraform_read_policy]
+  }
+
   statement {
     sid       = "PassStockspoonRolesToTerraformManagedServices"
     effect    = "Allow"
