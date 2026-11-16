@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from graphlib import CycleError, TopologicalSorter
 from pathlib import PurePosixPath
 
@@ -44,6 +45,9 @@ ROOT_DEPENDENCIES = {
 MODULE_CONSUMERS = {
     "modules/terraform-ci-policies": {"app-server"},
 }
+
+TERRAFORM_CI_POLICY_PATHS = {"app-server/terraform_github_actions_policies.tf"}
+ROOT_SELECTION_HELPER_PATH = ".github/scripts/terraform_roots.py"
 
 DEFAULT_ENVIRONMENTS = {"ecs": "prod", "monitoring": "prod", "fis/market-http/terraform": "prod"}
 MARKET_HTTP_FIS_ECS_PATHS = {
@@ -122,7 +126,32 @@ def changes_market_http_fis_target(paths: list[str]) -> bool:
     )
 
 
-def affected_roots(paths: list[str]) -> list[str]:
+def changes_only_terraform_ci_policies(paths: list[str]) -> bool:
+    """Detect policy-only changes that bootstrap permissions for the PR plan role."""
+    relevant_paths = []
+    for raw_path in paths:
+        raw_path = raw_path.strip()
+        if not raw_path:
+            continue
+        normalized = PurePosixPath(raw_path).as_posix()
+        path = PurePosixPath(normalized)
+        if path.name == ".DS_Store":
+            continue
+        if path.suffix.lower() in {".md", ".rst"}:
+            continue
+        if normalized == ROOT_SELECTION_HELPER_PATH:
+            continue
+        if normalized in TERRAFORM_CI_POLICY_PATHS:
+            relevant_paths.append(normalized)
+            continue
+        if normalized.startswith("modules/terraform-ci-policies/"):
+            relevant_paths.append(normalized)
+            continue
+        return False
+    return bool(relevant_paths)
+
+
+def affected_roots(paths: list[str], *, pr_plan: bool = False) -> list[str]:
     selected: set[str] = set()
 
     for raw_path in paths:
@@ -160,7 +189,15 @@ def affected_roots(paths: list[str]) -> list[str]:
                         continue
                 selected.add(root)
 
-    pending = list(selected)
+    # A PR that changes only the Terraform CI policies cannot plan downstream
+    # ECS state until its new read permission is applied. Plan the owning
+    # app-server root; keep full dependency propagation for pushes so the
+    # apply workflow still updates app-server before its consumers.
+    is_policy_bootstrap_pr = (
+        pr_plan and changes_only_terraform_ci_policies(paths)
+    )
+
+    pending = [] if is_policy_bootstrap_pr else list(selected)
     while pending:
         current = pending.pop()
         for dependent in DEPENDENTS.get(current, set()):
@@ -193,7 +230,10 @@ def main() -> None:
     with open(args.changed_paths, encoding="utf-8") as changed_file:
         paths = changed_file.readlines()
 
-    roots = affected_roots(paths)
+    roots = affected_roots(
+        paths,
+        pr_plan=os.environ.get("GITHUB_EVENT_NAME") == "pull_request",
+    )
     if args.all_if_affected and roots:
         roots = ROOT_ORDER.copy()
 
