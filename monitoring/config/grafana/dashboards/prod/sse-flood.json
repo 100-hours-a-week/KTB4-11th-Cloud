@@ -1,0 +1,1583 @@
+{
+  "uid": "stockspoon-sse-flood",
+  "title": "Stockspoon 운영 SSE Flood 관측",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "aws",
+    "prod",
+    "sse",
+    "flood"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "stockspoon"
+      ],
+      "asDropdown": true,
+      "title": "Stockspoon 대시보드"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "시험 해석 안내",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### SSE 경로 GET Flood 관측\n대상은 `/market/prices/stream` 또는 `/market/orderbooks/stream`이며, 시험은 두 경로를 **각각 따로** 실행합니다. `market-http` Prometheus 지표의 `stream` 라벨로 가격·호가를 구분합니다.\n\n현재 WAF 사용자 지정 rate rule은 `/api/` 경로 기준입니다. 따라서 `stockspoon-api-per-source-ip`의 Count/Block이 0이어도 `/market/` 요청이 없었다는 뜻이 아니라 해당 규칙에 집계되지 않았다는 뜻일 수 있습니다. 아래 CloudFront·ALB·애플리케이션·Valkey 지표를 함께 확인하세요. 대상 그룹은 V2 `market-http`, Valkey는 prod 클러스터로 고정했습니다."
+      }
+    },
+    {
+      "id": 2,
+      "title": "WAF · 기존 API rate rule Count / Block",
+      "description": "기존 사용자 지정 규칙 지표입니다. 규칙이 /api/에 한정되어 있어 SSE 경로 보호 여부를 단독으로 판정할 수 없습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/WAFV2",
+          "metricName": "CountedRequests",
+          "statistic": "Sum",
+          "dimensions": {
+            "WebACL": "stockspoon-api-rate-limit",
+            "Rule": "stockspoon-api-per-source-ip"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "규칙 Count",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/WAFV2",
+          "metricName": "BlockedRequests",
+          "statistic": "Sum",
+          "dimensions": {
+            "WebACL": "stockspoon-api-rate-limit",
+            "Rule": "stockspoon-api-per-source-ip"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "규칙 Block",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "CloudFront · 전체 요청 수",
+      "description": "배포 전체 요청입니다. 경로별 요청량은 나타내지 않습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/CloudFront",
+          "metricName": "Requests",
+          "statistic": "Sum",
+          "dimensions": {
+            "DistributionId": "E2Y9S3V9X3DRMW",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "전체 요청",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "CloudFront · 4xx / 5xx 비율",
+      "description": "배포 전체 오류 비율입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/CloudFront",
+          "metricName": "4xxErrorRate",
+          "statistic": "Average",
+          "dimensions": {
+            "DistributionId": "E2Y9S3V9X3DRMW",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "4xx",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "namespace": "AWS/CloudFront",
+          "metricName": "5xxErrorRate",
+          "statistic": "Average",
+          "dimensions": {
+            "DistributionId": "E2Y9S3V9X3DRMW",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "5xx",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "ALB · V2 market-http 요청 수",
+      "description": "V2 market-http 대상 그룹으로 전달된 요청 수(60초 합계)입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RequestCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "market-http 요청",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "ALB · market-http 대상 4xx / 5xx",
+      "description": "애플리케이션 대상이 반환한 응답 코드입니다. WAF 차단 건수와 구분됩니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_Target_4XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "대상 4xx",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_Target_5XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "대상 5xx",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "ALB · market-http 응답 지연",
+      "description": "SSE 요청은 스트림이 오래 유지되므로 이 패널을 단독 처리시간으로 해석하지 말고 연결·전달 지표와 함께 봅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p50",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "p50",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p95",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "p95",
+          "hide": false
+        },
+        {
+          "refId": "C",
+          "id": "c",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "statistic": "p99",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "p99",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "ALB · 정상 타깃 / 연결 오류",
+      "description": "market-http 대상 그룹의 헬스 및 ALB→대상 연결 오류입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HealthyHostCount",
+          "statistic": "Minimum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "정상 타깃 최소",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "UnHealthyHostCount",
+          "statistic": "Maximum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "비정상 타깃 최대",
+          "hide": false
+        },
+        {
+          "refId": "C",
+          "id": "c",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetConnectionErrorCount",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": "app/stockspoon-v1-alb/ebcc17bb6129bafc",
+            "TargetGroup": "targetgroup/stockspoon-v2-prod-market-http/2a04e3ebb1d8697f"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "대상 연결 오류",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "SSE · 현재 활성 연결 수",
+      "description": "가격·호가 스트림별로 market-http가 유지 중인 연결 수입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(stream) (market_http_sse_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "legendFormat": "{{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "SSE · 연결 시작 / 종료 속도",
+      "description": "재연결 churn과 정상 종료를 stream별로 봅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(stream) (rate(market_http_sse_connections_started_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "{{stream}} 시작",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(stream,reason) (rate(market_http_sse_connections_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "{{stream}} 종료 {{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Pub/Sub 수신 / SSE 실시간 이벤트 전송",
+      "description": "Valkey Pub/Sub 수신량과 브라우저 방향 실시간 이벤트 전송량입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(channel) (rate(market_http_pubsub_messages_received_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "Pub/Sub {{channel}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(stream) (rate(market_http_sse_live_events_sent_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "SSE {{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "SSE · Valkey 수신→전송 지연 p95 / p99",
+      "description": "시세 이벤트가 Valkey에서 수신된 뒤 ASGI 전송까지 걸린 시간입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval])))",
+          "legendFormat": "{{stream}} p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by(le,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval])))",
+          "legendFormat": "{{stream}} p99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "SSE · 구독자 큐 적체 / 버림 / 느린 연결 종료",
+      "description": "subscriber queue의 적체, 버림, 느린 구독자 종료를 관찰합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(stream) (market_http_sse_queue_high_watermark_events{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "legendFormat": "{{stream}} 큐 최고점",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(stream) (rate(market_http_sse_queue_discarded_events_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "{{stream}} 버림/초",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "sum by(stream) (rate(market_http_sse_slow_subscribers_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "{{stream}} 느린 연결 종료/초",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Valkey · 애플리케이션 연결 풀과 획득 지연",
+      "description": "애플리케이션 풀 지표입니다. ElastiCache 서버의 전체 클라이언트 연결 수와는 다른 값입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(state) (market_http_valkey_pool_connections{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "legendFormat": "풀 {{state}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by(le,result) (rate(market_http_valkey_pool_acquire_duration_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval])))",
+          "legendFormat": "연결 획득 p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "sum (rate(market_http_valkey_pool_acquire_timeouts_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "획득 시간초과/초",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "ElastiCache · 서버 연결 수 / 새 연결",
+      "description": "Valkey Serverless cache에 연결된 클라이언트 수와 신규 연결 수입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "CurrConnections",
+          "statistic": "Maximum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "현재 연결 최대",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "NewConnections",
+          "statistic": "Sum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "새 연결(60초 합계)",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "ElastiCache · ECPU / throttling",
+      "description": "Valkey 연산 사용량과 서비스 측 throttling입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 60,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "ElastiCacheProcessingUnits",
+          "statistic": "Sum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "ECPU(60초 합계)",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "ThrottledCmds",
+          "statistic": "Sum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "제한된 명령",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "ElastiCache · 네트워크 바이트",
+      "description": "Valkey 서비스가 60초 구간 동안 수신·송신한 총 바이트입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 60,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "NetworkBytesIn",
+          "statistic": "Sum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "수신 바이트/60초",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "NetworkBytesOut",
+          "statistic": "Sum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "송신 바이트/60초",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "market-http · 프로세스 CPU / RSS",
+      "description": "Task별 프로세스 사용량입니다. ECS 서비스 전체 수치와 구분해 봅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 68,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id) (rate(process_cpu_seconds_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} CPU 코어",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "max by(task_id) (process_resident_memory_bytes{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\"})",
+          "legendFormat": "{{task_id}} RSS",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "market-http · SSE 메트릭 수집 상태",
+      "description": "값 1은 해당 task의 Prometheus 수집이 살아 있음을 뜻합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 68,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",job=\"market-http-metrics\"}",
+          "legendFormat": "{{task_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "ElastiCache · Pub/Sub 명령 / ECPU",
+      "description": "Valkey Serverless의 PubSubBasedCmds에는 publish, pubsub, subscribe, unsubscribe 등이 포함됩니다. 구독자 수 자체는 아니지만 시험 중 Pub/Sub 명령량과 명령 ECPU 변화가 연결 생성·해제 단계와 함께 움직이는지 확인합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 76,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "a",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "PubSubBasedCmds",
+          "statistic": "Sum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Pub/Sub 명령(60초 합계)",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "b",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ElastiCache",
+          "metricName": "PubSubBasedCmdsECPUs",
+          "statistic": "Sum",
+          "dimensions": {
+            "clusterId": "stockspoon-v2-prod-valkey"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Pub/Sub 명령 ECPU(60초 합계)",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}

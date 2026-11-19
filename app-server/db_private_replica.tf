@@ -58,60 +58,6 @@ resource "aws_vpc_security_group_egress_rule" "db_private_replica_to_primary" {
   description                  = "GTID auto-position replication from the current Primary"
 }
 
-resource "aws_vpc_security_group_egress_rule" "db_private_replica_to_loki" {
-  security_group_id            = aws_security_group.db_private_replica.id
-  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
-  from_port                    = 3100
-  to_port                      = 3100
-  ip_protocol                  = "tcp"
-  description                  = "Allow the private replica Alloy agent to push DB logs to Loki"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_private_replica_mysql_from_monitoring" {
-  security_group_id            = aws_security_group.db_private_replica.id
-  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
-  from_port                    = 3306
-  to_port                      = 3306
-  ip_protocol                  = "tcp"
-  description                  = "Read-only MySQL metrics collection from the monitoring host"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_private_replica_node_exporter_from_monitoring" {
-  security_group_id            = aws_security_group.db_private_replica.id
-  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
-  from_port                    = 9100
-  to_port                      = 9100
-  ip_protocol                  = "tcp"
-  description                  = "Prometheus node exporter scrape from the monitoring host"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_private_replica_loki_from_replica" {
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.db_private_replica.id
-  from_port                    = 3100
-  to_port                      = 3100
-  ip_protocol                  = "tcp"
-  description                  = "Private replica Alloy log push to Loki"
-}
-
-resource "aws_vpc_security_group_egress_rule" "db_migration_pmm_to_private_replica_mysql" {
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.db_private_replica.id
-  from_port                    = 3306
-  to_port                      = 3306
-  ip_protocol                  = "tcp"
-  description                  = "Prometheus MySQL scrape of the private GTID replica"
-}
-
-resource "aws_vpc_security_group_egress_rule" "db_migration_pmm_to_private_replica_node_exporter" {
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.db_private_replica.id
-  from_port                    = 9100
-  to_port                      = 9100
-  ip_protocol                  = "tcp"
-  description                  = "Prometheus node exporter scrape of the private GTID replica"
-}
-
 resource "aws_vpc_security_group_ingress_rule" "primary_mysql_from_private_replica" {
   security_group_id            = aws_security_group.db_migration[0].id
   referenced_security_group_id = aws_security_group.db_private_replica.id
@@ -229,6 +175,12 @@ resource "aws_instance" "db_private_replica" {
     aws_iam_role_policy.db_private_replica_parameters,
   ]
 
+  lifecycle {
+    # Keep the existing database instance until a deliberate migration plan;
+    # the SSM "latest" AMI changes over time and must not replace this replica.
+    ignore_changes = [ami]
+  }
+
   tags = merge(local.db_private_replica_tags, {
     Name = "stockspoon-v1-db-private-replica"
   })
@@ -291,8 +243,8 @@ resource "terraform_data" "db_private_replica_bootstrap" {
     aws_instance.db_migration[0].private_ip,
     aws_instance.db_private_replica.id,
     aws_instance.db_private_replica.private_ip,
-    aws_instance.db_migration_support["pmm"].id,
-    aws_instance.db_migration_support["pmm"].private_ip,
+    data.aws_instance.central_db_monitoring[0].id,
+    data.aws_instance.central_db_monitoring[0].private_ip,
     filesha256("${path.module}/db-private-replica/bootstrap_replica.sh"),
     filesha256("${path.module}/db-private-replica/bootstrap_cd.py"),
   ]
@@ -307,8 +259,8 @@ resource "terraform_data" "db_private_replica_bootstrap" {
       DB_PRIMARY_PRIVATE_IP          = aws_instance.db_migration[0].private_ip
       DB_PRIVATE_REPLICA_INSTANCE_ID = aws_instance.db_private_replica.id
       DB_PRIVATE_REPLICA_PRIVATE_IP  = aws_instance.db_private_replica.private_ip
-      DB_MIGRATION_PMM_PRIVATE_IP    = aws_instance.db_migration_support["pmm"].private_ip
-      DB_MIGRATION_PMM_INSTANCE_ID   = aws_instance.db_migration_support["pmm"].id
+      CENTRAL_MONITORING_PRIVATE_IP  = data.aws_instance.central_db_monitoring[0].private_ip
+      CENTRAL_MONITORING_INSTANCE_ID = data.aws_instance.central_db_monitoring[0].id
     }
   }
 
@@ -316,6 +268,8 @@ resource "terraform_data" "db_private_replica_bootstrap" {
     aws_iam_role_policy.github_actions_db_private_replica_bootstrap,
     aws_iam_role_policy.db_migration_replication_password,
     aws_vpc_security_group_egress_rule.db_private_replica_to_primary,
+    aws_vpc_security_group_egress_rule.private_replica_to_central_loki,
+    aws_vpc_security_group_ingress_rule.db_private_replica_from_central_monitoring,
     aws_vpc_security_group_ingress_rule.primary_mysql_from_private_replica,
   ]
 }

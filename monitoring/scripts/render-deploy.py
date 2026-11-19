@@ -27,8 +27,8 @@ AI_SERVICES = [
 AI_TRACING_TARGETS = ["dev-ai-tracing", "prod-ai-tracing"]
 MARKET_TRACING_TARGET = "prod-market-http-tracing"
 METRICS_TARGETS = ["dev-ai-metrics", "prod-market-http-metrics"]
-# Dashboards ship in their own SSM payload so neither command exceeds the limit.
-SERVER_TARGETS = ["server", "server-dashboards"]
+# Dashboards ship in separate SSM payloads so neither command exceeds the limit.
+SERVER_TARGETS = ["server", "server-dashboards", "server-db-dashboard"]
 DASHBOARDS = ROOT / "config" / "grafana" / "dashboards"
 
 
@@ -118,6 +118,17 @@ def config_bytes(path: Path) -> bytes:
     return content
 
 
+def database_monitoring_addresses(outputs: dict) -> dict[str, str]:
+    primary = (outputs.get("db_migration_host", {}).get("value") or {}).get("private_ip")
+    replica = (outputs.get("db_private_replica_host", {}).get("value") or {}).get("private_ip")
+    if not primary or not replica:
+        raise ValueError("The app-server Terraform state must expose the active Primary and private replica IPs")
+    return {
+        "db_primary_private_ip": str(ipaddress.IPv4Address(primary)),
+        "db_private_replica_private_ip": str(ipaddress.IPv4Address(replica)),
+    }
+
+
 def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = False, streamer_metrics_port: int | None = None, test_streamer: bool = False) -> dict[str, bytes]:
     if test_streamer and target not in ["dev-ai-agent", "prod-ai-agent"]:
         raise ValueError("Test publisher collection requires an AI agent target")
@@ -130,10 +141,15 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
             raise ValueError("Select an AI agent and a non-conflicting private streamer metrics port")
     if sse_prometheus and target not in [*SERVER_TARGETS, "dev-ai-agent"]:
         raise ValueError("SSE Prometheus is available only for server and dev-ai-agent deployments")
-    if target == "server-dashboards":
+    if target in ["server-dashboards", "server-db-dashboard"]:
         files = {
             "config/" + path.relative_to(ROOT / "config").as_posix(): config_bytes(path)
             for path in DASHBOARDS.rglob("*.json")
+            if (
+                not path.is_relative_to(DASHBOARDS / "db-migration")
+                if target == "server-dashboards"
+                else path.is_relative_to(DASHBOARDS / "db-migration")
+            )
         }
     elif target == "server":
         files = {
@@ -142,6 +158,15 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
             if path.is_file() and not path.name.endswith(".local.json")
             and DASHBOARDS not in path.parents
         }
+        prometheus_config = files["config/prometheus.yaml"].decode()
+        for placeholder, key in [
+            ("__DB_PRIMARY_PRIVATE_IP__", "db_primary_private_ip"),
+            ("__DB_PRIVATE_REPLICA_PRIVATE_IP__", "db_private_replica_private_ip"),
+        ]:
+            prometheus_config = prometheus_config.replace(placeholder, destination[key])
+        if "__DB_" in prometheus_config:
+            raise ValueError("Unresolved database target in the central Prometheus configuration")
+        files["config/prometheus.yaml"] = prometheus_config.encode()
         files["smoke.py"] = (ROOT / "scripts" / "smoke.py").read_bytes()
         files["configure-alerting.py"] = (ROOT / "scripts" / "configure-alerting.py").read_bytes()
         address = ipaddress.IPv4Address(destination["private_ip"])
@@ -155,6 +180,8 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
             "AWS_REGION": destination["aws_region"],
             "LOKI_BUCKET": destination["loki_bucket"],
             "TEMPO_BUCKET": destination["tempo_bucket"],
+            "DB_PRIMARY_PRIVATE_IP": destination["db_primary_private_ip"],
+            "DB_PRIVATE_REPLICA_PRIVATE_IP": destination["db_private_replica_private_ip"],
             "GRAFANA_ROOT_URL": root_url,
             "GRAFANA_COOKIE_SECURE": str(parsed_root.scheme == "https").lower(),
         }
@@ -196,7 +223,9 @@ def deployment_files(target: str, destination: dict, *, sse_prometheus: bool = F
             files[f"{service}.otel.env"] = otel_environment(
                 destination["otlp_http_endpoint"], service, "dev"
             ).encode()
-    installer = "ai-agent" if target in ["dev-ai-agent", "prod-ai-agent"] else target
+    installer = "ai-agent" if target in ["dev-ai-agent", "prod-ai-agent"] else (
+        "server-dashboards" if target == "server-db-dashboard" else target
+    )
     if target not in SERVER_TARGETS:
         files["system-logs.sh"] = (ROOT / "scripts" / "deploy" / "system-logs.sh").read_bytes()
     files["install.sh"] = (ROOT / "scripts" / "deploy" / f"{installer}.sh").read_bytes()
@@ -250,6 +279,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", choices=[*SERVER_TARGETS, "dev-agent", "dev-ai-agent", "prod-ai-agent", *AI_TRACING_TARGETS, MARKET_TRACING_TARGET, *METRICS_TARGETS])
     parser.add_argument("--state-json", type=Path, help="Saved terraform output -json; optional for offline rendering")
+    parser.add_argument("--app-state-json", type=Path, help="Saved app-server terraform output -json; required for central DB monitoring targets")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--sse-prometheus", action="store_true", help="Enable dev AI scraping; accepted for server compatibility (SSE panels are always included)")
     parser.add_argument("--streamer-metrics-port", type=int, help="Explicit loopback streamer port (contract: 9102); AI agents only")
@@ -285,6 +315,19 @@ def main() -> None:
             check=True, text=True, capture_output=True,
         )
         outputs = json.loads(result.stdout)
+    if args.target == "server":
+        if args.app_state_json:
+            app_outputs = json.loads(args.app_state_json.read_text())
+        else:
+            result = subprocess.run(
+                ["terraform", f"-chdir={ROOT.parent / 'app-server'}", "output", "-json"],
+                check=True, text=True, capture_output=True,
+            )
+            app_outputs = json.loads(result.stdout)
+        destination = outputs.get("plg_tempo", {}).get("value")
+        if not destination:
+            raise ValueError("Enable and apply plg_tempo before preparing the central server deployment")
+        destination.update(database_monitoring_addresses(app_outputs))
     if args.target in AI_TRACING_TARGETS:
         args.output.write_text(ai_tracing_environment(args.target, outputs))
         variable = "DEV_AI_ENV" if args.target == "dev-ai-tracing" else "PROD_AI_ENV"

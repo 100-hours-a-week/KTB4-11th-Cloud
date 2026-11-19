@@ -178,8 +178,7 @@ resource "aws_ecs_service" "proxysql_fargate" {
     aws_vpc_security_group_egress_rule.proxysql_task_to_private_replica_mysql,
     aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.private_replica_mysql_from_proxysql,
-    aws_vpc_security_group_ingress_rule.proxysql_metrics_from_pmm,
-    aws_vpc_security_group_egress_rule.pmm_to_proxysql_metrics,
+    aws_vpc_security_group_ingress_rule.proxysql_metrics_from_central_telemetry,
   ]
 
   tags = { Name = "${var.name_prefix}-proxysql-fargate" }

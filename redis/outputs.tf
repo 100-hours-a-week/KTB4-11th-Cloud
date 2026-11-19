@@ -14,23 +14,23 @@ output "valkey_security_group_id" {
 }
 
 output "valkey_cache_name" {
-  description = "Name of the development Valkey serverless cache"
-  value       = aws_elasticache_serverless_cache.valkey.name
+  description = "Name of the Valkey serverless cache; null when disabled in development"
+  value       = local.valkey_enabled ? aws_elasticache_serverless_cache.valkey[0].name : null
 }
 
 output "valkey_cache_arn" {
-  description = "ARN of the development Valkey serverless cache"
-  value       = aws_elasticache_serverless_cache.valkey.arn
+  description = "ARN of the Valkey serverless cache; null when disabled in development"
+  value       = local.valkey_enabled ? aws_elasticache_serverless_cache.valkey[0].arn : null
 }
 
 output "valkey_endpoint_address" {
-  description = "Private endpoint address of the development Valkey serverless cache"
-  value       = aws_elasticache_serverless_cache.valkey.endpoint[0].address
+  description = "Private endpoint address of the Valkey serverless cache; null when disabled in development"
+  value       = local.valkey_enabled ? aws_elasticache_serverless_cache.valkey[0].endpoint[0].address : null
 }
 
 output "valkey_endpoint_port" {
-  description = "TLS port of the development Valkey serverless cache"
-  value       = aws_elasticache_serverless_cache.valkey.endpoint[0].port
+  description = "TLS port of the Valkey serverless cache; null when disabled in development"
+  value       = local.valkey_enabled ? aws_elasticache_serverless_cache.valkey[0].endpoint[0].port : null
 }
 
 output "backend_valkey_user_name" {

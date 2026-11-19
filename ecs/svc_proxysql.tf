@@ -9,7 +9,6 @@ locals {
   proxysql_private_replica_host     = try(data.terraform_remote_state.app.outputs.db_private_replica_host.private_ip, "")
   proxysql_primary_mysql_sg         = try(data.terraform_remote_state.app.outputs.db_migration_host.security_group_id, "")
   proxysql_private_replica_mysql_sg = try(data.terraform_remote_state.app.outputs.db_private_replica_host.security_group_id, "")
-  proxysql_pmm_security_group_id    = try(data.terraform_remote_state.app.outputs.db_migration_support_hosts["pmm"].security_group_id, "")
   proxysql_admin_password_arn       = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/proxysql/ADMIN_PASSWORD"
   proxysql_monitor_password_arn     = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter${var.ssm_parameter_path_prefix}/backend/PROXYSQL_MONITOR_PASSWORD"
 

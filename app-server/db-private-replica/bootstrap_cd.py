@@ -170,14 +170,12 @@ echo 'TEMPORARY_SEED_ACCOUNT_REMOVED'
 MONITORING_TARGET_UPDATE = r"""#!/usr/bin/env bash
 set -Eeuo pipefail
 NEW_REPLICA_IP=@@TARGET_IP@@
-PLG_DIRECTORY=/opt/stockspoon-plg
+PLG_DIRECTORY=/opt/stockspoon-telemetry
 ENV_FILE="$PLG_DIRECTORY/.env"
-PROMETHEUS_CONFIG="$PLG_DIRECTORY/prometheus.yml"
+PROMETHEUS_CONFIG="$PLG_DIRECTORY/prometheus.yaml"
 [[ -s "$ENV_FILE" && -s "$PROMETHEUS_CONFIG" ]]
-OLD_REPLICA_IP="$(awk -F= '$1 == "PRIVATE_REPLICA_DB_PRIVATE_IP" {print $2; exit}' "$ENV_FILE")"
+OLD_REPLICA_IP="$(awk -F= '$1 == "DB_PRIVATE_REPLICA_PRIVATE_IP" {print $2; exit}' "$ENV_FILE")"
 [[ -n "$OLD_REPLICA_IP" ]]
-PRIMARY_IP="$(awk -F= '$1 == "PRIMARY_DB_PRIVATE_IP" {print $2; exit}' "$ENV_FILE")"
-[[ -n "$PRIMARY_IP" ]]
 
 python3 - "$ENV_FILE" "$NEW_REPLICA_IP" <<'PY'
 from pathlib import Path
@@ -190,36 +188,34 @@ lines = path.read_text().splitlines()
 found = False
 updated = []
 for line in lines:
-    if line.startswith("PRIVATE_REPLICA_DB_PRIVATE_IP="):
-        updated.append(f"PRIVATE_REPLICA_DB_PRIVATE_IP={replica_ip}")
+    if line.startswith("DB_PRIVATE_REPLICA_PRIVATE_IP="):
+        updated.append(f"DB_PRIVATE_REPLICA_PRIVATE_IP={replica_ip}")
         found = True
     else:
         updated.append(line)
 if not found:
-    updated.append(f"PRIVATE_REPLICA_DB_PRIVATE_IP={replica_ip}")
+    updated.append(f"DB_PRIVATE_REPLICA_PRIVATE_IP={replica_ip}")
 path.write_text("\n".join(updated) + "\n")
 os.chmod(path, 0o600)
 PY
 
-if [[ -s "$PLG_DIRECTORY/prometheus.yml.tmpl" ]]; then
-  sed \
-    -e "s/__PRIMARY_DB_PRIVATE_IP__/$PRIMARY_IP/g" \
-    -e "s/__PRIVATE_REPLICA_DB_PRIVATE_IP__/$NEW_REPLICA_IP/g" \
-    "$PLG_DIRECTORY/prometheus.yml.tmpl" > "$PROMETHEUS_CONFIG.tmp"
-else
-  OLD_REPLICA_IP_PATTERN="${OLD_REPLICA_IP//./\\.}"
-  sed "s/$OLD_REPLICA_IP_PATTERN/$NEW_REPLICA_IP/g" "$PROMETHEUS_CONFIG" > "$PROMETHEUS_CONFIG.tmp"
-fi
-mv "$PROMETHEUS_CONFIG.tmp" "$PROMETHEUS_CONFIG"
+python3 - "$PROMETHEUS_CONFIG" "$OLD_REPLICA_IP" "$NEW_REPLICA_IP" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+old_ip, new_ip = sys.argv[2:]
+content = path.read_text()
+if old_ip not in content and new_ip not in content:
+    raise SystemExit("Central Prometheus config does not contain the previous replica target")
+path.write_text(content.replace(old_ip, new_ip))
+PY
+chmod 0644 "$PROMETHEUS_CONFIG"
 
 cd "$PLG_DIRECTORY"
-if [[ -s https/public.env ]]; then
-  COMPOSE=(docker compose --env-file .env --env-file https/public.env -f compose.yaml -f compose.https.yaml)
-else
-  COMPOSE=(docker compose --env-file .env -f compose.yaml)
-fi
+COMPOSE=(docker compose --env-file .env -f compose.yaml)
 "${COMPOSE[@]}" config --quiet
-"${COMPOSE[@]}" up -d --no-deps --force-recreate mysqld-exporter heartbeat-private-replica prometheus
+"${COMPOSE[@]}" up -d --no-deps --force-recreate mysql-private-replica-exporter heartbeat-private-replica prometheus
 
 prometheus_query_value() {
   local query="$1" response
@@ -287,8 +283,8 @@ def instance_environment() -> tuple[str, str, str, str, str, str]:
     source_ip = os.environ["DB_PRIMARY_PRIVATE_IP"]
     target_id = os.environ["DB_PRIVATE_REPLICA_INSTANCE_ID"]
     target_ip = os.environ["DB_PRIVATE_REPLICA_PRIVATE_IP"]
-    monitor_id = os.environ["DB_MIGRATION_PMM_INSTANCE_ID"]
-    monitor_ip = os.environ["DB_MIGRATION_PMM_PRIVATE_IP"]
+    monitor_id = os.environ["CENTRAL_MONITORING_INSTANCE_ID"]
+    monitor_ip = os.environ["CENTRAL_MONITORING_PRIVATE_IP"]
     IPv4Address(source_ip)
     IPv4Address(target_ip)
     IPv4Address(monitor_ip)

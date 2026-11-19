@@ -124,7 +124,7 @@ output "db_private_replica_host" {
 }
 
 output "db_migration_support_hosts" {
-  description = "Connection details for the API load generator and PMM EC2 hosts"
+  description = "Connection details for the DB load generator and retained, stopped PMM EC2 host"
   value = {
     for role, instance in aws_instance.db_migration_support : role => {
       instance_id       = instance.id
@@ -138,6 +138,6 @@ output "db_migration_support_hosts" {
 }
 
 output "db_migration_pmm_url" {
-  description = "PMM HTTPS UI; allowed only from db_migration_admin_cidrs"
-  value       = var.db_migration_enabled ? "https://${aws_instance.db_migration_support["pmm"].public_ip}:8443" : null
+  description = "Retired PMM HTTPS URL; DB monitoring now runs on the central PLG server"
+  value       = null
 }

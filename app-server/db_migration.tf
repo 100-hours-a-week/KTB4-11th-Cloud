@@ -121,6 +121,11 @@ resource "aws_iam_role_policy" "db_migration_switchover_runner_monitoring_creden
         Action   = ["ssm:GetParameter"]
         Resource = "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v2/prod/repman/MYSQL_PASSWORD"
       },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:${data.aws_partition.monitoring.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stockspoon/v1/db-migration/mysql-heartbeat"
+      },
     ]
   })
 }

@@ -93,27 +93,13 @@ resource "aws_vpc_security_group_ingress_rule" "proxysql_from_backend" {
   description                  = "Allow V2 backend tasks to connect to ProxySQL"
 }
 
-# Allow only the rehearsal Prometheus host to scrape Fargate ProxySQL metrics.
-resource "aws_vpc_security_group_ingress_rule" "proxysql_metrics_from_pmm" {
-  count = var.proxysql_fargate_enabled && local.proxysql_pmm_security_group_id != "" ? 1 : 0
+resource "aws_vpc_security_group_ingress_rule" "proxysql_metrics_from_central_telemetry" {
+  count = var.proxysql_fargate_enabled && var.plg_tempo_enabled ? 1 : 0
 
   security_group_id            = aws_security_group.proxysql_task.id
-  referenced_security_group_id = local.proxysql_pmm_security_group_id
+  referenced_security_group_id = local.telemetry_server.security_group_id
   from_port                    = 6070
   to_port                      = 6070
   ip_protocol                  = "tcp"
-  description                  = "Allow the rehearsal Prometheus host to scrape Fargate ProxySQL metrics"
-}
-
-# The PMM/PLG host uses restrictive egress rules, so allow its Prometheus
-# container to reach only the ProxySQL task security group on the metrics port.
-resource "aws_vpc_security_group_egress_rule" "pmm_to_proxysql_metrics" {
-  count = var.proxysql_fargate_enabled && local.proxysql_pmm_security_group_id != "" ? 1 : 0
-
-  security_group_id            = local.proxysql_pmm_security_group_id
-  referenced_security_group_id = aws_security_group.proxysql_task.id
-  from_port                    = 6070
-  to_port                      = 6070
-  ip_protocol                  = "tcp"
-  description                  = "Allow Prometheus to scrape Fargate ProxySQL metrics"
+  description                  = "Allow central PLG to scrape Fargate ProxySQL metrics"
 }

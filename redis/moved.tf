@@ -8,3 +8,9 @@ moved {
   from = aws_iam_policy.backend_connect
   to   = aws_iam_policy.app_connect["backend"]
 }
+
+# The resource became count-based so dev can be retired while prod remains managed.
+moved {
+  from = aws_elasticache_serverless_cache.valkey
+  to   = aws_elasticache_serverless_cache.valkey[0]
+}

@@ -52,7 +52,7 @@ data "aws_iam_policy_document" "human_connect" {
     effect  = "Allow"
     actions = ["elasticache:Connect"]
     resources = [
-      aws_elasticache_serverless_cache.valkey.arn,
+      "${local.elasticache_arn_prefix}:serverlesscache:${local.name_prefix}",
       aws_elasticache_user.human[each.key].arn,
     ]
   }

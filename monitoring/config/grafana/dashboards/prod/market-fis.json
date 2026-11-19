@@ -1015,8 +1015,8 @@
     {
       "id": 21,
       "type": "timeseries",
-      "title": "시세 서버 · 실시간 전달 지연 p95",
-      "description": "Pub/Sub 수신부터 ASGI send 완료까지입니다. k6 클라이언트의 첫 후속 이벤트 수신 시간은 별도 증거로 측정합니다.",
+      "title": "시세 서버 · 실시간 전달 지연 p95 / p99",
+      "description": "Pub/Sub 수신부터 ASGI send 완료까지의 서버측 지연입니다. p99은 느린 쪽 응답 구간을 확인합니다. k6 클라이언트의 실제 이벤트 수신 시간은 별도로 측정합니다.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1048,6 +1048,16 @@
           "refId": "A",
           "expr": "histogram_quantile(0.95,sum by(le,task_id,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
           "legendFormat": "{{task_id}} {{stream}} p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99,sum by(le,task_id,stream) (rate(market_http_sse_delivery_latency_seconds_bucket{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval])))",
+          "legendFormat": "{{task_id}} {{stream}} p99",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1131,6 +1141,106 @@
             "type": "loki",
             "uid": "loki"
           }
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "시세 서버 · SSE 연결 시작·종료 / 초",
+      "description": "연결이 새로 열리고 닫히는 빈도입니다. 종료에는 정상 종료와 클라이언트 취소도 포함되므로 재연결 횟수와 같지는 않습니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 98,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_connections_started_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}} 시작",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by(task_id,stream,reason) (rate(market_http_sse_connections_closed_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}} 종료 / {{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "시세 서버 · SSE 전송 바이트 / 초",
+      "description": "ASGI send 반환 기준 전송 바이트입니다. 네트워크 wire bytes나 클라이언트가 실제 수신한 바이트와는 다릅니다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 98,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(task_id,stream) (rate(market_http_sse_events_sent_bytes_total{environment=\"prod\",cluster=\"stockspoon-v2-prod-cluster\",service_name=\"market-http\",task_id=~\"${task:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{task_id}} {{stream}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true
         }
       ]
     }

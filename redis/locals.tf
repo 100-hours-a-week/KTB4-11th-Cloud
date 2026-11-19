@@ -3,6 +3,8 @@ locals {
   elasticache_arn_prefix = "arn:${data.aws_partition.current.partition}:elasticache:${var.aws_region}:${data.aws_caller_identity.current.account_id}"
 
   is_dev = var.environment == "dev"
+  # Dev Valkey was retired to reduce spend; keep the production cache managed.
+  valkey_enabled = !local.is_dev
   # 리소스 설명에 쓰는 환경 이름입니다. dev 값은 기존 리소스 설명과 같아야 교체되지 않습니다.
   environment_label = local.is_dev ? "development" : "production"
 

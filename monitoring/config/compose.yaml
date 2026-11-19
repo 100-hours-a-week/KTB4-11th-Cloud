@@ -21,8 +21,122 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./prometheus-rules:/etc/prometheus/rules:ro
       - /srv/stockspoon-telemetry/prometheus:/prometheus
     mem_limit: 3g
+    logging: *logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=72h
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - /srv/stockspoon-telemetry/secrets/discord-webhook:/etc/alertmanager/secrets/discord-webhook:ro
+      - /srv/stockspoon-telemetry/alertmanager:/alertmanager
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    logging: *logging
+
+  mysql-primary-exporter:
+    image: prom/mysqld-exporter:v0.20.0
+    restart: unless-stopped
+    command:
+      - --config.my-cnf=/.my.cnf
+      - --mysqld.address=${DB_PRIMARY_PRIVATE_IP:?set DB_PRIMARY_PRIVATE_IP}:3306
+      - --mysqld.username=pmm
+      - --tls.insecure-skip-verify
+      - --web.listen-address=:9104
+      - --collect.heartbeat
+      - --collect.heartbeat.database=stockspoon
+      - --collect.heartbeat.table=monitoring_heartbeat
+      - --collect.heartbeat.utc
+    volumes:
+      - /srv/stockspoon-telemetry/secrets/db-migration/mysql-primary.cnf:/.my.cnf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    logging: *logging
+
+  mysql-private-replica-exporter:
+    image: prom/mysqld-exporter:v0.20.0
+    restart: unless-stopped
+    command:
+      - --config.my-cnf=/.my.cnf
+      - --mysqld.address=${DB_PRIVATE_REPLICA_PRIVATE_IP:?set DB_PRIVATE_REPLICA_PRIVATE_IP}:3306
+      - --mysqld.username=pmm
+      - --tls.insecure-skip-verify
+      - --web.listen-address=:9104
+      - --collect.heartbeat
+      - --collect.heartbeat.database=stockspoon
+      - --collect.heartbeat.table=monitoring_heartbeat
+      - --collect.heartbeat.utc
+    volumes:
+      - /srv/stockspoon-telemetry/secrets/db-migration/mysql-private-replica.cnf:/.my.cnf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    logging: *logging
+
+  heartbeat-primary:
+    image: percona/percona-toolkit:3.7.2
+    restart: unless-stopped
+    command:
+      - pt-heartbeat
+      - --update
+      - --replace
+      - --check-read-only
+      - --utc
+      - --interval=1
+      - --database=stockspoon
+      - --table=monitoring_heartbeat
+      - h=${DB_PRIMARY_PRIVATE_IP:?set DB_PRIMARY_PRIVATE_IP},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
+    volumes:
+      - /srv/stockspoon-telemetry/secrets/db-migration/heartbeat.cnf:/heartbeat.cnf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    logging: *logging
+
+  heartbeat-private-replica:
+    image: percona/percona-toolkit:3.7.2
+    restart: unless-stopped
+    command:
+      - pt-heartbeat
+      - --update
+      - --replace
+      - --check-read-only
+      - --utc
+      - --interval=1
+      - --database=stockspoon
+      - --table=monitoring_heartbeat
+      - h=${DB_PRIVATE_REPLICA_PRIVATE_IP:?set DB_PRIVATE_REPLICA_PRIVATE_IP},P=3306,u=heartbeat,F=/heartbeat.cnf,s=1
+    volumes:
+      - /srv/stockspoon-telemetry/secrets/db-migration/heartbeat.cnf:/heartbeat.cnf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
     logging: *logging
 
   loki:
