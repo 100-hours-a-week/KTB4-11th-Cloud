@@ -176,12 +176,12 @@ resource "aws_instance" "db_migration_support" {
   })
 }
 
-# The DB migration load generator is an explicit exception to the dev shutdown.
+# Keep the DB migration load generator intact, but stop it to reduce costs.
 resource "aws_ec2_instance_state" "db_migration_loadgen" {
   count = var.db_migration_enabled ? 1 : 0
 
   instance_id = aws_instance.db_migration_support["loadgen"].id
-  state       = "running"
+  state       = "stopped"
 }
 
 # PMM agents and MySQL exporters now run on the central PLG host. Keep the old

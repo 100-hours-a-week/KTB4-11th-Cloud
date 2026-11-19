@@ -187,7 +187,7 @@ resource "aws_instance" "db_private_replica" {
 }
 
 # The main-branch deployment job sends narrowly scoped SSM Run Command requests
-# to the existing Primary and this replica to initialize and verify GTID sync.
+# to the Primary, replica, and central PLG host for DB monitoring setup.
 resource "aws_iam_role_policy" "github_actions_db_private_replica_bootstrap" {
   count = var.db_migration_enabled ? 1 : 0
 
@@ -209,6 +209,11 @@ resource "aws_iam_role_policy" "github_actions_db_private_replica_bootstrap" {
             "ssm:resourceTag/Purpose" = ["db-migration", "private-db-replica"]
           }
         }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = "arn:${data.aws_partition.monitoring.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/${data.aws_instance.central_db_monitoring[0].id}"
       },
       {
         Effect   = "Allow"
