@@ -22,6 +22,8 @@ def outputs():
             "aws_region": "ap-northeast-2", "compose_project_name": "stockspoon-v2-prod-telemetry",
             "loki_bucket": "stockspoon-telemetry-loki", "tempo_bucket": "stockspoon-telemetry-tempo",
             "grafana_url": "https://monitoring.stock-spoon.com/",
+            "db_primary_private_ip": "10.0.1.217",
+            "db_private_replica_private_ip": "10.0.11.176",
         }},
         "ai_telemetry": {"value": {
             environment: {
@@ -167,23 +169,30 @@ class DeploymentTest(unittest.TestCase):
     def test_dashboard_bundle_carries_every_dashboard_and_nothing_else(self):
         files = deploy.deployment_files("server-dashboards", outputs()["plg_tempo"]["value"])
         dashboards = {"config/" + p.relative_to(ROOT / "config").as_posix()
-                      for p in (ROOT / "config/grafana/dashboards").rglob("*.json")}
+                      for p in (ROOT / "config/grafana/dashboards").rglob("*.json")
+                      if not p.is_relative_to(ROOT / "config/grafana/dashboards/db-migration")}
         self.assertEqual(set(files) - {"install.sh"}, dashboards)
         installer = files["install.sh"].decode()
         self.assertNotIn("docker compose", installer)
         self.assertNotIn("configure-alerting", installer)
 
+        db_files = deploy.deployment_files("server-db-dashboard", outputs()["plg_tempo"]["value"])
+        self.assertEqual(set(db_files) - {"install.sh"}, {
+            "config/grafana/dashboards/db-migration/replication.json",
+        })
+
     def test_json_transport_compaction_preserves_configuration_values(self):
         destination = outputs()["plg_tempo"]["value"]
         files = {**deploy.deployment_files("server", destination),
-                 **deploy.deployment_files("server-dashboards", destination)}
+                 **deploy.deployment_files("server-dashboards", destination),
+                 **deploy.deployment_files("server-db-dashboard", destination)}
         for source in (ROOT / "config").rglob("*.json"):
             if not source.name.endswith(".local.json"):
                 name = "config/" + source.relative_to(ROOT / "config").as_posix()
                 self.assertEqual(json.loads(source.read_bytes()), json.loads(files[name]))
 
     def test_payload_is_bash_syntax_checked_and_under_ssm_limit(self):
-        for target in ["server", "server-dashboards", "dev-agent", "dev-ai-agent", "prod-ai-agent"]:
+        for target in ["server", "server-dashboards", "server-db-dashboard", "dev-agent", "dev-ai-agent", "prod-ai-agent"]:
             payload = deploy.make_payload(target, outputs())
             commands = payload["Parameters"]["commands"][0]
             self.assertLess(len(commands.encode()), 24000)

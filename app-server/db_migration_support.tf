@@ -10,22 +10,13 @@ locals {
     }
   } : {}
 
-  db_migration_support_admin_rules = merge(
-    {
-      for entry in setproduct(keys(local.db_migration_support_hosts), var.db_migration_admin_cidrs) :
-      "${entry[0]}:${entry[1]}" => {
-        host = entry[0]
-        cidr = entry[1]
-      }
-    },
-    {
-      for cidr in var.db_migration_pmm_ssh_cidrs :
-      "pmm:${cidr}" => {
-        host = "pmm"
-        cidr = cidr
-      }
+  # Only the retained load generator needs administrator SSH access.
+  db_migration_support_admin_rules = var.db_migration_enabled ? {
+    for cidr in var.db_migration_admin_cidrs : "loadgen:${cidr}" => {
+      host = "loadgen"
+      cidr = cidr
     }
-  )
+  } : {}
 
   db_migration_support_web_egress = {
     for entry in setproduct(keys(local.db_migration_support_hosts), [80, 443]) :
@@ -88,72 +79,6 @@ resource "aws_vpc_security_group_ingress_rule" "db_migration_loadgen_ssh" {
   description       = "Public SSH to load generator; key authentication only"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "db_migration_pmm_admin" {
-  for_each = var.db_migration_enabled ? var.db_migration_admin_cidrs : toset([])
-
-  security_group_id = aws_security_group.db_migration_support["pmm"].id
-  cidr_ipv4         = each.value
-  from_port         = 8443
-  to_port           = 8443
-  ip_protocol       = "tcp"
-  description       = "PMM HTTPS UI from the administrator IP only"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_migration_pmm_from_app" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.app.id
-  from_port                    = 8443
-  to_port                      = 8443
-  ip_protocol                  = "tcp"
-  description                  = "PMM agent connection from the V1 application host"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_migration_pmm_from_db" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.db_migration[0].id
-  from_port                    = 8443
-  to_port                      = 8443
-  ip_protocol                  = "tcp"
-  description                  = "PMM agent connection from the migration database host"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_migration_pmm_from_loadgen" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.db_migration_support["loadgen"].id
-  from_port                    = 8443
-  to_port                      = 8443
-  ip_protocol                  = "tcp"
-  description                  = "PMM agent connection from the load generator"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "db_migration_mysql_from_pmm" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration[0].id
-  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
-  from_port                    = 3306
-  to_port                      = 3306
-  ip_protocol                  = "tcp"
-  description                  = "Read-only MySQL monitoring from the PMM server"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "app_mysql_from_migration_pmm" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.app.id
-  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
-  from_port                    = 3306
-  to_port                      = 3306
-  ip_protocol                  = "tcp"
-  description                  = "Read-only MySQL monitoring from the PMM server when the private port is published"
-}
-
 resource "aws_vpc_security_group_ingress_rule" "app_http_from_migration_loadgen" {
   for_each = var.db_migration_enabled ? toset(["80", "443"]) : toset([])
 
@@ -198,50 +123,6 @@ resource "aws_vpc_security_group_egress_rule" "db_migration_to_source_mysql" {
   description                  = "Seed and replication connection to V1 MySQL"
 }
 
-resource "aws_vpc_security_group_egress_rule" "db_migration_to_pmm" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration[0].id
-  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
-  from_port                    = 8443
-  to_port                      = 8443
-  ip_protocol                  = "tcp"
-  description                  = "PMM agent HTTPS connection"
-}
-
-resource "aws_vpc_security_group_egress_rule" "db_migration_loadgen_to_pmm" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration_support["loadgen"].id
-  referenced_security_group_id = aws_security_group.db_migration_support["pmm"].id
-  from_port                    = 8443
-  to_port                      = 8443
-  ip_protocol                  = "tcp"
-  description                  = "PMM agent HTTPS connection"
-}
-
-resource "aws_vpc_security_group_egress_rule" "db_migration_pmm_to_target_mysql" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.db_migration[0].id
-  from_port                    = 3306
-  to_port                      = 3306
-  ip_protocol                  = "tcp"
-  description                  = "Read-only monitoring of the migration MySQL server"
-}
-
-resource "aws_vpc_security_group_egress_rule" "db_migration_pmm_to_source_mysql" {
-  count = var.db_migration_enabled ? 1 : 0
-
-  security_group_id            = aws_security_group.db_migration_support["pmm"].id
-  referenced_security_group_id = aws_security_group.app.id
-  from_port                    = 3306
-  to_port                      = 3306
-  ip_protocol                  = "tcp"
-  description                  = "Read-only monitoring of V1 MySQL when its private port is published"
-}
-
 resource "aws_instance" "db_migration_support" {
   for_each = local.db_migration_support_hosts
 
@@ -282,10 +163,32 @@ resource "aws_instance" "db_migration_support" {
   ]
 
   lifecycle {
-    ignore_changes = [ami]
+    # Stopping an EC2 removes its ephemeral public IP; do not replace the
+    # retained PMM host just because it is intentionally stopped.
+    ignore_changes = [
+      ami,
+      associate_public_ip_address,
+    ]
   }
 
   tags = merge(local.db_migration_tags, {
     Name = "stockspoon-v1-app-db-migration-${each.key}"
   })
+}
+
+# The DB migration load generator is an explicit exception to the dev shutdown.
+resource "aws_ec2_instance_state" "db_migration_loadgen" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  instance_id = aws_instance.db_migration_support["loadgen"].id
+  state       = "running"
+}
+
+# PMM agents and MySQL exporters now run on the central PLG host. Keep the old
+# support host and its disk intact, but leave the EC2 stopped.
+resource "aws_ec2_instance_state" "db_migration_pmm" {
+  count = var.db_migration_enabled ? 1 : 0
+
+  instance_id = aws_instance.db_migration_support["pmm"].id
+  state       = "stopped"
 }

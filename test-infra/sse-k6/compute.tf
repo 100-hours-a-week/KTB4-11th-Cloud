@@ -73,3 +73,9 @@ resource "aws_eip_association" "sse_k6" {
   allocation_id        = aws_eip.sse_k6.id
   network_interface_id = aws_instance.sse_k6.primary_network_interface_id
 }
+
+# Preserve the SSE load generator and its disk for later use without running it.
+resource "aws_ec2_instance_state" "sse_k6" {
+  instance_id = aws_instance.sse_k6.id
+  state       = "stopped"
+}

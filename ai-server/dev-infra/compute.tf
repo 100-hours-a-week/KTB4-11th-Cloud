@@ -55,3 +55,8 @@ resource "aws_eip_association" "ai" {
   instance_id   = aws_instance.ai.id
   allocation_id = aws_eip.ai.id
 }
+
+resource "aws_ec2_instance_state" "ai" {
+  instance_id = aws_instance.ai.id
+  state       = "stopped"
+}

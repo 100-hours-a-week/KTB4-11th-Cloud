@@ -71,6 +71,13 @@ resource "aws_eip_association" "app" {
   allocation_id = aws_eip.app.id
 }
 
+# Keep the load-test application host and its data volume for a future test run,
+# while avoiding compute charges between runs.
+resource "aws_ec2_instance_state" "app" {
+  instance_id = aws_instance.app.id
+  state       = "stopped"
+}
+
 # Development frontend, backend, and MySQL containers share one EC2 host.
 # Give the development host its own role and security group. The Redis and AI
 # roots consume their IDs from this root's outputs after this root is applied.
@@ -142,6 +149,11 @@ resource "aws_eip_association" "dev_app" {
   allocation_id = aws_eip.dev_app.id
 }
 
+resource "aws_ec2_instance_state" "dev_app" {
+  instance_id = aws_instance.dev_app.id
+  state       = "stopped"
+}
+
 resource "aws_instance" "k6" {
   ami                         = data.aws_ssm_parameter.ubuntu_2604_ami.value
   instance_type               = var.k6_instance_type
@@ -193,5 +205,5 @@ resource "aws_instance" "k6" {
 
 resource "aws_ec2_instance_state" "k6" {
   instance_id = aws_instance.k6.id
-  state       = "running"
+  state       = "stopped"
 }

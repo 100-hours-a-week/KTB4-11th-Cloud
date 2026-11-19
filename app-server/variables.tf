@@ -170,6 +170,12 @@ variable "db_migration_enabled" {
   default     = true
 }
 
+variable "db_migration_central_grafana_url" {
+  description = "Central PLG Grafana URL exposed for DB monitoring"
+  type        = string
+  default     = "https://monitoring.stock-spoon.com/"
+}
+
 variable "db_migration_instance_type" {
   description = "x86_64 EC2 instance type for the MySQL migration target"
   type        = string
@@ -217,7 +223,7 @@ variable "retain_legacy_terraform_ci_write_policy" {
 }
 
 variable "db_migration_admin_cidrs" {
-  description = "Administrator IPv4 CIDRs allowed to use SSH, PMM HTTPS, and Grafana HTTPS"
+  description = "Administrator IPv4 CIDRs allowed to use SSH on the migration DB and retained load generator"
   type        = set(string)
   default     = ["211.244.225.224/32", "220.86.114.140/32", "123.142.185.86/32"]
 
@@ -225,21 +231,4 @@ variable "db_migration_admin_cidrs" {
     condition     = alltrue([for cidr in var.db_migration_admin_cidrs : can(cidrnetmask(cidr)) && endswith(cidr, "/32")])
     error_message = "db_migration_admin_cidrs must contain individual IPv4 /32 addresses."
   }
-}
-
-variable "db_migration_pmm_ssh_cidrs" {
-  description = "Additional administrator IPv4 CIDRs for SSH and Grafana HTTPS on the monitoring host"
-  type        = set(string)
-  default     = ["211.244.225.211/32"]
-
-  validation {
-    condition     = alltrue([for cidr in var.db_migration_pmm_ssh_cidrs : can(cidrnetmask(cidr)) && endswith(cidr, "/32")])
-    error_message = "db_migration_pmm_ssh_cidrs must contain individual IPv4 /32 addresses."
-  }
-}
-
-variable "db_migration_grafana_https_enabled" {
-  description = "Allow administrator-only HTTPS access to Grafana on the existing monitoring host"
-  type        = bool
-  default     = true
 }

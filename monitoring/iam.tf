@@ -41,6 +41,24 @@ resource "aws_iam_role_policy" "telemetry_storage" {
   })
 }
 
+resource "aws_iam_role_policy" "telemetry_db_monitoring" {
+  count = var.plg_tempo_enabled ? 1 : 0
+  name  = "telemetry-db-monitoring-secrets-read"
+  role  = aws_iam_role.telemetry[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["ssm:GetParameter"]
+      Resource = [
+        "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter/stockspoon/v1/db-migration/mysql-monitoring",
+        "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter/stockspoon/v1/db-migration/mysql-heartbeat",
+        "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter/stockspoon/v1/db-migration/discord-webhook",
+      ]
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "telemetry" {
   count = var.plg_tempo_enabled ? 1 : 0
   name  = local.telemetry_name

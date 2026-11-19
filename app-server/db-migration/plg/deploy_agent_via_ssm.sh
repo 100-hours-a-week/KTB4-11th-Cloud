@@ -4,7 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 INSTANCE_ID="${1:-}"
 HOST_ROLE="${2:-private-replica}"
-LOKI_PRIVATE_IP="${3:-10.0.1.85}"
+LOKI_PRIVATE_IP="${3:-10.0.11.236}"
 MYSQL_CONTAINER="${4:-stockspoon-private-db-replica}"
 AWS_REGION="${AWS_REGION:-ap-northeast-2}"
 
@@ -51,6 +51,11 @@ commands = [
 if host_role == "private-replica":
     commands.append(
         "bash /tmp/stockspoon-plg-agent/configure_replica_monitoring_user.sh "
+        f"{shlex.quote(loki_ip)} {shlex.quote(mysql_container)}"
+    )
+else:
+    commands.append(
+        "bash /tmp/stockspoon-plg-agent/configure_primary_monitoring_user.sh "
         f"{shlex.quote(loki_ip)} {shlex.quote(mysql_container)}"
     )
 commands.append(

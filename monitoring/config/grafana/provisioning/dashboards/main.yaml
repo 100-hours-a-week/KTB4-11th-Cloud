@@ -20,3 +20,12 @@ providers:
     allowUiUpdates: false
     options:
       path: /etc/grafana/dashboards/dev
+  - name: stockspoon-database
+    orgId: 1
+    folder: Database
+    type: file
+    disableDeletion: true
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards/db-migration

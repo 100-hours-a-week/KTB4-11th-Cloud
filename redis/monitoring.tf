@@ -22,7 +22,7 @@ resource "aws_cloudwatch_metric_alarm" "storage_usage_high" {
   alarm_actions       = [aws_lambda_function.discord_notifier.arn]
 
   dimensions = {
-    clusterId = aws_elasticache_serverless_cache.valkey.name
+    clusterId = local.name_prefix
   }
 
   depends_on = [aws_lambda_permission.cloudwatch_alarms]
@@ -43,7 +43,7 @@ resource "aws_cloudwatch_metric_alarm" "ecpu_usage_high" {
   alarm_actions       = [aws_lambda_function.discord_notifier.arn]
 
   dimensions = {
-    clusterId = aws_elasticache_serverless_cache.valkey.name
+    clusterId = local.name_prefix
   }
 
   depends_on = [aws_lambda_permission.cloudwatch_alarms]
@@ -64,7 +64,7 @@ resource "aws_cloudwatch_metric_alarm" "throttled_commands" {
   alarm_actions       = [aws_lambda_function.discord_notifier.arn]
 
   dimensions = {
-    clusterId = aws_elasticache_serverless_cache.valkey.name
+    clusterId = local.name_prefix
   }
 
   depends_on = [aws_lambda_permission.cloudwatch_alarms]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-MONITOR_PRIVATE_IP="${1:-10.0.1.85}"
+MONITOR_PRIVATE_IP="${1:-10.0.11.236}"
 MYSQL_CONTAINER="${2:-stockspoon-private-db-replica}"
 AWS_REGION="${AWS_REGION:-ap-northeast-2}"
 

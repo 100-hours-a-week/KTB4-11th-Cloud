@@ -1,4 +1,6 @@
 resource "aws_elasticache_serverless_cache" "valkey" {
+  count = local.valkey_enabled ? 1 : 0
+
   name                 = local.name_prefix
   description          = "StockSpoon V2 ${local.environment_label} Valkey serverless cache"
   engine               = "valkey"
