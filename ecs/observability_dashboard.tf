@@ -88,6 +88,69 @@ locals {
       },
     ]
   ])
+
+  # ProxySQL runs on Fargate, so its resource metrics come from ECS /
+  # Container Insights rather than the EC2-local cAdvisor collection.
+  proxysql_widgets = [
+    for widget in [
+      {
+        type = "metric", x = 0, y = 77, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate Task · CPU / memory utilization (%)", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "CPU" }],
+            ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Memory" }],
+          ]
+        }
+      },
+      {
+        type = "metric", x = 12, y = 77, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · network throughput (bytes/s)", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["ECS/ContainerInsights", "NetworkRxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Received" }],
+            ["ECS/ContainerInsights", "NetworkTxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Transmitted" }],
+          ]
+        }
+      },
+      {
+        type = "metric", x = 0, y = 83, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · desired / running / pending Tasks", region = var.aws_region, period = 60, view = "timeSeries", stat = "Maximum"
+          metrics = [for metric in ["DesiredTaskCount", "RunningTaskCount", "PendingTaskCount"] : [
+            "ECS/ContainerInsights", metric, "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate",
+          ]]
+        }
+      },
+      {
+        type = "metric", x = 0, y = 89, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · CPU units utilized / reserved", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["ECS/ContainerInsights", "CpuUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Utilized (CPU units)" }],
+            ["ECS/ContainerInsights", "CpuReserved", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Reserved (CPU units)" }],
+          ]
+        }
+      },
+      {
+        type = "metric", x = 12, y = 89, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · memory MiB utilized / reserved", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["ECS/ContainerInsights", "MemoryUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Utilized (MiB)" }],
+            ["ECS/ContainerInsights", "MemoryReserved", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Reserved (MiB)" }],
+          ]
+        }
+      },
+      {
+        type = "log", x = 12, y = 83, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · Task lifecycle / stop reason", region = var.aws_region, view = "table"
+          query = "SOURCE '${aws_cloudwatch_log_group.lifecycle.name}' | fields @timestamp, detail.group, detail.taskDefinitionArn, detail.lastStatus, detail.stoppedReason, detail.reason, @message | filter detail.group like /${var.name_prefix}-proxysql-fargate/ or detail.taskDefinitionArn like /${var.name_prefix}-proxysql-fargate/ | sort @timestamp desc | limit 100"
+        }
+      },
+    ] : widget if var.proxysql_fargate_enabled
+  ]
 }
 
 resource "aws_cloudwatch_dashboard" "ecs_experiments" {
@@ -98,7 +161,7 @@ resource "aws_cloudwatch_dashboard" "ecs_experiments" {
     widgets = concat([
       {
         type       = "text", x = 0, y = 0, width = 24, height = 2
-        properties = { markdown = "# StockSpoon V2 · Scaling / Migration / Fault experiments\n서버·사용자 지표와 실험 시각을 함께 확인합니다. 장중 최소 3 / 그 외 최소 2 / 최대 4. ALB 지연은 SSE 이벤트 수신 지연을 나타내지 않습니다. 클라이언트 지표는 업로드 후 표시되며 여러 실험을 동시에 실행하지 않습니다. 알람 알림 수신자는 별도 설정이 필요합니다." }
+        properties = { markdown = "# StockSpoon V2 · Scaling / Migration / Fault experiments\n서버·사용자 지표와 실험 시각을 함께 확인합니다. ProxySQL Fargate Task의 CPU·메모리·네트워크·Task 수 CloudWatch 지표는 60초 단위이며 SSM agent sidecar를 포함한 Task 수준 합계입니다. Grafana 새로고침 주기는 수집 해상도를 바꾸지 않습니다. 초 단위 RTO는 k6/Probe의 첫 성공 시각과 ECS Task State Change 이벤트 시각으로 계산합니다. 장중 최소 3 / 그 외 최소 2 / 최대 4. ALB 지연은 SSE 이벤트 수신 지연을 나타내지 않습니다. 클라이언트 지표는 업로드 후 표시되며 여러 실험을 동시에 실행하지 않습니다. 알람 알림 수신자는 별도 설정이 필요합니다." }
       },
       {
         type = "alarm", x = 0, y = 2, width = 24, height = 3
@@ -161,7 +224,7 @@ resource "aws_cloudwatch_dashboard" "ecs_experiments" {
           query = "SOURCE '${aws_cloudwatch_log_group.backend.name}' | SOURCE '${aws_cloudwatch_log_group.market_http.name}' | fields @timestamp, @log, @logStream, @message | sort @timestamp desc | limit 100"
         }
       },
-    ], local.service_widgets, local.target_widgets, local.client_widgets)
+    ], local.service_widgets, local.target_widgets, local.client_widgets, local.proxysql_widgets)
   })
 }
 

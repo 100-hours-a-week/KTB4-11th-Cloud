@@ -1,0 +1,561 @@
+{
+  "uid": "stockspoon-proxysql-fis",
+  "title": "ProxySQL FIS · 자원과 DB 경로 지연",
+  "description": "CloudWatch ECS 자원·Task 지표는 60초 주기입니다. Grafana 새로고침으로 수집 해상도가 빨라지지 않습니다. ProxySQL→DB ping은 Prometheus 5초, Backend HTTP/Hikari는 15초 주기입니다. RTO는 k6/Probe의 첫 요청 성공 시각과 ECS Task State Change 이벤트 시각으로 계산하고 CloudWatch 그래프만으로 판단하지 않습니다.",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "stockspoon",
+    "prod",
+    "fis",
+    "proxysql"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "15s",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "ECS FIS · Task lifecycle / CloudWatch",
+      "url": "https://ap-northeast-2.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-2#dashboards/dashboard/stockspoon-v2-prod-ecs-experiments",
+      "targetBlank": true,
+      "keepTime": true
+    },
+    {
+      "type": "link",
+      "title": "Backend 요청 상세",
+      "url": "/d/stockspoon-prod-backend",
+      "keepTime": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "ProxySQL Fargate · CPU 사용률",
+      "description": "AWS/ECS 서비스 수준 CPUUtilization을 60초 period로 표시합니다. ProxySQL 컨테이너뿐 아니라 Task 안의 SSM agent 등 sidecar 자원도 포함합니다. 15초 Grafana 새로고침은 수집 주기를 빠르게 만들지 않습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "cpu",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ECS",
+          "metricName": "CPUUtilization",
+          "statistic": "Average",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-proxysql-fargate"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "CPU",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "ProxySQL Fargate · 메모리 사용률",
+      "description": "AWS/ECS 서비스 수준 MemoryUtilization을 60초 period로 표시합니다. ProxySQL 컨테이너뿐 아니라 Task 안의 SSM agent 등 sidecar 자원도 포함합니다. Container Insights의 MiB 사용량은 CloudWatch Task 자원 패널에서 확인할 수 있습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "memory",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "AWS/ECS",
+          "metricName": "MemoryUtilization",
+          "statistic": "Average",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-proxysql-fargate"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Memory",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "ProxySQL Fargate · Task 수",
+      "description": "Desired, Running, Pending Task 수를 60초 period로 표시합니다. 짧은 교체 과정의 정확한 STOPPED/RUNNING 시각은 상단 CloudWatch lifecycle 대시보드에서 확인합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "running",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "ECS/ContainerInsights",
+          "metricName": "RunningTaskCount",
+          "statistic": "Maximum",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-proxysql-fargate"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Running",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "desired",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "ECS/ContainerInsights",
+          "metricName": "DesiredTaskCount",
+          "statistic": "Maximum",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-proxysql-fargate"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Desired",
+          "hide": false
+        },
+        {
+          "refId": "C",
+          "id": "pending",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "ECS/ContainerInsights",
+          "metricName": "PendingTaskCount",
+          "statistic": "Maximum",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-proxysql-fargate"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Pending",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "ProxySQL Fargate · 네트워크 송수신량",
+      "description": "CloudWatch Container Insights 서비스 수준 네트워크 처리량을 60초 period로 표시합니다. 네트워크 지연은 아래 ProxySQL backend ping latency에서 확인합니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "id": "rx",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "ECS/ContainerInsights",
+          "metricName": "NetworkRxBytes",
+          "statistic": "Average",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-proxysql-fargate"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Received",
+          "hide": false
+        },
+        {
+          "refId": "B",
+          "id": "tx",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "region": "ap-northeast-2",
+          "namespace": "ECS/ContainerInsights",
+          "metricName": "NetworkTxBytes",
+          "statistic": "Average",
+          "dimensions": {
+            "ClusterName": "stockspoon-v2-prod-cluster",
+            "ServiceName": "stockspoon-v2-prod-proxysql-fargate"
+          },
+          "matchExact": true,
+          "period": "60",
+          "metricEditorMode": 0,
+          "metricQueryType": 0,
+          "label": "Transmitted",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "ProxySQL → DB · backend ping latency",
+      "description": "ProxySQL MySQL monitor가 DB endpoint에 보낸 ping의 왕복 지연입니다. SQL 실행 시간이나 BE 응답 시간과는 다른 계층의 지표입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "proxysql_connpool_conns_latency_us{job=\"proxysql-fargate\"} / 1000",
+          "legendFormat": "{{hostgroup}} / {{endpoint}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "BE API 경로 · 응답 지연 P95 / P99",
+      "description": "BE가 측정한 HTTP endpoint 응답 시간입니다. 해당 endpoint가 DB를 조회하면 ProxySQL과 DB 대기 시간을 포함합니다. 수동 지표이므로 요청이 없으면 값이 비어 있으며, 부하 시험이나 probe가 요청을 보내야 기록됩니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",uri=~\"/api/.*\",uri!~\"/actuator.*\"}[$__rate_interval])))",
+          "legendFormat": "P95 {{uri}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\",uri=~\"/api/.*\",uri!~\"/actuator.*\"}[$__rate_interval])))",
+          "legendFormat": "P99 {{uri}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "BE HikariCP · 연결 획득 지연 P95",
+      "description": "BE HikariCP에서 풀의 DB connection을 빌리는 대기 시간입니다. 정상적인 pooled reuse에서는 네트워크 RTT나 SQL 실행 시간이 아니므로 BE API 응답 P95 및 ProxySQL backend ping과 함께 봅니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, pool) (rate(hikaricp_connections_acquire_seconds_bucket{environment=\"prod\",job=\"backend-metrics\",service_name=\"backend\"}[$__rate_interval])))",
+          "legendFormat": "{{pool}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "ProxySQL · DB endpoint별 라우팅 처리량",
+      "description": "ProxySQL connection pool이 backend hostgroup / endpoint별로 처리한 query 처리량입니다. 요청량을 나타내며 latency는 표시하지 않습니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (hostgroup, endpoint) (rate(proxysql_connpool_conns_queries_total{job=\"proxysql-fargate\"}[$__rate_interval]))",
+          "legendFormat": "HG {{hostgroup}} / {{endpoint}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "ProxySQL · connection 할당 실패 / s",
+      "description": "ProxySQL이 client query에 사용할 backend connection을 얻지 못한 증가율입니다.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance) (rate(proxysql_connpool_get_conn_failure_total{job=\"proxysql-fargate\"}[$__rate_interval]))",
+          "legendFormat": "{{instance}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    }
+  ]
+}
