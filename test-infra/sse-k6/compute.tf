@@ -74,8 +74,8 @@ resource "aws_eip_association" "sse_k6" {
   network_interface_id = aws_instance.sse_k6.primary_network_interface_id
 }
 
-# Preserve the SSE load generator and its disk for later use without running it.
+# Reuse the existing C7i load generator for the normal HTTP baseline test.
 resource "aws_ec2_instance_state" "sse_k6" {
   instance_id = aws_instance.sse_k6.id
-  state       = "stopped"
+  state       = "running"
 }
