@@ -1,4 +1,4 @@
-# SSE 전용 k6 서버
+# SSE 부하 k6 서버 및 HTTP 기준 부하 재사용
 
 기존 `test-infra`의 VPC와 public subnet output을 읽는 독립 Terraform root입니다.
 State: `s3://stockspoon-terraform-state-v1/sse-k6/terraform.tfstate`
@@ -11,6 +11,12 @@ State: `s3://stockspoon-terraform-state-v1/sse-k6/terraform.tfstate`
 - 운영 market-http SG에서 전용 k6 SG의 TCP 8000 접근만 허용합니다. 피어링 자체와 기존 관측 경로는 변경하지 않습니다.
 - CD 적용 후 `http://<SSE 태스크 사설 IP>:8000/market/prices/stream?codes=000660`으로 접속합니다. 태스크 교체 시 IP를 다시 조회해야 합니다.
 - SSH 허용 CIDR 기본값은 기존 테스트 서버와 같은 `0.0.0.0/0`이며 `ssh_allowed_cidrs`로 제한할 수 있습니다.
+
+## 정상 HTTP 부하 시험
+
+기존 `c7i.xlarge` 서버에는 표준 `k6`가 설치되어 있으므로 별도 서버를 만들지 않고 정상 HTTP 부하 시험에도 재사용합니다. 현재 Terraform은 이 인스턴스 상태를 `running`으로 유지하므로, `test-infra/sse-k6` 루트의 Terraform apply가 적용되면 서버가 시작됩니다. Terraform apply는 인스턴스만 시작하며 부하 시험을 자동 실행하지 않습니다.
+
+시나리오와 실행 조건은 [정상 부하 시험 준비 문서](../../loadtest/baseline/README.md)를 참고합니다. 시험을 마치면 이 리소스의 상태를 `stopped`로 되돌리고 다시 apply해 유휴 실행을 종료합니다.
 
 검토 명령어:
 
