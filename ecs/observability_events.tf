@@ -21,11 +21,25 @@ resource "aws_cloudwatch_log_group" "experiments" {
 
 resource "aws_cloudwatch_event_rule" "ecs_lifecycle" {
   name        = "${var.name_prefix}-ecs-lifecycle"
-  description = "Retain ECS task, container instance, service and deployment events"
+  description = "Retain ECS container instance and service action events"
   event_pattern = jsonencode({
     source        = ["aws.ecs"]
-    "detail-type" = ["ECS Task State Change", "ECS Container Instance State Change", "ECS Service Action"]
+    "detail-type" = ["ECS Container Instance State Change", "ECS Service Action"]
     detail        = { clusterArn = [aws_ecs_cluster.main.arn] }
+  })
+}
+
+# Task state events carry the task ARN in the top-level resources field.
+# Match that ARN prefix so Fargate replacement transitions are retained too.
+resource "aws_cloudwatch_event_rule" "ecs_task_lifecycle" {
+  name        = "${var.name_prefix}-ecs-task-lifecycle"
+  description = "Retain ECS task state changes for every task in the cluster"
+  event_pattern = jsonencode({
+    source        = ["aws.ecs"]
+    "detail-type" = ["ECS Task State Change"]
+    resources = [{
+      prefix = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:task/${aws_ecs_cluster.main.name}/"
+    }]
   })
 }
 
@@ -71,6 +85,7 @@ resource "aws_cloudwatch_log_resource_policy" "lifecycle_delivery" {
 resource "aws_cloudwatch_event_target" "lifecycle" {
   for_each = {
     ecs        = aws_cloudwatch_event_rule.ecs_lifecycle.name
+    ecs_tasks  = aws_cloudwatch_event_rule.ecs_task_lifecycle.name
     deployment = aws_cloudwatch_event_rule.ecs_deployment.name
     asg        = aws_cloudwatch_event_rule.asg_lifecycle.name
   }
