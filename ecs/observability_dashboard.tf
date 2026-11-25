@@ -91,64 +91,66 @@ locals {
 
   # ProxySQL runs on Fargate, so its resource metrics come from ECS /
   # Container Insights rather than the EC2-local cAdvisor collection.
-  proxysql_widgets = var.proxysql_fargate_enabled ? [
-    {
-      type = "metric", x = 0, y = 77, width = 12, height = 6
-      properties = {
-        title = "ProxySQL Fargate Task · CPU / memory utilization (%)", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
-        metrics = [
-          ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "CPU" }],
-          ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Memory" }],
-        ]
-      }
-    },
-    {
-      type = "metric", x = 12, y = 77, width = 12, height = 6
-      properties = {
-        title = "ProxySQL Fargate · network throughput (bytes/s)", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
-        metrics = [
-          ["ECS/ContainerInsights", "NetworkRxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Received" }],
-          ["ECS/ContainerInsights", "NetworkTxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Transmitted" }],
-        ]
-      }
-    },
-    {
-      type = "metric", x = 0, y = 83, width = 12, height = 6
-      properties = {
-        title = "ProxySQL Fargate · desired / running / pending Tasks", region = var.aws_region, period = 60, view = "timeSeries", stat = "Maximum"
-        metrics = [for metric in ["DesiredTaskCount", "RunningTaskCount", "PendingTaskCount"] : [
-          "ECS/ContainerInsights", metric, "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate",
-        ]]
-      }
-    },
-    {
-      type = "metric", x = 0, y = 89, width = 12, height = 6
-      properties = {
-        title = "ProxySQL Fargate · CPU units utilized / reserved", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
-        metrics = [
-          ["ECS/ContainerInsights", "CpuUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Utilized (CPU units)" }],
-          ["ECS/ContainerInsights", "CpuReserved", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Reserved (CPU units)" }],
-        ]
-      }
-    },
-    {
-      type = "metric", x = 12, y = 89, width = 12, height = 6
-      properties = {
-        title = "ProxySQL Fargate · memory MiB utilized / reserved", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
-        metrics = [
-          ["ECS/ContainerInsights", "MemoryUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Utilized (MiB)" }],
-          ["ECS/ContainerInsights", "MemoryReserved", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Reserved (MiB)" }],
-        ]
-      }
-    },
-    {
-      type = "log", x = 12, y = 83, width = 12, height = 6
-      properties = {
-        title = "ProxySQL Fargate · Task lifecycle / stop reason", region = var.aws_region, view = "table"
-        query = "SOURCE '${aws_cloudwatch_log_group.lifecycle.name}' | fields @timestamp, detail.group, detail.taskDefinitionArn, detail.lastStatus, detail.stoppedReason, detail.reason, @message | filter detail.group like /${var.name_prefix}-proxysql-fargate/ or detail.taskDefinitionArn like /${var.name_prefix}-proxysql-fargate/ | sort @timestamp desc | limit 100"
-      }
-    },
-  ] : []
+  proxysql_widgets = [
+    for widget in [
+      {
+        type = "metric", x = 0, y = 77, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate Task · CPU / memory utilization (%)", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "CPU" }],
+            ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Memory" }],
+          ]
+        }
+      },
+      {
+        type = "metric", x = 12, y = 77, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · network throughput (bytes/s)", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["ECS/ContainerInsights", "NetworkRxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Received" }],
+            ["ECS/ContainerInsights", "NetworkTxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Transmitted" }],
+          ]
+        }
+      },
+      {
+        type = "metric", x = 0, y = 83, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · desired / running / pending Tasks", region = var.aws_region, period = 60, view = "timeSeries", stat = "Maximum"
+          metrics = [for metric in ["DesiredTaskCount", "RunningTaskCount", "PendingTaskCount"] : [
+            "ECS/ContainerInsights", metric, "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate",
+          ]]
+        }
+      },
+      {
+        type = "metric", x = 0, y = 89, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · CPU units utilized / reserved", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["ECS/ContainerInsights", "CpuUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Utilized (CPU units)" }],
+            ["ECS/ContainerInsights", "CpuReserved", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Reserved (CPU units)" }],
+          ]
+        }
+      },
+      {
+        type = "metric", x = 12, y = 89, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · memory MiB utilized / reserved", region = var.aws_region, period = 60, view = "timeSeries", stat = "Average"
+          metrics = [
+            ["ECS/ContainerInsights", "MemoryUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Utilized (MiB)" }],
+            ["ECS/ContainerInsights", "MemoryReserved", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", "${var.name_prefix}-proxysql-fargate", { label = "Reserved (MiB)" }],
+          ]
+        }
+      },
+      {
+        type = "log", x = 12, y = 83, width = 12, height = 6
+        properties = {
+          title = "ProxySQL Fargate · Task lifecycle / stop reason", region = var.aws_region, view = "table"
+          query = "SOURCE '${aws_cloudwatch_log_group.lifecycle.name}' | fields @timestamp, detail.group, detail.taskDefinitionArn, detail.lastStatus, detail.stoppedReason, detail.reason, @message | filter detail.group like /${var.name_prefix}-proxysql-fargate/ or detail.taskDefinitionArn like /${var.name_prefix}-proxysql-fargate/ | sort @timestamp desc | limit 100"
+        }
+      },
+    ] : widget if var.proxysql_fargate_enabled
+  ]
 }
 
 resource "aws_cloudwatch_dashboard" "ecs_experiments" {
