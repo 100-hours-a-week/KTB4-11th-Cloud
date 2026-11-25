@@ -9,9 +9,13 @@ locals {
   proxysql_fargate_service_name = "${var.proxysql_dns_service_name}-fargate"
   proxysql_fargate_dns_name     = "${local.proxysql_fargate_service_name}.${var.proxysql_dns_namespace}"
   backend_proxysql_dns_name     = local.proxysql_fargate_dns_name
-  proxysql_fargate_task_cpu     = var.proxysql_task_cpu
-  # Leave room for the FIS SSM agent sidecar on the smallest default task.
-  proxysql_fargate_task_memory = max(var.proxysql_task_memory, 2048)
+  # The SSM sidecar installs the AWS CLI and FIS command dependencies. The
+  # previous 128 MiB limit OOM-killed dnf during startup, so give it 512 MiB
+  # and increase the task memory allocation to account for the larger sidecar.
+  proxysql_fargate_task_cpu       = max(var.proxysql_task_cpu, 512)
+  proxysql_fis_agent_memory       = 512
+  proxysql_fargate_task_memory    = max(var.proxysql_task_memory, 3072)
+  proxysql_fargate_sidecar_memory = local.proxysql_fis_agent_memory + 128
   proxysql_fis_agent_container = {
     name       = "amazon-ssm-agent"
     image      = "public.ecr.aws/amazon-ssm-agent/amazon-ssm-agent:latest"
@@ -22,7 +26,7 @@ locals {
       { name = "MANAGED_INSTANCE_ROLE_NAME", value = aws_iam_role.proxysql_fis_managed.name },
     ]
     cpu         = 32
-    memory      = 128
+    memory      = local.proxysql_fis_agent_memory
     stopTimeout = 60
 
     logConfiguration = {
@@ -105,7 +109,7 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
         container,
         {
           cpu    = container.name == "proxysql" ? local.proxysql_fargate_task_cpu - 96 : container.cpu
-          memory = container.name == "proxysql" ? local.proxysql_fargate_task_memory - 256 : container.memory
+          memory = container.name == "proxysql" ? local.proxysql_fargate_task_memory - local.proxysql_fargate_sidecar_memory : container.memory
         },
         container.name == "proxysql" ? {
           healthCheck = {
@@ -135,7 +139,7 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
         "8192"  = range(16384, 61441, 4096)
         "16384" = range(32768, 122881, 8192)
       }, tostring(local.proxysql_fargate_task_cpu), []), local.proxysql_fargate_task_memory)
-      error_message = "ProxySQL CPU/memory must be a supported Fargate combination (default: 512 CPU, 2048 MiB with the FIS sidecar)."
+      error_message = "ProxySQL CPU/memory must be a supported Fargate combination (minimum: 512 CPU, 3072 MiB with the FIS sidecar)."
     }
   }
 }

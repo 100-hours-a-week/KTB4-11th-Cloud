@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-dnf install -y jq procps awscli
+# procps is not used by this registration script.
+dnf install -y jq awscli
 
 ACTIVATION_ID=""
 SSM_AGENT_PID=""
