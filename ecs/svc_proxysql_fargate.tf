@@ -9,19 +9,16 @@ locals {
   proxysql_fargate_service_name = "${var.proxysql_dns_service_name}-fargate"
   proxysql_fargate_dns_name     = "${local.proxysql_fargate_service_name}.${var.proxysql_dns_namespace}"
   backend_proxysql_dns_name     = local.proxysql_fargate_dns_name
-  # The SSM sidecar installs the AWS CLI and FIS command dependencies. The
-  # previous 128 MiB limit OOM-killed dnf during startup, so give it 512 MiB
-  # and increase the task memory allocation to account for the larger sidecar.
-  proxysql_fargate_task_cpu       = max(var.proxysql_task_cpu, 512)
-  proxysql_fis_agent_memory       = 512
-  proxysql_fargate_task_memory    = max(var.proxysql_task_memory, 3072)
+  # AWS's FIS image includes the SSM registration script, AWS CLI, and the
+  # fault-injection dependencies. Avoid installing packages at task startup.
+  proxysql_fargate_task_cpu       = var.proxysql_task_cpu
+  proxysql_fis_agent_memory       = 128
+  proxysql_fargate_task_memory    = max(var.proxysql_task_memory, 2048)
   proxysql_fargate_sidecar_memory = local.proxysql_fis_agent_memory + 128
   proxysql_fis_agent_container = {
-    name       = "amazon-ssm-agent"
-    image      = "public.ecr.aws/amazon-ssm-agent/amazon-ssm-agent:latest"
-    essential  = false
-    entryPoint = ["/bin/bash", "-c"]
-    command    = [file("${path.module}/scripts/fis-ssm-agent.sh")]
+    name      = "amazon-ssm-agent"
+    image     = "public.ecr.aws/aws-fis/aws-fis-ssm-agent-non-root:latest"
+    essential = false
     environment = [
       { name = "MANAGED_INSTANCE_ROLE_NAME", value = aws_iam_role.proxysql_fis_managed.name },
     ]
@@ -139,7 +136,7 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
         "8192"  = range(16384, 61441, 4096)
         "16384" = range(32768, 122881, 8192)
       }, tostring(local.proxysql_fargate_task_cpu), []), local.proxysql_fargate_task_memory)
-      error_message = "ProxySQL CPU/memory must be a supported Fargate combination (minimum: 512 CPU, 3072 MiB with the FIS sidecar)."
+      error_message = "ProxySQL CPU/memory must be a supported Fargate combination (minimum: 512 CPU, 2048 MiB with the FIS sidecar)."
     }
   }
 }
