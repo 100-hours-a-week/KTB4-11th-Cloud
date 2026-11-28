@@ -1,0 +1,76 @@
+groups:
+  - name: stockspoon-db-fis-recording
+    interval: 5s
+    rules:
+      - record: stockspoon:mysql_semisync_source_status
+        expr: |
+          max by (job, instance, db_node) (
+            mysql_global_status_rpl_semi_sync_source_status{job=~"mysql-(primary|private-replica)"}
+            or mysql_global_status_rpl_semi_sync_master_status{job=~"mysql-(primary|private-replica)"}
+          )
+      - record: stockspoon:mysql_semisync_replica_status
+        expr: |
+          max by (job, instance, db_node) (
+            mysql_global_status_rpl_semi_sync_replica_status{job=~"mysql-(primary|private-replica)"}
+            or mysql_global_status_rpl_semi_sync_slave_status{job=~"mysql-(primary|private-replica)"}
+          )
+      - record: stockspoon:mysql_writable_nodes
+        expr: count(mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == 0) or vector(0)
+      # Basic sampled preconditions only; this is NOT Repman's election verdict.
+      - record: stockspoon:mysql_replica_basic_preconditions
+        expr: |
+          (mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == 1)
+          and on (job, instance) (mysql_up == 1)
+          and on (job, instance) (mysql_slave_status_replica_io_running == 1)
+          and on (job, instance) (mysql_slave_status_replica_sql_running == 1)
+          and on (job, instance) (mysql_slave_status_seconds_behind_source == 0)
+          and on (job, instance) (stockspoon:mysql_semisync_replica_status == 1)
+  - name: stockspoon-db-fis-alerts
+    interval: 5s
+    rules:
+      - alert: DBFISRepmanObserverUnavailable
+        expr: absent(up{job="db-fis-observer"}) or up{job="db-fis-observer"} == 0 or stockspoon_db_fis_observer_source_up{source="repman_logs"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB FIS Repman 로그 관측 불가"
+          description: "observer 또는 CloudWatch 수집 상태를 확인한다. 관측 실패를 정상 복구로 해석하지 않는다."
+      - alert: DBFISRepmanDatabaseAuthenticationFailed
+        expr: stockspoon_db_fis_repman_server_state{state="ErrorAuth"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Repman DB 인증 실패: {{ $labels.endpoint }}"
+          description: "Task RUNNING과 무관하게 Repman이 DB를 관리하지 못한다. 인증 설정을 확인하고 FIS 실행을 보류한다."
+      - alert: DBFISSemiSyncSourceInactive
+        expr: |
+          (mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == 0)
+          and on (job, instance) (stockspoon:mysql_semisync_source_status == 0)
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "현재 writer의 Semi-sync 비활성: {{ $labels.db_node }}"
+          description: "실제 source_status가 OFF다. async fallback 중에는 무손실을 가정할 수 없다."
+      - alert: DBFISSemiSyncSourceMetricMissing
+        expr: |
+          ((mysql_global_variables_read_only{job=~"mysql-(primary|private-replica)"} == 0)
+          and on (job, instance) (mysql_up == 1))
+          unless on (job, instance) stockspoon:mysql_semisync_source_status
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "현재 writer의 Semi-sync 상태 지표 없음: {{ $labels.db_node }}"
+          description: "승격된 노드의 source 플러그인과 exporter를 확인한다. 지표 부재는 정상 0건과 다르다."
+      - alert: DBFISReplicaBasicPreconditionsNotMet
+        expr: |
+          (count(stockspoon:mysql_replica_basic_preconditions) or vector(0)) < 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB FIS Replica 기본 사전조건을 충족하는 노드 없음"
+          description: "복제 I/O·SQL thread, native lag=0, Semi-sync replica 상태를 확인한다. 이 조건을 충족해도 Repman의 최종 승격 가능 판정을 대신하지 않는다."
