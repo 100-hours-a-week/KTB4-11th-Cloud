@@ -56,7 +56,8 @@ locals {
     proxysql-servers = "${local.repman_proxy_dns_name}"
     proxysql-port = "${var.proxysql_port}"
     proxysql-admin-port = "6032"
-    proxysql-user = "admin"
+    # ProxySQL reserves its built-in admin account for local connections.
+    proxysql-user = "repman"
     proxysql-password = "$REPMAN_PROXYSQL_PASSWORD"
     proxysql-writer-hostgroup = 10
     proxysql-reader-hostgroup = 20
