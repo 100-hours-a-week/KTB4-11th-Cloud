@@ -29,6 +29,9 @@ locals {
     [Default]
     monitoring-datadir = "/var/lib/replication-manager"
     monitoring-save-config = false
+    # AWS SSM is the source of truth; do not let EFS-backed Repman secret versions
+    # override the credentials injected into this task at startup.
+    monitoring-secret-versioning = false
     http-server = true
     api-port = 10005
     api-https-bind = true
