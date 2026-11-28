@@ -40,6 +40,15 @@ resource "aws_iam_group" "existing" {
   }
 }
 
+resource "aws_iam_group" "ai_server_viewer" {
+  name = "stockspoon_ai_server_viewer"
+  path = "/"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "aws_iam_group_policy_attachment" "existing" {
   for_each = local.group_policy_attachments
 

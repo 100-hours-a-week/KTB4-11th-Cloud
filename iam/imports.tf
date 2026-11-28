@@ -13,10 +13,18 @@ import {
 }
 
 import {
-  for_each = local.user_group_memberships
+  for_each = {
+    for user, group in local.user_group_memberships : user => group
+    if user != "eric"
+  }
 
   to = aws_iam_user_group_membership.existing[each.key]
   id = "${each.key}/${each.value}"
+}
+
+import {
+  to = aws_iam_user_group_membership.existing["eric"]
+  id = "eric/stockspoon_developer"
 }
 
 import {
