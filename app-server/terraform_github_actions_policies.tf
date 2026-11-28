@@ -205,6 +205,7 @@ locals {
     [
       for group in [
         "cloud_developer",
+        "stockspoon_ai_server_viewer",
         "stockspoon_developer",
         "terraform",
       ] : "arn:${data.aws_partition.github_actions_terraform.partition}:iam::${data.aws_caller_identity.github_actions_terraform.account_id}:group/${group}"
