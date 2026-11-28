@@ -1,5 +1,6 @@
 locals {
   ecs_performance_log_arn = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/aws/ecs/containerinsights/${var.name_prefix}-cluster/performance"
+  db_fis_log_group_arn    = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/aws/vendedlogs/fis/stockspoon-db-primary-fis"
 }
 
 resource "aws_iam_role_policy" "telemetry_cloudwatch" {
@@ -27,6 +28,12 @@ resource "aws_iam_role_policy" "telemetry_cloudwatch" {
         Condition = {
           StringEquals = { "aws:RequestedRegion" = "us-east-1" }
         }
+      },
+      {
+        Sid      = "QueryDatabaseFisExperimentTimeline"
+        Effect   = "Allow"
+        Action   = ["logs:StartQuery", "logs:GetLogGroupFields"]
+        Resource = [local.db_fis_log_group_arn, "${local.db_fis_log_group_arn}:*"]
       },
       {
         Sid      = "QueryEcsPerformanceOnly"
