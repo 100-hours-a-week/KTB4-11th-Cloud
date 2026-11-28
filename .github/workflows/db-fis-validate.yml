@@ -28,5 +28,6 @@ jobs:
       - name: Test DB FIS rules in an isolated container
         run: >-
           docker run --rm --network=none --read-only
+          --tmpfs /tmp:rw,nosuid,size=256m
           --entrypoint promtool -v "$PWD/monitoring:/work:ro"
           prom/prometheus:v3.15.0 test rules /work/tests/db_fis.promql.yaml
