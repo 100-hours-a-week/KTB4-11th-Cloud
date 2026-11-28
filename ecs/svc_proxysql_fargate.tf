@@ -6,35 +6,11 @@ variable "proxysql_fargate_enabled" {
 }
 
 locals {
-  proxysql_fargate_service_name = "${var.proxysql_dns_service_name}-fargate"
-  proxysql_fargate_dns_name     = "${local.proxysql_fargate_service_name}.${var.proxysql_dns_namespace}"
-  backend_proxysql_dns_name     = local.proxysql_fargate_dns_name
-  # AWS's FIS image includes the SSM registration script, AWS CLI, and the
-  # fault-injection dependencies. Avoid installing packages at task startup.
-  proxysql_fargate_task_cpu       = var.proxysql_task_cpu
-  proxysql_fis_agent_memory       = 128
-  proxysql_fargate_task_memory    = max(var.proxysql_task_memory, 2048)
-  proxysql_fargate_sidecar_memory = local.proxysql_fis_agent_memory + 128
-  proxysql_fis_agent_container = {
-    name      = "amazon-ssm-agent"
-    image     = "public.ecr.aws/aws-fis/aws-fis-ssm-agent-non-root:latest"
-    essential = false
-    environment = [
-      { name = "MANAGED_INSTANCE_ROLE_NAME", value = aws_iam_role.proxysql_fis_managed.name },
-    ]
-    cpu         = 32
-    memory      = local.proxysql_fis_agent_memory
-    stopTimeout = 60
-
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        awslogs-group         = aws_cloudwatch_log_group.proxysql.name
-        awslogs-region        = var.aws_region
-        awslogs-stream-prefix = "fis-ssm-agent"
-      }
-    }
-  }
+  proxysql_fargate_service_name      = "${var.proxysql_dns_service_name}-fargate"
+  proxysql_fargate_dns_name          = "${local.proxysql_fargate_service_name}.${var.proxysql_dns_namespace}"
+  backend_proxysql_dns_name          = local.proxysql_fargate_dns_name
+  proxysql_fargate_task_cpu          = var.proxysql_task_cpu
+  proxysql_fargate_task_memory       = var.proxysql_task_memory
   proxysql_fargate_bootstrap_command = <<-EOT
     ${local.proxysql_bootstrap_command}
 
@@ -89,9 +65,6 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
   cpu                      = local.proxysql_fargate_task_cpu
   memory                   = local.proxysql_fargate_task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.proxysql_fargate_task.arn
-  pid_mode                 = "task"
-  enable_fault_injection   = true
 
   runtime_platform {
     operating_system_family = "LINUX"
@@ -100,30 +73,23 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
 
   # Reuse the existing containers, secrets and CloudWatch group. Set the
   # Fargate health check and monitor bootstrap command explicitly.
-  container_definitions = jsonencode(concat(
-    [
-      for container in local.proxysql_container_definitions : merge(
-        container,
-        {
-          cpu    = container.name == "proxysql" ? local.proxysql_fargate_task_cpu - 96 : container.cpu
-          memory = container.name == "proxysql" ? local.proxysql_fargate_task_memory - local.proxysql_fargate_sidecar_memory : container.memory
-        },
-        container.name == "proxysql" ? {
-          healthCheck = {
-            command     = ["CMD-SHELL", local.proxysql_healthcheck_command]
-            interval    = 10
-            timeout     = 5
-            retries     = 6
-            startPeriod = 180
-          }
-        } : {},
-        container.name == "proxysql-bootstrap" ? {
-          command = [local.proxysql_fargate_bootstrap_command]
-        } : {},
-      )
-    ],
-    [local.proxysql_fis_agent_container],
-  ))
+  container_definitions = jsonencode([
+    for container in local.proxysql_container_definitions : merge(
+      container,
+      container.name == "proxysql" ? {
+        healthCheck = {
+          command     = ["CMD-SHELL", local.proxysql_healthcheck_command]
+          interval    = 10
+          timeout     = 5
+          retries     = 6
+          startPeriod = 180
+        }
+      } : {},
+      container.name == "proxysql-bootstrap" ? {
+        command = [local.proxysql_fargate_bootstrap_command]
+      } : {},
+    )
+  ])
 
   lifecycle {
     precondition {
@@ -136,7 +102,7 @@ resource "aws_ecs_task_definition" "proxysql_fargate" {
         "8192"  = range(16384, 61441, 4096)
         "16384" = range(32768, 122881, 8192)
       }, tostring(local.proxysql_fargate_task_cpu), []), local.proxysql_fargate_task_memory)
-      error_message = "ProxySQL CPU/memory must be a supported Fargate combination (minimum: 512 CPU, 2048 MiB with the FIS sidecar)."
+      error_message = "ProxySQL CPU/memory must be a supported Fargate combination."
     }
   }
 }
@@ -171,10 +137,6 @@ resource "aws_ecs_service" "proxysql_fargate" {
   }
 
   depends_on = [
-    aws_iam_role_policy.proxysql_fargate_task_fis_registration,
-    aws_iam_role_policy.proxysql_fis_managed_cleanup,
-    aws_iam_role_policy_attachment.proxysql_fis_managed_core,
-    aws_vpc_security_group_egress_rule.proxysql_task_https,
     aws_vpc_security_group_egress_rule.proxysql_task_to_migration_mysql,
     aws_vpc_security_group_egress_rule.proxysql_task_to_private_replica_mysql,
     aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
