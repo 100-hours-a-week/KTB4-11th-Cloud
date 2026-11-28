@@ -39,7 +39,7 @@ locals {
   }
 
   user_group_memberships = {
-    eric                 = "stockspoon_developer"
+    eric                 = "stockspoon_ai_server_viewer"
     ezra                 = "stockspoon_developer"
     lily                 = "stockspoon_developer"
     pattie               = "cloud_developer"
@@ -75,13 +75,22 @@ resource "aws_iam_user" "existing" {
 resource "aws_iam_user_group_membership" "existing" {
   for_each = local.user_group_memberships
 
-  user   = aws_iam_user.existing[each.key].name
-  groups = [aws_iam_group.existing[each.value].name]
+  user = aws_iam_user.existing[each.key].name
+  groups = (
+    each.key == "eric"
+    ? [aws_iam_group.ai_server_viewer.name]
+    : [aws_iam_group.existing[each.value].name]
+  )
 }
 
 resource "aws_iam_user_policy_attachment" "change_password" {
   for_each = local.password_policy_users
 
   user       = aws_iam_user.existing[each.value].name
+  policy_arn = "arn:aws:iam::aws:policy/IAMUserChangePassword"
+}
+
+resource "aws_iam_user_policy_attachment" "eric_change_password" {
+  user       = aws_iam_user.existing["eric"].name
   policy_arn = "arn:aws:iam::aws:policy/IAMUserChangePassword"
 }
