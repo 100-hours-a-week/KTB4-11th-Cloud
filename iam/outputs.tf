@@ -4,6 +4,6 @@ output "managed_iam_user_names" {
 }
 
 output "managed_iam_group_names" {
-  description = "Existing IAM groups managed by this Terraform root"
-  value       = sort(keys(aws_iam_group.existing))
+  description = "IAM groups managed by this Terraform root"
+  value       = sort(concat(keys(aws_iam_group.existing), [aws_iam_group.ai_server_viewer.name]))
 }
