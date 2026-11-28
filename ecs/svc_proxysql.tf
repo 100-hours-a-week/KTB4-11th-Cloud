@@ -143,7 +143,9 @@ locals {
         datadir="/var/lib/proxysql"
         admin_variables =
         {
-            admin_credentials="admin:$PROXYSQL_ADMIN_PASSWORD"
+            # The built-in admin user is local-only. Repman connects remotely
+            # through the same security-group-restricted interface as `repman`.
+            admin_credentials="admin:$PROXYSQL_ADMIN_PASSWORD;repman:$PROXYSQL_ADMIN_PASSWORD"
             mysql_ifaces="0.0.0.0:6032"
         }
         mysql_variables =
