@@ -4,6 +4,7 @@
 # Terraform state
 *.tfstate
 *.tfstate.*
+fis/database/terraform/terraform.tfvars
 
 # Saved Terraform plans
 *.tfplan

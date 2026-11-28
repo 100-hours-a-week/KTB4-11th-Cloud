@@ -6,7 +6,7 @@ Issue: https://github.com/100-hours-a-week/KTB4-11th-Cloud/issues/352
 
 운영 Prometheus를 읽기 전용으로 점검했다. Hikari pending/timeout은 Backend Task 두 개에서 수집되며 acquire histogram은 138개 시계열이었다. ProxySQL 연결 획득 실패 counter, MySQL read_only 두 노드, Replica I/O·SQL thread가 수집된다. 점검 당시 pending/timeout과 ProxySQL 연결 실패는 0, writer 수는 1, Replica I/O·SQL thread와 Semi-sync source/replica 실제 STATUS는 모두 1이었다. 이 값은 점검 시점 관측이며 복구 실험 결과가 아니다.
 
-Repman Task는 RUNNING이지만 양쪽 MySQL에 `ErrorAuth`를 반복 기록하고 있었다. 이는 MySQL Semi-sync 자체의 중단과 구분해야 한다. Task revision 4의 startup command에는 `$$REPMAN_...` 참조 8개가 있었다. POSIX shell의 `$$`는 PID이므로 환경 변수의 비밀번호가 TOML에 전달되지 않는 오류다. 인증 수정은 별도 fix PR에서 다루며, 적용 후 Repman의 실제 DB/ProxySQL 인증 및 역할 인식까지 확인해야 자동 복구 준비 완료라고 할 수 있다.
+Repman Task는 RUNNING이지만 양쪽 MySQL에 `ErrorAuth`를 반복 기록했다. Task revision 4의 startup command에는 POSIX shell에서 PID로 확장되는 `$$REPMAN_...` 참조가 있었다. 이 오류를 수정한 PR #354는 병합됐고, 현재 운영 Task revision 5에는 단일 `$REPMAN_...` 참조가 배포됐다. 하지만 ErrorAuth는 계속된다. revision 5 내부에서 생성된 설정 파일이 Task에 주입된 SSM secret과 일치하고, 같은 Task의 MariaDB client는 두 DB에 직접 인증되며 잘못된 비밀번호는 거부됐다. Replication Manager v3.1.48은 MySQL 1045를 `ErrorAuth`로 분류하지만 현 로그에는 상세 오류가 없다. 따라서 셸 확장 결함은 해결됐어도 Repman 자체의 인증·연결 상태는 정상이라고 판정할 수 없다.
 
 ## 구축 내용
 
@@ -19,6 +19,23 @@ Repman Task는 RUNNING이지만 양쪽 MySQL에 `ErrorAuth`를 반복 기록하�
 - `repman_node_failed`는 native Failed 상태 이벤트다. 해당 노드가 장애 직전 Primary였는지는 역할 증거와 대조한다.
 - `proxysql_writer_observed`는 5초 scrape의 관측 시각이다. SQL commit 성공 시각이 아니다. 이전 표본 시각도 원장에 기록한다.
 - state 로그가 없는 구간은 정상이라고 추정하지 않는다. observer 로그 조회는 성공했어도 Repman DB 인증이 정상이라는 뜻은 아니다.
+
+## FIS 복구 결과를 판정하는 입력
+
+추가 Prometheus 시계열은 현재 정의한 tagged synthetic K6 실험의 RTO/RPO 계산에 필요하지 않다. DB FIS 대시보드는 Hikari·ProxySQL·DB 역할·복제·Semi-sync·Repman 전환 상태를 원인 및 전환 순서 진단에 사용한다. 결과는 FIS action 이벤트 로그, K6 per-write 요청/응답 시각, Backend `db_migration_write_transaction` commit audit, 그리고 승격 DB의 run 데이터 대사를 연결해 계산한다. 현재 Backend audit는 K6 write ID를 명시한 요청에 한정되므로 운영 전체 고객 쓰기의 손실을 증명하지 않는다.
+
+FIS template은 schema-v2 이벤트를 `/aws/vendedlogs/fis/stockspoon-db-primary-fis` CloudWatch log group에 기록한다. FIS `action-start` / `action-end` 이벤트의 `action_start_time` / `action_end_time`은 주입 작업 시각이며 실제 guest 중단 시각이나 고객 요청 복구 시각을 뜻하지 않는다. `monitoring/cloudwatch.tf`는 이 log group에 대한 `logs:StartQuery`를 기존 Grafana CloudWatch datasource에만 허용한다. Loki에 복제하거나 Prometheus metric으로 변환하지 않는다.
+
+Grafana Explore의 CloudWatch Logs Insights에서 다음 쿼리로 FIS 이벤트 시각을 볼 수 있다. 시간 범위는 실험 구간으로 좁히고 FIS experiment ID를 확인해 다른 실행 이벤트와 섞이지 않게 한다.
+
+```text
+fields @timestamp, event_timestamp, id, log_type, details.action_name, details.action_id,
+       details.action_start_time, details.action_end_time,
+       details.action_state.status
+| filter log_type = "action-start" or log_type = "action-end" or log_type = "action-error"
+| sort @timestamp asc
+| limit 100
+```
 
 ## 두 복구 시각은 어디에 남기는가
 
@@ -36,7 +53,7 @@ k6 run --env DB_FIS_RUN_ID=db-fis-<unique-id> \
   loadtest/fis-probe/db-path-rto.js
 ```
 
-실험별 외부 원장에 `run_id`, FIS experiment ID, 대상 EC2 ID/server UUID, 실제 장애 적용 시각(불명확하면 action-start 대리값임을 명시), 위 복구 이벤트를 연결한다. 고객 복구는 요청 성공과 합의된 지연 기준을 30초 연속 충족한 구간의 시작으로 정의할 수 있다. 판정 확정 시각은 30초 뒤다. 끊긴 probe·dropped iteration·인증 만료를 정상 복구로 간주하지 않는다. 인프라 전환 완료와 실제 SQL/API 복구를 구분하며 여기서 RTO 목표값을 임의로 정하지 않는다.
+실험별 외부 원장에 `run_id`, FIS experiment ID, 대상 EC2 ID/server UUID, 실제 장애 적용 시각(불명확하면 action-start 대리값임을 명시), 고객 경로의 실패·복구 이벤트를 연결한다. 고객 복구는 쓰기 성공과 사전 합의한 지연 기준을 일정 구간 연속 충족한 시점으로 정한다. 끊긴 probe·dropped iteration·인증 만료를 정상 복구로 간주하지 않는다. 인프라 전환 완료와 실제 SQL/API 복구를 구분하며 여기서 RTO 목표값을 임의로 정하지 않는다.
 
 ## FIS template에서 할 수 있는 범위
 
@@ -53,7 +70,7 @@ FIS `logConfiguration`으로 action-start/action-end 등 장애 주입 제어 �
 }
 ```
 
-`aws:ssm:send-command`를 사용해 DB와 분리된 probe 호스트의 사전 준비된 프로그램을 실행하도록 template에 연결할 수 있다. SSM 문서·실행 역할·대상·접속 경로는 별도로 필요하다. 동기식 send-command로 장시간 probe를 실행하면 장애 action 시작을 막을 수 있으므로 probe 시작/준비 완료→장애 주입→결과 회수의 실행 순서를 설계한다. DB 중단이 끝나도 독립 probe 관측은 복구 확인까지 유지해야 한다. Backend 코드 변경 없이 외부 probe로 두 경로의 복구를 측정할 수 있다. 이 PR은 FIS template을 생성하거나 장애를 실행하지 않는다.
+`aws:ssm:send-command`를 사용해 DB와 분리된 probe 호스트의 사전 준비된 프로그램을 실행하도록 template에 연결할 수도 있다. SSM 문서·실행 역할·대상·접속 경로는 별도로 필요하다. 동기식 send-command로 장시간 probe를 실행하면 장애 action 시작을 막을 수 있으므로 probe 시작/준비 완료→장애 주입→결과 회수의 실행 순서를 설계한다. DB 중단이 끝나도 독립 probe 관측은 복구 확인까지 유지해야 한다. 현재 별도 `fis/database/terraform` root가 manual-start template과 FIS event log group을 만든다. `terraform apply`는 실험을 시작하지 않고, K6/Backend 결과 보고서도 생성하지 않는다.
 
 공식 문서: [FIS 실험 로깅](https://docs.aws.amazon.com/fis/latest/userguide/monitoring-logging.html), [SSM 액션](https://docs.aws.amazon.com/fis/latest/userguide/actions-ssm-agent.html).
 
@@ -77,6 +94,6 @@ RPO(Recovery Point Objective)는 **조직이 정하는 허용 데이터 손실�
 
 ### 이번 작업의 실제 반영 결과
 
-2026-11-28 KST에 telemetry 로그 읽기 IAM 정책 1개를 Terraform으로 추가하고, 관측기·신규 규칙·대시보드를 적용했다. Grafana UID `stockspoon-db-fis`의 25개 패널을 확인했으며 모든 Prometheus target 쿼리가 성공했다. 관측기 `up=1`, Repman/ProxySQL 수집 성공, Loki 이벤트 2건, 신규 recording/alert rule 9개 `health=ok`를 확인했다. Semi-sync source/replica STATUS=1, ACK 없는 commit 및 async 전환 counter=0이었다. Repman ErrorAuth 두 노드는 계속 관측되며 인증 수정은 별도 PR의 배포·검증이 필요하다.
+2026-11-28 KST에 telemetry 로그 읽기 IAM 정책 1개를 Terraform으로 추가하고, 관측기·신규 규칙·대시보드를 적용했다. Grafana UID `stockspoon-db-fis`의 25개 패널을 확인했으며 모든 Prometheus target 쿼리가 성공했다. 관측기 `up=1`, Repman/ProxySQL 수집 성공, Loki 이벤트 2건, 신규 recording/alert rule 9개 `health=ok`를 확인했다. Semi-sync source/replica STATUS=1, ACK 없는 commit 및 async 전환 counter=0이었다. 이후 fix PR #354가 병합되고 Repman revision 5가 배포됐지만 ErrorAuth는 계속됐다. 같은 Task에서 직접 MySQL 인증은 성공했으며 Repman API는 `alive=errors`를 반환했다. 이 지표 상태만으로 자동 failover가 준비됐다고 볼 수 없다.
 
 Promtool config/rules 검사와 `db_fis.promql.yaml`의 정상 복제·역할 전환 후 지표 누락 사례가 통과했다. Python 모니터링 테스트 114개와 Terraform 오프라인 테스트 6개가 통과했다. Backend·DB·ProxySQL·Repman 재시작이나 FIS 장애 주입, 운영 API 부하 시험은 이 관측 배포에 포함하지 않았다.

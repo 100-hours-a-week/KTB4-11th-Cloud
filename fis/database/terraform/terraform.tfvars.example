@@ -1,0 +1,3 @@
+deployment_profile            = "your-production-aws-profile"
+target_database_instance_id   = "i-0123456789abcdef0"
+primary_restart_after_minutes = 10
