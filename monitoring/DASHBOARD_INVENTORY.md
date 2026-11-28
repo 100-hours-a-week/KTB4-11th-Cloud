@@ -1,5 +1,15 @@
 # PMM·PLG·BE 대시보드 현재 구성
 
+## 2026-11-28 DB FIS 대시보드 추가
+
+중앙 telemetry Grafana의 Database 폴더에 `stockspoon-db-fis`를 추가했다. 25개 패널에 고객 API 지연·5xx, Hikari pending/acquire/timeout, ProxySQL 연결 실패·backend 역할, 복제 thread·지연, Semi-sync 실제 STATUS·fallback counter, Repman 이벤트 원장을 모았다.
+
+- 대시보드: [`DB FIS · 고객 영향과 자동 복구`](https://monitoring.stock-spoon.com/d/stockspoon-db-fis)
+- 구성: [`db-fis.json`](config/grafana/dashboards/db-migration/db-fis.json)
+- 실제 반영·측정 계약·RPO 정의: [`OBSERVABILITY.md`](../fis/database/OBSERVABILITY.md)
+
+아래는 2026-11-02에 기록한 기존 구성 이력이다.
+
 검토 기준일: 2026-11-02  
 범위: `i-00dce75378431daf7`의 PMM/DB 마이그레이션 PLG와 별도 V2 BE 관측 스택  
 상태: 저장소 설정과 기록을 정리한 문서다. AWS 인스턴스와 Grafana의 현재 실시간 상태는 캡처로 확인해야 한다.

@@ -1,0 +1,24 @@
+services:
+  db-fis-observer:
+    image: stockspoon-db-fis-observer:local
+    build:
+      context: ./db-fis
+    restart: unless-stopped
+    environment:
+      AWS_REGION: ap-northeast-2
+      PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
+      DATA_DIR: /data
+    expose: ["9191"]
+    volumes:
+      - /srv/stockspoon-telemetry/db-fis:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 192m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

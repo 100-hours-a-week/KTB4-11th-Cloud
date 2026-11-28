@@ -1,0 +1,60 @@
+rule_files:
+  - ../config/prometheus-rules/db-fis.yml
+evaluation_interval: 5s
+tests:
+  - interval: 5s
+    input_series:
+      - series: 'mysql_global_variables_read_only{job="mysql-primary",instance="p",db_node="primary"}'
+        values: '0x24'
+      - series: 'mysql_global_variables_read_only{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '1x24'
+      - series: 'mysql_up{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '1x24'
+      - series: 'mysql_global_status_rpl_semi_sync_slave_status{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '1x24'
+      - series: 'mysql_slave_status_replica_io_running{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '1x24'
+      - series: 'mysql_slave_status_replica_sql_running{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '1x24'
+      - series: 'mysql_slave_status_seconds_behind_source{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '0x24'
+    promql_expr_test:
+      - expr: stockspoon:mysql_writable_nodes
+        eval_time: 1m
+        exp_samples:
+          - labels: 'stockspoon:mysql_writable_nodes'
+            value: 1
+      - expr: count(stockspoon:mysql_replica_basic_preconditions)
+        eval_time: 1m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - interval: 5s
+    input_series:
+      # Role switches: stable node name "private-replica" is now the writer.
+      - series: 'mysql_global_variables_read_only{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '0x24'
+      - series: 'mysql_up{job="mysql-private-replica",instance="r",db_node="private-replica"}'
+        values: '1x24'
+      # Deliberately no source STATUS on the promoted writer.
+    alert_rule_test:
+      - eval_time: 65s
+        alertname: DBFISSemiSyncSourceMetricMissing
+        exp_alerts:
+          - exp_labels:
+              job: mysql-private-replica
+              instance: r
+              db_node: private-replica
+              severity: warning
+            exp_annotations:
+              summary: '현재 writer의 Semi-sync 상태 지표 없음: private-replica'
+              description: '승격된 노드의 source 플러그인과 exporter를 확인한다. 지표 부재는 정상 0건과 다르다.'
+    promql_expr_test:
+      - expr: stockspoon:mysql_semisync_source_status
+        eval_time: 1m
+        exp_samples: []
+      - expr: count(stockspoon:mysql_replica_basic_preconditions) or vector(0)
+        eval_time: 1m
+        exp_samples:
+          - labels: '{}'
+            value: 0

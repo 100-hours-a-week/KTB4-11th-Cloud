@@ -179,6 +179,7 @@ class DeploymentTest(unittest.TestCase):
         db_files = deploy.deployment_files("server-db-dashboard", outputs()["plg_tempo"]["value"])
         self.assertEqual(set(db_files) - {"install.sh"}, {
             "config/grafana/dashboards/db-migration/replication.json",
+            "config/grafana/dashboards/db-migration/db-fis.json",
         })
 
     def test_json_transport_compaction_preserves_configuration_values(self):

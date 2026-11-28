@@ -46,7 +46,8 @@ class EnvironmentDashboardTest(unittest.TestCase):
         uids = [d['uid'] for d in dashboards]
         self.assertEqual(len(set(uids)), len(uids))
         self.assertTrue({'stockspoon-overview', 'stockspoon-service-logs', 'stockspoon-ecs-sse', 'stockspoon-task-resources', 'stockspoon-alb', 'stockspoon-frontend-edge', 'stockspoon-http-flood', 'stockspoon-proxysql-fis'} <= set(uids))
-        self.assertEqual(len(dashboards), 16)
+        self.assertEqual(len(dashboards), 17)
+        self.assertIn('stockspoon-db-fis', uids)
 
     def test_http_flood_dashboard_cloudwatch_queries_have_explicit_metrics_mode(self):
         dashboard = json.loads((ROOT / 'config/grafana/dashboards/prod/http-flood.json').read_text())

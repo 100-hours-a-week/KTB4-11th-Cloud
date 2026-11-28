@@ -4,6 +4,7 @@ import { Counter, Trend } from "k6/metrics";
 
 const apiBaseUrl = (__ENV.API_BASE_URL || "https://stock-spoon.com").replace(/\/+$/, "");
 const tokenFile = __ENV.DB_FIS_PROBE_TOKEN_FILE;
+const runId = __ENV.DB_FIS_RUN_ID || "unassigned";
 
 if (!tokenFile) {
   throw new Error("Set DB_FIS_PROBE_TOKEN_FILE to a protected file containing one raw JWT.");
@@ -34,6 +35,7 @@ export const options = {
 };
 
 export default function () {
+  const startedAt = new Date().toISOString();
   const response = http.get(apiBaseUrl + "/api/v1/users/me/accounts", {
     headers: {
       Accept: "application/json",
@@ -57,6 +59,17 @@ export default function () {
   }
 
   const healthy = response.status === 200 && hasAccount;
+  console.log(JSON.stringify({
+    schema_version: 1,
+    event: "api_probe_result",
+    run_id: runId,
+    started_at_utc: startedAt,
+    completed_at_utc: new Date().toISOString(),
+    duration_ms: response.timings.duration,
+    success: healthy,
+    status: response.status,
+    operation: "account-list-read",
+  }));
   check(response, {
     "DB-backed account list returned data": () => healthy,
   });
