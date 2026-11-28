@@ -315,15 +315,6 @@ resource "aws_security_group" "proxysql_task" {
   }
 }
 
-resource "aws_vpc_security_group_egress_rule" "proxysql_task_https" {
-  security_group_id = aws_security_group.proxysql_task.id
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = 443
-  to_port           = 443
-  ip_protocol       = "tcp"
-  description       = "Allow SSM control traffic for the FIS sidecar through the existing NAT route"
-}
-
 resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_migration_mysql" {
   count = local.proxysql_primary_mysql_sg == "" ? 0 : 1
 

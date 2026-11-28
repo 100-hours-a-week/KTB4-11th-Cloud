@@ -15,7 +15,7 @@
 
 DB/ProxySQL 경로만 보려면 Backend 애플리케이션 대신 VPC 안의 별도 probe task에서 ProxySQL의 Cloud Map DNS와 client port `6033`으로 MySQL 프로토콜 접속을 한다. 이 요청은 Backend를 거치지 않지만 ProxySQL과 MySQL은 거친다. 개인 노트북에서 바로 실행하는 방식이 아니라, VPC DNS를 해석하고 ProxySQL `6033`에 접근할 수 있는 진단 task/호스트가 필요하다.
 
-현재 `ecs/cross_root_rules.tf`는 ProxySQL `6033` 인바운드를 Backend와 선택적 collector SG에만 허용하고 PMM에는 metrics port `6070`만 연다. 전용 probe를 쓰려면 probe SG에서 ProxySQL `6033`으로만 접근하도록 제한된 SG 규칙을 준비한다. 기존 switchover 터널 helper는 ECS Exec로 ProxySQL에 연결하지만, ECS task FIS 작업 중에는 ECS Exec를 비활성화해야 하므로 그 터널을 fault-injection probe로 전제하지 않는다.
+현재 `ecs/cross_root_rules.tf`는 ProxySQL `6033` 인바운드를 Backend와 선택적 collector SG에만 허용하고 PMM에는 metrics port `6070`만 연다. 전용 probe를 쓰려면 probe SG에서 ProxySQL `6033`으로만 접근하도록 제한된 SG 규칙을 준비한다. 기존 switchover 터널 helper는 ECS Exec로 ProxySQL에 연결하므로, 이를 독립 SQL probe로 간주하지 않는다.
 
 기본 연결·라우팅 점검 쿼리:
 
@@ -86,7 +86,7 @@ Repman의 직접 ProxySQL 연동은 ProxySQL Admin `6032` 접근이 필요하다
 
 현재 FIS template은 Terraform `db_migration_host`의 **고정 EC2 ID**를 대상으로 한다. 계획 전환 스크립트가 MySQL 역할만 바꾸면 Terraform EC2 ID는 그대로다. Repman이 승격한 다음 실험은 실제 Primary ID를 확인할 수 있도록 target을 명시적으로 입력하거나 검증된 role-tag 갱신 경로를 구현해야 한다. Terraform state만으로 MySQL의 실시간 Primary 역할을 판별하지 않는다.
 
-실험 종류도 분리한다: Backend task 하나의 장애는 ECS/ALB 복원력 시험, ProxySQL task에서 Primary 방향 TCP 3306 차단은 ProxySQL 경로 시험, Primary DB 호스트 장애는 DB 승격·라우팅 복구 시험이다. 한 실험에서 한 장애만 주입하고 그에 맞는 probe와 복구 절차를 사용한다.
+이번 실험 범위는 Primary DB 호스트 장애와 그에 따른 DB 승격·라우팅 복구다. ProxySQL은 서비스 경로에 포함된 채 정상 운영 대상으로 유지하며, ProxySQL task 장애·네트워크 차단 FIS는 이번 DB FIS 범위에서 제외한다. 한 번에 한 장애만 주입하고 그에 맞는 probe와 복구 절차를 사용한다.
 
 ## 실험 범위와 한계
 
@@ -94,6 +94,4 @@ Repman의 직접 ProxySQL 연동은 ProxySQL Admin `6032` 접근이 필요하다
 
 Primary와 Standby가 같은 AZ에 배치되어 있으므로 이 실험은 AZ 장애 대응 능력을 검증하지 않는다. 중단 조건은 기존 Backend 가용성 및 오류 CloudWatch 알람을 사용한다.
 
-ProxySQL task에서 `aws:ecs:task-network-blackhole-port`로 egress TCP 3306을 차단하는 것은 Primary 하나만 차단하는 실험이 아니다. Primary와 Standby가 모두 3306을 사용하므로 ProxySQL의 모든 DB backend 연결을 막는다. 이는 ProxySQL 전체 DB 연결 단절 시험으로 분리한다. ECS task FIS 작업에는 task 정의의 fault injection 활성화, `pidMode=task`, SSM agent sidecar의 정상 등록이 필요하다. ProxySQL task 정의에는 설정이 있지만, 2026-11-14 live 확인에서는 sidecar가 종료 상태(exit code 137)였다. 해당 네트워크 실험 전에 sidecar를 복구·검증해야 한다.
-
-Backend task를 직접 대상으로 하는 FIS 실험은 현재 Terraform 그대로는 준비되지 않았다. `ecs/svc_backend.tf`의 Backend task definition에는 `pid_mode=task`, `enable_fault_injection=true`, SSM agent sidecar가 없다. Backend task 하나를 FIS로 고르는 방식은 가능하지만, 먼저 이 task definition과 필요한 IAM·sidecar 구성을 추가해야 한다. Fargate 네트워크 장애 액션은 `useEcsFaultInjectionEndpoints=true`도 지정한다. ECS Exec가 켜져 있으면 해당 ECS task 액션과 함께 사용할 수 없으므로 비활성 상태도 확인한다.
+Backend task 장애 주입도 이번 DB FIS 범위에 포함하지 않는다. 서비스 RTO 관측을 위한 ALB → Backend → ProxySQL → MySQL probe 경로는 유지한다.
