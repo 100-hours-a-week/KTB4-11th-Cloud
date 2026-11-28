@@ -350,6 +350,15 @@ resource "aws_vpc_security_group_egress_rule" "proxysql_task_to_private_replica_
   description                  = "Allow ProxySQL network checks and proxy traffic to the private GTID replica"
 }
 
+resource "aws_vpc_security_group_egress_rule" "proxysql_task_https" {
+  security_group_id = aws_security_group.proxysql_task.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  description       = "Retrieve ECS task secrets and pull images through the existing private subnet NAT route"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "private_replica_mysql_from_proxysql" {
   count = local.proxysql_private_replica_mysql_sg == "" ? 0 : 1
 

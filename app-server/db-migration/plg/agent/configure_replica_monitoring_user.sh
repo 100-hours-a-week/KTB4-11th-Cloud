@@ -42,11 +42,19 @@ fi
 
 # Initial replica baselines copy the application schema, not mysql system users.
 # Create monitor accounts locally without adding account-management GTIDs.
+# Keep read_only=ON: root has CONNECTION_ADMIN for account DDL, while the
+# heartbeat account cannot write local GTIDs during this short setup window.
 restore_read_only() {
   mysql_root --execute='SET PERSIST read_only=ON; SET PERSIST super_read_only=ON' >/dev/null 2>&1 || true
 }
 trap restore_read_only EXIT
-mysql_root --execute='SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF'
+mysql_root --execute='SET GLOBAL super_read_only=OFF'
+read_only_flags="$(mysql_root --batch --skip-column-names \
+  --execute='SELECT CONCAT(@@GLOBAL.read_only, CHAR(32), @@GLOBAL.super_read_only)')"
+if [ "$read_only_flags" != '1 0' ]; then
+  printf 'Replica admin window did not preserve read_only=ON (flags=%s)\n' "$read_only_flags" >&2
+  exit 1
+fi
 
 mysql_root <<SQL
 SET SESSION sql_log_bin=0;
