@@ -96,6 +96,10 @@ CREATE USER IF NOT EXISTS 'repman'@'%' IDENTIFIED BY '$db_password' PASSWORD EXP
 ALTER USER 'repman'@'%' IDENTIFIED BY '$db_password' PASSWORD EXPIRE NEVER;
 GRANT SELECT, PROCESS, REPLICATION CLIENT, REPLICATION SLAVE, RELOAD ON *.* TO 'repman'@'%';
 GRANT REPLICATION_SLAVE_ADMIN, BINLOG_ADMIN, SYSTEM_VARIABLES_ADMIN, CONNECTION_ADMIN ON *.* TO 'repman'@'%';
+# Replication Manager v3.1.x still checks mysql.user.Super_priv on MySQL 8,
+# even though the dynamic equivalents are granted above. Keep this compatibility
+# grant until its privilege checker recognizes those dynamic privileges.
+GRANT SUPER ON *.* TO 'repman'@'%';
 GRANT ALL PRIVILEGES ON replication_manager_schema.* TO 'repman'@'%';
 
 CREATE USER IF NOT EXISTS 'repman_repl'@'%' IDENTIFIED BY '$replication_password' PASSWORD EXPIRE NEVER;

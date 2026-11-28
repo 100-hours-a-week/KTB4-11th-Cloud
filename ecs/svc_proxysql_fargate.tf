@@ -139,6 +139,7 @@ resource "aws_ecs_service" "proxysql_fargate" {
   depends_on = [
     aws_vpc_security_group_egress_rule.proxysql_task_to_migration_mysql,
     aws_vpc_security_group_egress_rule.proxysql_task_to_private_replica_mysql,
+    aws_vpc_security_group_egress_rule.proxysql_task_https,
     aws_vpc_security_group_ingress_rule.migration_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.private_replica_mysql_from_proxysql,
     aws_vpc_security_group_ingress_rule.proxysql_metrics_from_central_telemetry,

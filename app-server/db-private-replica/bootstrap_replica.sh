@@ -294,6 +294,19 @@ ensure_read_only() {
   mysql_root --execute='SET PERSIST read_only=ON; SET PERSIST super_read_only=ON'
 }
 
+enable_replica_admin_writes() {
+  # Lower only super_read_only. The local root account has CONNECTION_ADMIN,
+  # so it can import and manage accounts while ordinary clients remain blocked
+  # by read_only=ON (including the heartbeat writer).
+  mysql_root --execute='SET GLOBAL super_read_only=OFF'
+  local flags
+  flags="$(mysql_root --batch --skip-column-names --execute='SELECT CONCAT(@@GLOBAL.read_only, CHAR(32), @@GLOBAL.super_read_only)')"
+  [[ "$flags" == '1 0' ]] || {
+    echo "Replica admin window did not preserve read_only=ON (flags=$flags)" >&2
+    return 1
+  }
+}
+
 restore_read_only() {
   mysql_root --execute='SET PERSIST read_only=ON; SET PERSIST super_read_only=ON' >/dev/null
 }
@@ -430,7 +443,7 @@ seed_baseline() {
     return 1
   }
 
-  mysql_root --execute='SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF'
+  enable_replica_admin_writes
   docker exec "$MYSQL_CONTAINER" mysqldump \
     --defaults-extra-file="$SEED_OPTION_FILE" \
     --protocol=TCP --host="$SOURCE_HOST" --port=3306 \
@@ -525,7 +538,9 @@ heartbeat_table_count="$(mysql_root --batch --skip-column-names \
 
 # The dump contains app tables but not mysql.user. Recreate the existing app
 # and monitoring accounts locally without adding account GTIDs to the stream.
-mysql_root --execute='SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF'
+# Keep read_only=ON while root (CONNECTION_ADMIN) performs the account DDL so
+# ordinary clients cannot write local transactions during this window.
+enable_replica_admin_writes
 trap 'restore_read_only || true' EXIT
 mysql_root <<SQL
 SET SESSION sql_log_bin=0;
