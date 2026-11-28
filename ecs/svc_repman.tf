@@ -15,12 +15,13 @@ locals {
     subnet.availability_zone != data.aws_instance.repman_replica.availability_zone
   ]
 
+  # This is a shell command, not Compose interpolation: $$ would expand to PID.
   repman_startup_command = <<-EOT
     set -eu
-    : "$$REPMAN_DATABASE_PASSWORD"
-    : "$$REPMAN_REPLICATION_PASSWORD"
-    : "$$REPMAN_API_PASSWORD"
-    : "$$REPMAN_PROXYSQL_PASSWORD"
+    : "$REPMAN_DATABASE_PASSWORD"
+    : "$REPMAN_REPLICATION_PASSWORD"
+    : "$REPMAN_API_PASSWORD"
+    : "$REPMAN_PROXYSQL_PASSWORD"
 
     umask 077
     mkdir -p /var/lib/replication-manager
@@ -31,15 +32,15 @@ locals {
     http-server = true
     api-port = 10005
     api-https-bind = true
-    api-credentials = "admin:$$REPMAN_API_PASSWORD"
+    api-credentials = "admin:$REPMAN_API_PASSWORD"
 
     [stockspoon]
     title = "StockSpoon MySQL primary-replica"
     prov-orchestrator = "onpremise"
     db-servers-hosts = "${local.proxysql_primary_host}:${var.v1_mysql_port},${local.proxysql_private_replica_host}:${var.v1_mysql_port}"
     db-servers-prefered-master = "${local.proxysql_primary_host}:${var.v1_mysql_port}"
-    db-servers-credential = "repman:$$REPMAN_DATABASE_PASSWORD"
-    replication-credential = "repman_repl:$$REPMAN_REPLICATION_PASSWORD"
+    db-servers-credential = "repman:$REPMAN_DATABASE_PASSWORD"
+    replication-credential = "repman_repl:$REPMAN_REPLICATION_PASSWORD"
 
     failover-mode = "automatic"
     failover-at-sync = true
@@ -56,7 +57,7 @@ locals {
     proxysql-port = "${var.proxysql_port}"
     proxysql-admin-port = "6032"
     proxysql-user = "admin"
-    proxysql-password = "$$REPMAN_PROXYSQL_PASSWORD"
+    proxysql-password = "$REPMAN_PROXYSQL_PASSWORD"
     proxysql-writer-hostgroup = 10
     proxysql-reader-hostgroup = 20
     proxysql-bootstrap = true
