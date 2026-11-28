@@ -55,6 +55,24 @@ data "aws_iam_policy_document" "terraform_ci_write_identity" {
     resources = var.resource_arns.iam_accounts
   }
 
+  statement {
+    sid    = "ManageAiServerReadOnlySsmDocument"
+    effect = "Allow"
+    actions = [
+      "ssm:AddTagsToResource",
+      "ssm:CreateDocument",
+      "ssm:DeleteDocument",
+      "ssm:DescribeDocument",
+      "ssm:GetDocument",
+      "ssm:ListDocumentVersions",
+      "ssm:ListTagsForResource",
+      "ssm:RemoveTagsFromResource",
+      "ssm:UpdateDocument",
+      "ssm:UpdateDocumentDefaultVersion",
+    ]
+    resources = var.resource_arns.ssm_documents
+  }
+
   # 읽기 정책 내용은 수정하지 않고 오래된 비기본 버전만 정리한다.
   statement {
     sid       = "PruneTerraformReadPolicyVersions"
